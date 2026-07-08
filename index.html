@@ -742,7 +742,7 @@
             startCountdown();
 
             try {
-                const response = await fetch(`http://localhost:5000/api/live-buses?agency=${selectedAgency}`);
+                const response = await fetch(`https://maribus.onrender.com/api/live-buses?agency=${selectedAgency}`);
                 const result = await response.json();
                 if (!result.success) return;
 
