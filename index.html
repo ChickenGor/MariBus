@@ -1,0 +1,1000 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>MariBus Malaysia - Pro Tracker</title>
+
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.Default.css" />
+
+    <style>
+        /* 1. CSS Variables for Light/Dark Theming */
+        :root {
+            --bg-color: #f3f4f6;
+            --sheet-bg: white;
+            --text-main: #111827;
+            --text-muted: #6b7280;
+            --border-color: #e5e7eb;
+            --input-bg: #f9fafb;
+            --shadow-color: rgba(0, 0, 0, 0.1);
+        }
+
+        body.dark-mode {
+            --bg-color: #111827;
+            --sheet-bg: #1f2937;
+            --text-main: #f9fafb;
+            --text-muted: #9ca3af;
+            --border-color: #374151;
+            --input-bg: #374151;
+            --shadow-color: rgba(0, 0, 0, 0.5);
+        }
+
+        body,
+        html {
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            height: 100%;
+            overflow: hidden;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            transition: background-color 0.3s;
+        }
+
+        #map {
+            height: 100vh;
+            width: 100vw;
+            z-index: 1;
+        }
+
+        /* --- TRUE PITCH-BLACK OLED MAP --- */
+        body.dark-mode #map {
+            background-color: #000000; 
+        }
+        
+        /* This perfectly inverts the Light map into a glowing OLED dark map! */
+        body.dark-mode .leaflet-tile-pane {
+            filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(120%);
+            transition: filter 0.3s ease;
+        }
+
+        /* --- TOP APP BAR --- */
+        #top-bar {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 60px;
+            background-color: var(--sheet-bg);
+            z-index: 2000;
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 0 20px; box-sizing: border-box;
+            box-shadow: 0 2px 10px var(--shadow-color);
+            transition: background-color 0.3s;
+        }
+        /* 1. This centers the brand element container inside the flex bar */
+        .brand { 
+            display: flex; align-items: center; gap: 8px; 
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        .logo-icon { font-size: 24px; }
+        .logo-text { 
+            font-size: 20px; 
+            font-weight: 800; 
+            color: #000000; 
+            letter-spacing: -0.5px; 
+            transition: color 0.3s; 
+        }
+        body.dark-mode .logo-text { color: #ffffff; }
+        
+        /* 2. Pushes the theme toggle to the far right since the bar no longer uses space-between */
+        #theme-toggle-header {
+            background: none; border: none; font-size: 20px; cursor: pointer; padding: 5px;
+            margin-left: auto; 
+        }
+
+        /* Floating Top Search Bar */
+        #top-search-container {
+            position: absolute;
+            top: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 90%;
+            max-width: 400px;
+            background: var(--sheet-bg);
+            z-index: 1000;
+            border-radius: 50px;
+            box-shadow: 0 4px 15px var(--shadow-color);
+            display: flex;
+            align-items: center;
+            padding: 5px 15px;
+            box-sizing: border-box;
+            transition: background-color 0.3s, box-shadow 0.3s;
+        }
+
+        #top-search-container input {
+            border: none;
+            outline: none;
+            flex-grow: 1;
+            padding: 10px;
+            font-size: 16px;
+            background: transparent;
+            color: var(--text-main);
+        }
+
+        #top-search-container button {
+            background: none;
+            border: none;
+            font-size: 18px;
+            color: var(--text-muted);
+            cursor: pointer;
+            padding: 5px;
+        }
+
+        /* Floating Action Buttons */
+        .fab-btn {
+            position: absolute;
+            right: 15px;
+            z-index: 1000;
+            width: 48px;
+            height: 48px;
+            border-radius: 24px;
+            background: var(--sheet-bg);
+            border: none;
+            box-shadow: 0 4px 15px var(--shadow-color);
+            font-size: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: transform 0.2s, background-color 0.3s;
+        }
+
+        .fab-btn:active {
+            transform: scale(0.9);
+        }
+
+        #fab-locate {
+            bottom: 230px;
+            color: #6366f1;
+        }
+
+        
+
+        /* Positioned right above the GPS button */
+
+        /* The Bottom Sheet */
+        #bottom-sheet {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            background: var(--sheet-bg);
+            z-index: 1000;
+            border-radius: 24px 24px 0 0;
+            box-shadow: 0 -4px 20px var(--shadow-color);
+            padding: 12px 20px 30px 20px;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            transition: background-color 0.3s, box-shadow 0.3s;
+        }
+
+        .drag-handle {
+            width: 40px;
+            height: 5px;
+            background: var(--border-color);
+            border-radius: 3px;
+            margin: 0 auto;
+        }
+
+        .sheet-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .sheet-header h2 {
+            margin: 0;
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--text-main);
+        }
+
+        /* --- LIVE STATUS BADGE & PULSE DOT --- */
+        .status-badge {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: var(--bg-color);
+            padding: 4px 10px;
+            border-radius: 12px;
+            transition: background-color 0.3s;
+        }
+        
+        .status-text {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-muted);
+            min-width: 55px; /* Keeps the badge size stable when text changes */
+            text-align: right;
+        }
+
+        .pulse-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: #10b981; /* Emerald Green */
+            animation: pulse-green 2s infinite;
+        }
+
+        /* The class we will add using JavaScript when actively downloading data */
+        .pulse-dot.is-syncing {
+            background-color: #f59e0b; /* Amber/Orange */
+            animation: pulse-amber 1s infinite; /* Pulses twice as fast! */
+        }
+
+        /* The glowing ring animations */
+        @keyframes pulse-green {
+            0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+            70% { box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+        }
+        
+        @keyframes pulse-amber {
+            0% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.7); }
+            70% { box-shadow: 0 0 0 6px rgba(245, 158, 11, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); }
+        }
+
+        #refresh-timer {
+            font-size: 12px;
+            color: var(--text-muted);
+            font-weight: 600;
+            background: var(--bg-color);
+            padding: 4px 8px;
+            border-radius: 12px;
+        }
+
+
+
+        select {
+            width: 100%;
+            padding: 14px;
+            font-size: 16px;
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+            background-color: var(--input-bg);
+            color: var(--text-main);
+            outline: none;
+            appearance: none;
+            background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%236b7280%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E");
+            background-repeat: no-repeat;
+            background-position: right 15px top 50%;
+            background-size: 12px auto;
+            transition: background-color 0.3s, border-color 0.3s, color 0.3s;
+        }
+
+        select:focus {
+            border-color: #6366f1;
+        }
+
+        /* Dynamic Map Markers */
+        .marker-wrapper {
+            position: absolute;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            transform: translate(-50%, -50%);
+            z-index: 10;
+        }
+
+        .route-pill {
+            color: white;
+            font-weight: 700;
+            font-size: 11px;
+            padding: 4px 8px;
+            border-radius: 12px;
+            border: 2px solid white;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+            white-space: nowrap;
+            text-align: center;
+            display: inline-block;
+        }
+
+        .rapid-pill {
+            background-color: #f60404;
+        }
+
+        .mybas-pill {
+            background-color: #f93999;
+        }
+
+        .default-pill {
+            background-color: #3b82f6;
+        }
+
+        .train-pill {
+            background-color: #1d0392;
+            font-size: 14px;
+            padding: 4px 6px;
+        }
+
+        .direction-arrow {
+            width: 22px;
+            height: 22px;
+            background-color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+            margin-top: -2px;
+            z-index: -1;
+        }
+
+        .arrow-svg {
+            width: 14px;
+            height: 14px;
+            fill: #374151;
+            transition: transform 0.4s ease-out;
+        }
+
+        @media (min-width: 768px) {
+            #top-search-container { left: 20px; top: 80px; transform: none; width: 300px; }
+            #bottom-sheet {
+                top: 20px;
+                right: 20px;
+                bottom: auto;
+                left: auto;
+                width: 350px;
+                border-radius: 16px;
+                padding: 20px;
+            }
+
+            .drag-handle {
+                display: none;
+            }
+
+            #fab-locate {
+                bottom: 20px;
+                right: 390px;
+            }
+
+        
+
+            #top-search-container {
+                left: 20px;
+                transform: none;
+                width: 300px;
+            }
+        }
+
+        /* --- LEAFLET POPUP OVERRIDES & REDESIGN --- */
+        .leaflet-popup-content-wrapper {
+            background-color: var(--sheet-bg);
+            color: var(--text-main);
+            border-radius: 16px;
+            box-shadow: 0 8px 25px var(--shadow-color);
+            padding: 2px;
+            transition: background-color 0.3s, color 0.3s;
+        }
+
+        .leaflet-popup-tip {
+            background-color: var(--sheet-bg);
+            transition: background-color 0.3s;
+        }
+
+        .leaflet-popup-close-button {
+            color: var(--text-muted) !important;
+            margin-top: 10px !important;
+            margin-right: 10px !important;
+        }
+
+        .leaflet-popup-content {
+            margin: 16px;
+            width: min-content;
+        }
+
+        /* Custom Popup Interior Layout */
+        .custom-popup {
+            min-width: 190px;
+        }
+
+        .popup-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 12px;
+            margin-bottom: 12px;
+        }
+
+        .popup-header .route-badge {
+            color: white;
+            font-weight: 700;
+            font-size: 13px;
+            padding: 4px 8px;
+            border-radius: 8px;
+            white-space: nowrap;
+        }
+
+        .popup-header .route-name {
+            font-weight: 600;
+            font-size: 14px;
+            line-height: 1.2;
+        }
+
+        .popup-body .info-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 13px;
+            margin-bottom: 8px;
+            gap: 15px;
+        }
+
+        .popup-body .info-row span {
+            color: var(--text-muted);
+        }
+
+        .popup-body .info-row strong {
+            color: var(--text-main);
+            font-weight: 600;
+            text-align: right;
+            word-break: break-all;
+        }
+
+        /* --- CUSTOM MAP CLUSTERS --- */
+        .custom-cluster {
+            /* Using the premium Indigo accent color */
+            background-color: #6366f1; 
+            color: white;
+            font-weight: 700;
+            font-size: 14px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            /* The border uses our CSS variable so it switches between white and dark slate! */
+            border: 3px solid var(--sheet-bg); 
+            box-shadow: 0 4px 15px var(--shadow-color);
+            transition: transform 0.2s;
+        }
+        .custom-cluster:hover {
+            transform: scale(1.1);
+            background-color: #4f46e5; /* Slightly darker on hover */
+        }
+        /* --- CUSTOM PREMIUM DROPDOWN --- */
+        .custom-select { position: relative; width: 100%; user-select: none; }
+        
+        .select-trigger { 
+            display: flex; justify-content: space-between; align-items: center; 
+            padding: 14px 16px; background: var(--input-bg); 
+            border: 1px solid var(--border-color); border-radius: 12px; 
+            cursor: pointer; transition: border-color 0.3s, box-shadow 0.3s; 
+        }
+        .select-trigger:hover { border-color: #6366f1; }
+        .select-value { display: flex; align-items: center; gap: 12px; font-weight: 600; font-size: 15px; color: var(--text-main); }
+        
+        .chevron { width: 20px; height: 20px; fill: var(--text-muted); transition: transform 0.3s; }
+        .custom-select.open .chevron { transform: rotate(180deg); }
+        .custom-select.open .select-trigger { border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,0.2); }
+
+        .select-dropdown { 
+            position: absolute; bottom: calc(100% + 10px); left: 0; width: 100%; 
+            background: var(--sheet-bg); border: 1px solid var(--border-color); 
+            border-radius: 12px; box-shadow: 0 -10px 25px var(--shadow-color); 
+            max-height: 250px; overflow-y: auto; display: none; flex-direction: column; 
+            padding: 6px; z-index: 2000; box-sizing: border-box; 
+        }
+        .custom-select.open .select-dropdown { display: flex; }
+
+        .select-option { 
+            display: flex; align-items: center; gap: 12px; padding: 12px; 
+            border-radius: 8px; cursor: pointer; font-size: 15px; font-weight: 500; 
+            color: var(--text-main); transition: background 0.2s; 
+        }
+        .select-option:hover { background: var(--bg-color); }
+        .select-option.active { background: rgba(99,102,241,0.1); color: #6366f1; font-weight: 700; }
+        
+        /* The colored dots matching the map pills */
+        .agency-dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; flex-shrink: 0; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
+        .dot-rapid { background-color: #ff0101; }
+        .dot-mybas { background-color: #ff0080; }
+        .dot-ktmb { background-color: #0205a2; }
+        
+        /* Custom sleek scrollbar for the menu */
+        .select-dropdown::-webkit-scrollbar { width: 6px; }
+        .select-dropdown::-webkit-scrollbar-track { background: transparent; }
+        .select-dropdown::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 10px; }
+
+        /* On Desktop, open downwards instead of upwards */
+        @media (min-width: 768px) {
+            .select-dropdown { bottom: auto; top: calc(100% + 10px); box-shadow: 0 10px 25px var(--shadow-color); }
+        }
+
+        /* --- BRANDING FOOTER (UPDATED) --- */
+        #app-footer {
+            margin-top: 10px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 4px 10px;
+            pointer-events: none; /* Prevents blocking any clicks */
+        }
+        
+        .footer-text {
+            font-family: sans-serif;
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-muted);
+            letter-spacing: 0.3px;
+            margin: 0;
+            white-space: nowrap;
+            opacity: 0.7; /* Slightly subtle so it doesn't distract from the selector */
+        }
+
+       
+
+    </style>
+</head>
+
+<body>
+
+    <header id="top-bar">
+        <div class="brand">
+            <span class="logo-icon"></span>
+            <span class="logo-text">MARIBUS</span>
+        </div>
+        <button id="theme-toggle-header" onclick="toggleTheme()" title="Toggle Dark Mode">🌙</button>
+    </header>
+
+    <div id="top-search-container">
+        <input type="text" id="search-input" placeholder="Vehicle ID or Route (e.g. 220)">
+        <button onclick="searchBus()">🔍</button>
+    </div>
+
+    <div id="map"></div>
+
+    
+    <button id="fab-locate" class="fab-btn" onclick="locateMe()" title="Locate Me">🎯</button>
+
+    <div id="bottom-sheet">
+        <div class="drag-handle"></div>
+        <div class="sheet-header">
+            <h2>Active Service</h2>
+            <div class="status-badge">
+                <div id="sync-dot" class="pulse-dot"></div>
+                <span id="refresh-timer" class="status-text">Live</span>
+            </div>
+        </div>
+        <div class="custom-select" id="custom-agency-select">
+            <div class="select-trigger" onclick="toggleAgencyDropdown()">
+                <div class="select-value">
+                    <div class="agency-dot dot-rapid" id="selected-dot"></div>
+                    <span class="text" id="selected-text">RapidKL Buses</span>
+                </div>
+                <svg class="chevron" viewBox="0 0 24 24"><path d="M7 10l5 5 5-5z"/></svg>
+            </div>
+            
+            <div class="select-dropdown">
+                <!-- RapidKL & Trains -->
+                <div class="select-option active" data-value="rapid-bus-kl" onclick="selectAgencyOption('rapid-bus-kl', 'RapidKL Buses', 'dot-rapid')">
+                    <div class="agency-dot dot-rapid"></div><span class="text">RapidKL Buses</span>
+                </div>
+                <div class="select-option" data-value="rapid-bus-mrtfeeder" onclick="selectAgencyOption('rapid-bus-mrtfeeder', 'MRT Feeder Buses', 'dot-rapid')">
+                    <div class="agency-dot dot-rapid"></div><span class="text">MRT Feeder Buses</span>
+                </div>
+                <div class="select-option" data-value="ktmb" onclick="selectAgencyOption('ktmb', 'KTMB Trains', 'dot-ktmb')">
+                    <div class="agency-dot dot-ktmb"></div><span class="text">KTMB Trains</span>
+                </div>
+                <!-- BAS.MY Network -->
+                <div class="select-option" data-value="mybas-johor-bahru" onclick="selectAgencyOption('mybas-johor-bahru', 'BAS.MY Johor Bahru', 'dot-mybas')">
+                    <div class="agency-dot dot-mybas"></div><span class="text">BAS.MY Johor Bahru</span>
+                </div>
+                <div class="select-option" data-value="mybas-melaka" onclick="selectAgencyOption('mybas-melaka', 'BAS.MY Melaka', 'dot-mybas')">
+                    <div class="agency-dot dot-mybas"></div><span class="text">BAS.MY Melaka</span>
+                </div>
+                <div class="select-option" data-value="mybas-seremban-A" onclick="selectAgencyOption('mybas-seremban-A', 'BAS.MY Seremban A', 'dot-mybas')">
+                    <div class="agency-dot dot-mybas"></div><span class="text">BAS.MY Seremban A</span>
+                </div>
+                <div class="select-option" data-value="mybas-seremban-B" onclick="selectAgencyOption('mybas-seremban-B', 'BAS.MY Seremban B', 'dot-mybas')">
+                    <div class="agency-dot dot-mybas"></div><span class="text">BAS.MY Seremban B</span>
+                </div>
+                <div class="select-option" data-value="mybas-ipoh" onclick="selectAgencyOption('mybas-ipoh', 'BAS.MY Ipoh', 'dot-mybas')">
+                    <div class="agency-dot dot-mybas"></div><span class="text">BAS.MY Ipoh</span>
+                </div>
+                <div class="select-option" data-value="mybas-kuala-terengganu" onclick="selectAgencyOption('mybas-kuala-terengganu', 'BAS.MY K. Terengganu', 'dot-mybas')">
+                    <div class="agency-dot dot-mybas"></div><span class="text">BAS.MY K. Terengganu</span>
+                </div>
+                <div class="select-option" data-value="mybas-kota-bharu" onclick="selectAgencyOption('mybas-kota-bharu', 'BAS.MY Kota Bharu', 'dot-mybas')">
+                    <div class="agency-dot dot-mybas"></div><span class="text">BAS.MY Kota Bharu</span>
+                </div>
+                <div class="select-option" data-value="mybas-alor-setar" onclick="selectAgencyOption('mybas-alor-setar', 'BAS.MY Alor Setar', 'dot-mybas')">
+                    <div class="agency-dot dot-mybas"></div><span class="text">BAS.MY Alor Setar</span>
+                </div>
+                <div class="select-option" data-value="mybas-kangar" onclick="selectAgencyOption('mybas-kangar', 'BAS.MY Kangar', 'dot-mybas')">
+                    <div class="agency-dot dot-mybas"></div><span class="text">BAS.MY Kangar</span>
+                </div>
+                <div class="select-option" data-value="mybas-kuching" onclick="selectAgencyOption('mybas-kuching', 'BAS.MY Kuching', 'dot-mybas')">
+                    <div class="agency-dot dot-mybas"></div><span class="text">BAS.MY Kuching</span>
+                </div>
+            </div>
+            <footer id="app-footer">
+        <p class="footer-text">© 2026 Chicken Rice Developer Studio</p>
+    </footer>
+        </div>
+        
+        <!-- Hidden input preserves compatibility with your existing JS -->
+        <input type="hidden" id="agency-select" value="rapid-bus-kl">
+    </div>
+    
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js"></script>
+
+    <script>
+        const map = L.map('map', { zoomControl: false }).setView([3.1390, 101.6869], 12);
+        L.control.zoom({ position: 'bottomleft' }).addTo(map);
+
+        // 2. Light and Dark Map Layer URLs
+        const lightTileUrl = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
+        const darkTileUrl = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
+
+        let currentTileLayer = L.tileLayer(lightTileUrl, {
+            attribution: '© OpenStreetMap contributors, © CARTO',
+            subdomains: 'abcd',
+            maxZoom: 20
+        }).addTo(map);
+
+        let isDarkMode = false;
+
+        // 3. The Toggle Theme Function
+        function toggleTheme() {
+            isDarkMode = !isDarkMode;
+
+            // This single line instantly triggers the CSS filter to invert the map!
+            document.body.classList.toggle('dark-mode', isDarkMode);
+
+            // Update the button icon in the top header
+            document.getElementById('theme-toggle-header').innerText = isDarkMode ? '☀️' : '🌙';
+            
+            // Note: We completely removed the map.removeLayer() stuff! 
+            // The map will no longer flicker or reload when switching themes.
+        }
+
+        let markersGroup = L.markerClusterGroup({ 
+            // 1. Slightly reduced radius so they don't suck each other in from as far away
+            maxClusterRadius: 35, 
+            
+            // 2. NEW: The moment you zoom in to level 14 or closer, force all clusters to break apart!
+            disableClusteringAtZoom: 25,
+            
+            // This function takes over the default Leaflet design completely
+            iconCreateFunction: function(cluster) {
+                let count = cluster.getChildCount();
+                
+                // Make the circle slightly larger if there are more buses inside it
+                let size = 36;
+                if (count > 9) size = 42;
+                if (count > 49) size = 50;
+
+                return L.divIcon({
+                    html: `<div>${count}</div>`,
+                    className: 'custom-cluster',
+                    iconSize: L.point(size, size)
+                });
+            }
+        });
+        map.addLayer(markersGroup);
+
+        let busMarkersDict = {};
+        let routeMarkersDict = {};
+        let countdownValue = 30;
+        let countdownInterval;
+
+        const agencyLocations = {
+            "rapid-bus-kl": { lat: 3.1390, lng: 101.6869, zoom: 12 },
+            "rapid-bus-mrtfeeder": { lat: 3.1390, lng: 101.6869, zoom: 12 },
+            "ktmb": { lat: 3.1390, lng: 101.6869, zoom: 7 },
+            "mybas-kangar": { lat: 6.4414, lng: 100.1986, zoom: 13 },
+            "mybas-alor-setar": { lat: 6.1248, lng: 100.3678, zoom: 13 },
+            "mybas-kota-bharu": { lat: 6.1254, lng: 102.2381, zoom: 13 },
+            "mybas-kuala-terengganu": { lat: 5.3302, lng: 103.1408, zoom: 13 },
+            "mybas-ipoh": { lat: 4.5975, lng: 101.0901, zoom: 13 },
+            "mybas-seremban-A": { lat: 2.7258, lng: 101.9424, zoom: 13 },
+            "mybas-seremban-B": { lat: 2.7258, lng: 101.9424, zoom: 13 },
+            "mybas-melaka": { lat: 2.1896, lng: 102.2501, zoom: 13 },
+            "mybas-johor-bahru": { lat: 1.4927, lng: 103.7414, zoom: 12 },
+            "mybas-kuching": { lat: 1.5535, lng: 110.3593, zoom: 13 }
+        };
+
+        function updateCountdownDisplay() {
+            // Changed from "Sync in 30s" to a cleaner "Live (30s)"
+            document.getElementById('refresh-timer').innerText = `Live (${countdownValue}s)`;
+        }
+
+        function startCountdown() {
+            countdownValue = 30;
+            updateCountdownDisplay();
+            if (countdownInterval) clearInterval(countdownInterval);
+
+            countdownInterval = setInterval(() => {
+                countdownValue--;
+                updateCountdownDisplay();
+                if (countdownValue <= 0) fetchBuses();
+            }, 1000);
+        }
+
+        async function fetchBuses() {
+            const selectedAgency = document.getElementById('agency-select').value;
+            // 1. TRIGGER SYNCING STATE
+            const syncDot = document.getElementById('sync-dot');
+            const timerText = document.getElementById('refresh-timer');
+            syncDot.classList.add('is-syncing');
+            timerText.innerText = 'Syncing...';
+            
+            startCountdown();
+
+            try {
+                const response = await fetch(`http://localhost:5000/api/live-buses?agency=${selectedAgency}`);
+                const result = await response.json();
+                if (!result.success) return;
+
+                markersGroup.clearLayers();
+                busMarkersDict = {};
+                routeMarkersDict = {};
+
+                let newMarkers = [];
+
+                result.data.forEach(vehicle => {
+                    if (vehicle.position && vehicle.vehicle && vehicle.vehicle.id) {
+                        const vehicleId = vehicle.vehicle.id;
+                        
+                        // 1. Define default names so the script never crashes
+                        let routeShortName = (selectedAgency === 'ktmb') ? "KTM" : "Bus"; 
+                        let longName = "Active Fleet Vehicle"; 
+                        
+                        if (vehicle.route_info) {
+                            let shortName = vehicle.route_info.short_name;
+                            longName = vehicle.route_info.long_name; // Update longName if we have it
+
+                            if (selectedAgency === 'ktmb' && shortName === "Bus") {
+                                shortName = "KTM";
+                                longName = "Active Rail Vehicle";
+                            }
+
+                            if (shortName && shortName !== "Unknown") {
+                                routeShortName = shortName;
+                            }
+                        }
+
+                        let pillClass = 'default-pill';
+                        let emoji = '';
+                        
+                        if (selectedAgency === 'ktmb') {
+                            pillClass = 'train-pill';
+                            emoji = '🚆 ';
+                        } else if (selectedAgency.includes('mybas')) {
+                            pillClass = 'mybas-pill';
+                        } else if (selectedAgency.includes('rapid-bus')) {
+                            pillClass = 'rapid-pill';
+                        }
+
+                        const bearing = vehicle.position.bearing;
+                        const hasValidBearing = (bearing !== undefined && bearing !== null && bearing !== 0);
+
+                        let iconHtml = `
+                            <div class="marker-wrapper">
+                                <div class="route-pill ${pillClass}">${emoji}${routeShortName}</div>
+                                ${hasValidBearing ? `
+                                <div class="direction-arrow">
+                                    <svg class="arrow-svg" style="transform: rotate(${bearing}deg);" viewBox="0 0 24 24">
+                                        <path d="M12 2L19 21L12 17L5 21L12 2Z" />
+                                    </svg>
+                                </div>
+                                ` : ''}
+                            </div>
+                        `;
+
+                        const dynamicIcon = L.divIcon({
+                            html: iconHtml,
+                            className: '', 
+                            iconSize: null 
+                        });
+
+                        let speedHtml = '';
+                        if (vehicle.position.speed && vehicle.position.speed > 0) {
+                            let speedKmh = Math.round(vehicle.position.speed * 3.6);
+                            speedHtml = `<div class="info-row"><span>Speed</span><strong>${speedKmh} km/h</strong></div>`;
+                        }
+                        
+                        // 2. Build the new popup layout
+                        const popupHtml = `
+                            <div class="custom-popup">
+                                <div class="popup-header">
+                                    <span class="route-badge ${pillClass}">${emoji}${routeShortName}</span>
+                                    <div class="route-name">${longName}</div>
+                                </div>
+                                <div class="popup-body">
+                                    <div class="info-row"><span>Vehicle ID</span><strong>${vehicleId}</strong></div>
+                                    <div class="info-row"><span>Trip ID</span><strong>${vehicle.trip?.tripId || 'N/A'}</strong></div>
+                                    ${speedHtml}
+                                </div>
+                            </div>
+                        `;
+
+                        // 3. Bind the popupHtml variable properly!
+                        const marker = L.marker([vehicle.position.latitude, vehicle.position.longitude], { icon: dynamicIcon })
+                            .bindPopup(popupHtml);
+
+                        busMarkersDict[vehicleId] = marker;
+
+                        if (routeShortName && routeShortName !== "Bus" && routeShortName !== "KTM") {
+                            const cleanRouteName = routeShortName.toString().toUpperCase();
+                            if (!routeMarkersDict[cleanRouteName]) {
+                                routeMarkersDict[cleanRouteName] = [];
+                            }
+                            routeMarkersDict[cleanRouteName].push(marker);
+                        }
+
+                        newMarkers.push(marker);
+                    }
+                });
+                markersGroup.addLayers(newMarkers);
+            } catch (error) {
+                console.error("Error fetching buses:", error);
+            } finally {
+                // 2. REVERT TO LIVE STATE (Runs whether the fetch succeeded or failed)
+                syncDot.classList.remove('is-syncing');
+                updateCountdownDisplay();
+            }
+        }
+
+        // Toggle Dropdown Menu
+        function toggleAgencyDropdown() {
+            document.getElementById('custom-agency-select').classList.toggle('open');
+        }
+
+        // Close dropdown when clicking anywhere else on the screen
+        document.addEventListener('click', function(e) {
+            const selectEl = document.getElementById('custom-agency-select');
+            if (selectEl && !selectEl.contains(e.target)) {
+                selectEl.classList.remove('open');
+            }
+        });
+
+        // Handle the selection
+        function selectAgencyOption(value, text, dotClass, skipFlyTo = false) {
+            // 1. Update the hidden input for the API fetcher
+            document.getElementById('agency-select').value = value;
+            
+            // 2. Update the main button text and dot color
+            document.getElementById('selected-text').innerText = text;
+            document.getElementById('selected-dot').className = `agency-dot ${dotClass}`;
+            
+            // 3. Highlight the correct item in the list
+            document.querySelectorAll('.select-option').forEach(opt => {
+                opt.classList.toggle('active', opt.dataset.value === value);
+            });
+            
+            // 4. Close the menu
+            document.getElementById('custom-agency-select').classList.remove('open');
+            
+            // 5. Move the map camera (unless triggered by the 'Locate Me' auto-switcher)
+            if (!skipFlyTo) {
+                const location = agencyLocations[value];
+                if (location) {
+                    const isMobile = window.innerWidth < 768;
+                    let latOffset = isMobile ? (location.zoom === 12 ? 0.04 : 0.02) : 0;
+                    map.flyTo([location.lat - latOffset, location.lng], location.zoom);
+                }
+            }
+            
+            // 6. Fetch the new buses!
+            fetchBuses();
+        }
+
+        document.getElementById('search-input').addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') searchBus();
+        });
+
+        function searchBus() {
+            const query = document.getElementById('search-input').value.trim().toUpperCase();
+            if (!query) return;
+
+            const targetMarker = busMarkersDict[query];
+            if (targetMarker) {
+                markersGroup.zoomToShowLayer(targetMarker, function () {
+                    targetMarker.openPopup();
+                });
+                return;
+            }
+
+            const routeMarkers = routeMarkersDict[query];
+            if (routeMarkers && routeMarkers.length > 0) {
+                if (routeMarkers.length === 1) {
+                    markersGroup.zoomToShowLayer(routeMarkers[0], function () {
+                        routeMarkers[0].openPopup();
+                    });
+                } else {
+                    const latLngs = routeMarkers.map(m => m.getLatLng());
+                    const bounds = L.latLngBounds(latLngs);
+                    map.flyToBounds(bounds, { padding: [50, 50], maxZoom: 15, duration: 1.5 });
+
+                    setTimeout(() => {
+                        alert(`Found ${routeMarkers.length} active buses on Route ${query}!`);
+                    }, 1600);
+                }
+                return;
+            }
+
+            alert(`Could not find Vehicle ID or Route '${query}'.`);
+        }
+
+        let userLocationMarker;
+        function locateMe() {
+            map.locate({ setView: true, maxZoom: 15 });
+        }
+
+        map.on('locationfound', function (e) {
+            // 1. Draw or move the user's "You Are Here" GPS marker
+            if (userLocationMarker) map.removeLayer(userLocationMarker);
+            userLocationMarker = L.circleMarker(e.latlng, {
+                radius: 8, color: 'white', weight: 3, fillColor: '#6366f1', fillOpacity: 1
+            }).addTo(map).bindPopup("<b style='color:#111827;'>You are here</b>").openPopup();
+
+            // 2. AUTO-SWITCH AGENCY LOGIC
+            let closestAgency = null;
+            let shortestDistance = Infinity;
+
+            // Loop through our known cities/regions to calculate who is closest to the user
+            for (const [agency, coords] of Object.entries(agencyLocations)) {
+                // Skip 'ktmb' because trains are nationwide and don't represent a single city bus region
+                if (agency === 'ktmb') continue;
+
+                // Basic coordinate distance formula (Euclidean distance)
+                const dLat = e.latlng.lat - coords.lat;
+                const dLng = e.latlng.lng - coords.lng;
+                const distance = Math.sqrt(dLat * dLat + dLng * dLng);
+
+                if (distance < shortestDistance) {
+                    shortestDistance = distance;
+                    closestAgency = agency;
+                }
+            }
+
+            // 3. If a matching city is found within a realistic travel threshold
+            if (closestAgency && shortestDistance < 1.5) {
+                const currentVal = document.getElementById('agency-select').value;
+                
+                // Only trigger if it's a new city
+                if (currentVal !== closestAgency) {
+                    // Find the option element in our custom HTML to extract its text and colored dot
+                    const targetOption = document.querySelector(`.select-option[data-value="${closestAgency}"]`);
+                    if (targetOption) {
+                        const text = targetOption.querySelector('.text').innerText;
+                        const dotClass = Array.from(targetOption.querySelector('.agency-dot').classList).find(c => c.startsWith('dot-'));
+                        
+                        // Pass 'true' at the end so it doesn't move the map camera away from your GPS location!
+                        selectAgencyOption(closestAgency, text, dotClass, true);
+                    }
+                }
+            }
+        });
+
+        map.on('locationerror', function (e) {
+            alert("Could not find your location. Please check your browser permissions.");
+        });
+
+        fetchBuses();
+    </script>
+    
+</body>
+
+</html>
