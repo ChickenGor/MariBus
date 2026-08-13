@@ -265,6 +265,17 @@
             color: var(--text-main);
         }
 
+        #resume-journey-button {
+            display:none; width:100%; align-items:center; justify-content:space-between; gap:12px;
+            padding:12px 14px; border:1px solid rgba(249,57,153,.28); border-radius:14px;
+            background:rgba(249,57,153,.09); color:var(--text-main); font:inherit;
+            text-align:left; cursor:pointer;
+        }
+        #resume-journey-button.visible { display:flex; }
+        #resume-journey-button strong { display:block; font-size:13px; }
+        #resume-journey-label { display:block; max-width:260px; overflow:hidden; color:var(--text-muted); font-size:11px; text-overflow:ellipsis; white-space:nowrap; }
+        #resume-journey-button .resume-arrow { flex:0 0 auto; color:#f93999; font-size:20px; font-weight:800; }
+
         /* --- LIVE STATUS BADGE & PULSE DOT --- */
         .status-badge {
             display: flex;
@@ -792,6 +803,10 @@
                 <span id="refresh-timer" class="status-text">Live</span>
             </div>
         </div>
+        <button id="resume-journey-button" type="button" onclick="resumeTransitPanel()">
+            <span><strong>Back to journey</strong><span id="resume-journey-label">View your previous route options</span></span>
+            <span class="resume-arrow" aria-hidden="true">&#8593;</span>
+        </button>
         <div class="custom-select" id="custom-agency-select">
             <div class="select-trigger" onclick="toggleAgencyDropdown()">
                 <div class="select-value">
@@ -1218,6 +1233,7 @@
             document.getElementById('panel-content').innerHTML = html;
             document.getElementById('transit-panel').classList.add('open');
             const sheet = document.getElementById('bottom-sheet');
+            document.getElementById('resume-journey-button').classList.remove('visible');
             sheet.classList.add('detail-mode');
             if (window.innerWidth < 768 && !sheet.classList.contains('sheet-dragging')) {
                 sheet.classList.remove('sheet-half', 'sheet-expanded');
@@ -1310,11 +1326,29 @@
             const sheet = document.getElementById('bottom-sheet');
             sheet.classList.remove('detail-mode', 'sheet-half', 'sheet-expanded', 'sheet-dragging');
             sheet.style.height = '';
+            const resumeButton = document.getElementById('resume-journey-button');
+            const canResumeJourney = Boolean(journeySelection.from?.place && journeySelection.to?.place && document.getElementById('panel-content').children.length);
+            resumeButton.classList.toggle('visible', canResumeJourney);
+            if (canResumeJourney) {
+                document.getElementById('resume-journey-label').textContent = `${journeySelection.from.place.name} → ${journeySelection.to.place.name}`;
+            }
             journeyLiveVehicleLayer.clearLayers();
             if (routeBrowseTimer) clearInterval(routeBrowseTimer);
             routeBrowseTimer = null;
             journeyMapFocused = false;
             fetchBuses();
+        }
+
+        function resumeTransitPanel() {
+            const panel = document.getElementById('transit-panel');
+            if (!panel.querySelector('#panel-content')?.children.length) return;
+            document.getElementById('resume-journey-button').classList.remove('visible');
+            panel.classList.add('open');
+            const sheet = document.getElementById('bottom-sheet');
+            sheet.classList.add('detail-mode');
+            sheet.classList.remove('sheet-half', 'sheet-expanded');
+            sheet.style.height = '';
+            sheet.scrollTop = 0;
         }
 
         function focusJourneyMap() {
@@ -2623,7 +2657,7 @@
 
         Object.assign(window, {
             toggleTheme, locateMe, searchBus, selectAgencyOption, toggleAgencyDropdown,
-            closeTransitPanel, showRoute, toggleJourneyPlanner, showMapSearch, planJourney, useCurrentLocationForJourney
+            closeTransitPanel, resumeTransitPanel, showRoute, toggleJourneyPlanner, showMapSearch, planJourney, useCurrentLocationForJourney
         });
         initializeJourneyPlanner();
         initializeBottomSheetDrag();
