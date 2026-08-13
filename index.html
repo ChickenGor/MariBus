@@ -95,6 +95,7 @@
             background: none; border: none; font-size: 20px; cursor: pointer; padding: 5px;
             margin-left: auto; 
         }
+        body.dark-mode #theme-toggle-header { color:#ffffff; }
         .ui-icon { width:20px; height:20px; display:block; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
         .inline-icon { width:15px; height:15px; display:inline-block; vertical-align:-2px; margin-right:3px; }
 
@@ -248,6 +249,7 @@
             background: var(--border-color);
             border-radius: 3px;
             margin: 0 auto;
+            flex:0 0 auto;
         }
 
         .sheet-header {
@@ -618,7 +620,6 @@
         }
         #transit-panel.open { display: block; }
         #bottom-sheet.detail-mode { max-height: min(68vh, 620px); overflow-y: auto; }
-        #bottom-sheet.detail-mode > .drag-handle,
         #bottom-sheet.detail-mode > .sheet-header,
         #bottom-sheet.detail-mode > .custom-select { display:none; }
         .panel-heading { display:flex; justify-content:space-between; gap:12px; align-items:flex-start; }
@@ -713,7 +714,25 @@
             .logo-text { font-size:15px; }
             #header-journey-search { height:42px; padding:0 12px; font-size:14px; }
             #header-journey-search.expanded { top:78px; }
-            #bottom-sheet.detail-mode { max-height:58vh; padding-top:20px; }
+            #bottom-sheet.detail-mode {
+                height:max(190px, 32dvh);
+                max-height:none;
+                padding-top:10px;
+                overflow-y:auto;
+                transition:height .28s cubic-bezier(.2,.8,.2,1), background-color .3s, box-shadow .3s;
+            }
+            #bottom-sheet.detail-mode.sheet-half { height:52dvh; }
+            #bottom-sheet.detail-mode.sheet-expanded { height:80dvh; }
+            #bottom-sheet.detail-mode.sheet-dragging { transition:none; user-select:none; }
+            #bottom-sheet.detail-mode > .drag-handle {
+                display:block;
+                width:48px;
+                height:5px;
+                margin:0 auto 4px;
+                cursor:grab;
+                touch-action:none;
+            }
+            #bottom-sheet.detail-mode.sheet-dragging > .drag-handle { cursor:grabbing; }
             .planner-controls { flex-wrap:wrap; }
             .planner-controls input { flex-basis:40%; }
             #plan-journey-button { flex-basis:100%; }
@@ -1191,8 +1210,65 @@
             document.getElementById('panel-subtitle').textContent = subtitle || '';
             document.getElementById('panel-content').innerHTML = html;
             document.getElementById('transit-panel').classList.add('open');
-            document.getElementById('bottom-sheet').classList.add('detail-mode');
-            document.getElementById('bottom-sheet').scrollTop = 0;
+            const sheet = document.getElementById('bottom-sheet');
+            sheet.classList.add('detail-mode');
+            if (window.innerWidth < 768 && !sheet.classList.contains('sheet-dragging')) {
+                sheet.classList.remove('sheet-half', 'sheet-expanded');
+                sheet.style.height = '';
+            }
+            sheet.scrollTop = 0;
+        }
+
+        function initializeBottomSheetDrag() {
+            const sheet = document.getElementById('bottom-sheet');
+            const handle = sheet.querySelector('.drag-handle');
+            let startY = 0;
+            let startHeight = 0;
+            let pointerId = null;
+
+            const snapSheet = height => {
+                const viewportHeight = window.innerHeight;
+                const compactHeight = Math.max(190, viewportHeight * .32);
+                const halfHeight = viewportHeight * .52;
+                const expandedHeight = viewportHeight * .80;
+                const nearest = [
+                    { name:'compact', height:compactHeight },
+                    { name:'half', height:halfHeight },
+                    { name:'expanded', height:expandedHeight }
+                ].reduce((best, item) => Math.abs(item.height - height) < Math.abs(best.height - height) ? item : best);
+
+                sheet.classList.remove('sheet-dragging', 'sheet-half', 'sheet-expanded');
+                if (nearest.name === 'half') sheet.classList.add('sheet-half');
+                if (nearest.name === 'expanded') sheet.classList.add('sheet-expanded');
+                sheet.style.height = '';
+            };
+
+            handle.addEventListener('pointerdown', event => {
+                if (window.innerWidth >= 768 || !sheet.classList.contains('detail-mode')) return;
+                pointerId = event.pointerId;
+                startY = event.clientY;
+                startHeight = sheet.getBoundingClientRect().height;
+                sheet.classList.add('sheet-dragging');
+                sheet.style.height = `${startHeight}px`;
+                handle.setPointerCapture(pointerId);
+                event.preventDefault();
+            });
+
+            handle.addEventListener('pointermove', event => {
+                if (pointerId !== event.pointerId) return;
+                const nextHeight = Math.min(window.innerHeight * .82, Math.max(170, startHeight + startY - event.clientY));
+                sheet.style.height = `${nextHeight}px`;
+            });
+
+            const finishDrag = event => {
+                if (pointerId !== event.pointerId) return;
+                const height = sheet.getBoundingClientRect().height;
+                if (handle.hasPointerCapture(pointerId)) handle.releasePointerCapture(pointerId);
+                pointerId = null;
+                snapSheet(height);
+            };
+            handle.addEventListener('pointerup', finishDrag);
+            handle.addEventListener('pointercancel', finishDrag);
         }
 
         function setRouteLoading(isLoading) {
@@ -1221,7 +1297,9 @@
 
         function closeTransitPanel() {
             document.getElementById('transit-panel').classList.remove('open');
-            document.getElementById('bottom-sheet').classList.remove('detail-mode');
+            const sheet = document.getElementById('bottom-sheet');
+            sheet.classList.remove('detail-mode', 'sheet-half', 'sheet-expanded', 'sheet-dragging');
+            sheet.style.height = '';
             journeyLiveVehicleLayer.clearLayers();
             if (routeBrowseTimer) clearInterval(routeBrowseTimer);
             routeBrowseTimer = null;
@@ -2523,6 +2601,7 @@
             closeTransitPanel, showRoute, toggleJourneyPlanner, showMapSearch, planJourney, useCurrentLocationForJourney
         });
         initializeJourneyPlanner();
+        initializeBottomSheetDrag();
         fetchBuses();
         });
     </script>
