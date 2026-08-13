@@ -20,7 +20,7 @@
       <div class="auth-divider"><span>or use email</span></div>
 
       <form id="email-auth-form" class="stack">
-        <label id="name-field" hidden>Full name<input id="auth-name" class="field" type="text" autocomplete="name" placeholder="Your name"></label>
+        <label id="name-field" hidden>Username<input id="auth-name" class="field" type="text" autocomplete="username" minlength="3" maxlength="24" pattern="[A-Za-z0-9_]+" placeholder="e.g. maribus_rider"></label>
         <label>Email address<input id="auth-email" class="field" type="email" autocomplete="email" placeholder="you@example.com" required></label>
         <label>Password<input id="auth-password" class="field" type="password" autocomplete="current-password" minlength="6" placeholder="At least 6 characters" required></label>
         <button id="email-auth-submit" class="button" type="submit">Sign in</button>
