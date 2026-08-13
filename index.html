@@ -251,6 +251,7 @@
             margin: 0 auto;
             flex:0 0 auto;
         }
+        .sheet-swipe-hint { display:none; }
 
         .sheet-header {
             display: flex;
@@ -754,6 +755,15 @@
                 cursor:grab;
                 touch-action:none;
             }
+            #bottom-sheet.detail-mode:not(.sheet-half):not(.sheet-expanded) .sheet-swipe-hint {
+                display:block;
+                margin:-1px 0 1px;
+                color:var(--text-muted);
+                font-size:9px;
+                font-weight:700;
+                letter-spacing:.15px;
+                text-align:center;
+            }
             #bottom-sheet.detail-mode.sheet-dragging > .drag-handle { cursor:grabbing; }
             #bottom-sheet.detail-mode:not(.sheet-half):not(.sheet-expanded) .journey-card.modern {
                 padding:9px 11px;
@@ -820,6 +830,7 @@
 
     <div id="bottom-sheet">
         <div class="drag-handle"></div>
+        <div class="sheet-swipe-hint" aria-hidden="true">Swipe up for more</div>
         <div class="sheet-header">
             <h2>Active Service</h2>
             <div class="status-badge">
