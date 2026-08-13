@@ -1,6 +1,5 @@
 (async function () {
-    const apiOrigin = (location.protocol === 'file:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')
-        ? 'http://localhost:5000' : 'https://maribus.onrender.com';
+    const apiOrigin = location.protocol === 'file:' ? 'http://localhost:5000' : location.origin;
 
     function showSetupMessage(message) {
         window.googleMapsLoadError = message;

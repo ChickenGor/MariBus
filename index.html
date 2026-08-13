@@ -836,8 +836,7 @@
 
     <script>
         window.addEventListener('google-maps-ready', () => {
-        const API_BASE = (location.protocol === 'file:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')
-            ? 'http://localhost:5000' : 'https://maribus.onrender.com';
+        const API_BASE = location.protocol === 'file:' ? 'http://localhost:5000' : location.origin;
         const map = L.map('map', { zoomControl: false }).setView([3.1390, 101.6869], 12);
         L.control.zoom({ position: 'bottomleft' }).addTo(map);
 

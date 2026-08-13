@@ -1,0 +1,10 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "flask",
+  "functions": {
+    "app.py": {
+      "maxDuration": 60,
+      "excludeFiles": "{otp/**,build_static_db.py,prepare_otp_data.py}"
+    }
+  }
+}
