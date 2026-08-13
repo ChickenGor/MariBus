@@ -727,6 +727,15 @@
             #top-bar { gap:8px; padding:0 10px; }
             .logo-text { font-size:15px; }
             #header-journey-search { height:42px; padding:0 12px; font-size:14px; }
+            #bottom-sheet:not(.detail-mode) { padding:8px 16px 12px; gap:8px; }
+            #bottom-sheet:not(.detail-mode) .drag-handle { margin-bottom:1px; }
+            #bottom-sheet:not(.detail-mode) .sheet-header h2 { font-size:17px; }
+            #bottom-sheet:not(.detail-mode) .status-badge { padding:2px 7px; }
+            #bottom-sheet:not(.detail-mode) #refresh-timer { padding:3px 5px; font-size:11px; }
+            #bottom-sheet:not(.detail-mode) .select-trigger { padding:10px 12px; }
+            #bottom-sheet:not(.detail-mode) .select-value { gap:9px; font-size:14px; }
+            #bottom-sheet:not(.detail-mode) #app-footer { display:none; }
+            body:not(:has(#bottom-sheet.detail-mode)) #fab-locate { bottom:145px; }
             #top-bar.search-focused .brand,
             #top-bar.search-focused #theme-toggle-header { display:none; }
             #top-bar.search-focused #header-journey-search {
