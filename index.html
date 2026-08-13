@@ -1281,6 +1281,9 @@
                     <div class="text" data-text="Searching routes"></div>
                 </div>
             </div>`);
+            if (window.innerWidth < 768) {
+                document.getElementById('bottom-sheet').classList.add('sheet-half');
+            }
         }
 
         function iconSvg(name, className = 'ui-icon') {
