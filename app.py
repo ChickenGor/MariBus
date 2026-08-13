@@ -222,6 +222,19 @@ def index():
     return send_file(os.path.join(os.path.dirname(__file__), "index.html"))
 
 
+PAGE_NAMES = {
+    "ad-free", "saved-routes", "notifications", "feedback",
+    "share", "rate-us", "about-us", "sign-in",
+}
+
+
+@app.get("/<page_name>")
+def app_page(page_name):
+    if page_name not in PAGE_NAMES:
+        return jsonify({"success": False, "error": "Page not found"}), 404
+    return send_file(os.path.join(os.path.dirname(__file__), "pages", f"{page_name}.html"))
+
+
 @app.get("/api/live-buses")
 def get_live_buses():
     agency = request.args.get("agency", "rapid-bus-kl")
