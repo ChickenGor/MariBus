@@ -910,8 +910,12 @@ def plan_nearby_journey():
         return jsonify({"success": False, "error": "Use YYYY-MM-DD and HH:MM formats"}), 400
 
     with db_connection() as connection:
-        origins = nearby_stops(connection, agency, *coordinates["from"])
-        destinations = nearby_stops(connection, agency, *coordinates["to"])
+        # Direct journeys need a wider candidate set than transfers. Dense
+        # city areas can have many closer stops from unrelated routes, which
+        # previously pushed a valid through-route stop (for example A34) out
+        # of the six-stop shortlist and produced an unnecessary transfer.
+        origins = nearby_stops(connection, agency, *coordinates["from"], limit=12)
+        destinations = nearby_stops(connection, agency, *coordinates["to"], limit=12)
         if not origins:
             return jsonify({"success": True, "data": [], "notice": "No selected-operator stops were found within 5 km of the starting point"})
         if not destinations:
@@ -940,8 +944,10 @@ def plan_nearby_journey():
                   AND destination.stop_id IN ({destination_marks}) AND t.service_id IN ({service_marks})""",
             [agency, *origin_map, *destination_map, *active_services],
         ).fetchall()
+        transfer_origin_map = {item["stop_id"]: item for item in origins[:6]}
+        transfer_destination_map = {item["stop_id"]: item for item in destinations[:6]}
         transfer_results = one_transfer_journeys(
-            connection, agency, origin_map, destination_map, active_services, requested_seconds
+            connection, agency, transfer_origin_map, transfer_destination_map, active_services, requested_seconds
         )
 
     journeys, seen = [], set()
