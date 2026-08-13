@@ -1,5 +1,6 @@
 (async function () {
-    const apiOrigin = location.protocol === 'file:' ? 'http://localhost:5000' : location.origin;
+    const isLocalFrontend = ['localhost', '127.0.0.1'].includes(location.hostname) && location.port !== '5000';
+    const apiOrigin = location.protocol === 'file:' || isLocalFrontend ? 'http://localhost:5000' : location.origin;
 
     function showSetupMessage(message) {
         window.googleMapsLoadError = message;

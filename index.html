@@ -836,7 +836,8 @@
 
     <script>
         window.addEventListener('google-maps-ready', () => {
-        const API_BASE = location.protocol === 'file:' ? 'http://localhost:5000' : location.origin;
+        const IS_LOCAL_FRONTEND = ['localhost', '127.0.0.1'].includes(location.hostname) && location.port !== '5000';
+        const API_BASE = location.protocol === 'file:' || IS_LOCAL_FRONTEND ? 'http://localhost:5000' : location.origin;
         const map = L.map('map', { zoomControl: false }).setView([3.1390, 101.6869], 12);
         L.control.zoom({ position: 'bottomleft' }).addTo(map);
 
@@ -1406,7 +1407,11 @@
                     ? data.shape.map(point => [Number(point.lat), Number(point.lon)])
                     : data.stops.map(stop => [Number(stop.stop_lat), Number(stop.stop_lon)]);
                 const brandColor = safeRouteColor(data.route.route_color, agency);
-                if (coordinates.length) {
+                let roadMatched = false;
+                if (data.geometry_source === 'verified-override') {
+                    roadMatched = await drawVerifiedRouteOnRoads(coordinates, brandColor);
+                }
+                if (!roadMatched && coordinates.length) {
                     const line = drawOutlinedRoute(coordinates, brandColor);
                     map.fitBounds(line.getBounds(), { padding:[45,45] });
                 }
@@ -1417,7 +1422,8 @@
                 });
                 const routeLabel = compactRouteLabel(data.route.route_id, publicCode || data.route.route_short_name || data.route.route_long_name);
                 const title = `${routeLabel} ${data.trip.trip_headsign || ''}`.trim();
-                const geometryLabel = data.geometry_source === 'verified-override' ? 'verified route' : 'official stops';
+                const geometryLabel = data.geometry_source === 'verified-override'
+                    ? (roadMatched ? 'verified • road matched' : 'verified route') : 'official stops';
                 openTransitPanel(title, `${data.stops.length} stops • ${geometryLabel}`, `<div id="route-live-list" class="route-live-list"><p class="panel-message">Checking live bus locations…</p></div>` + data.stops.map((stop, index) => `
                     <div class="stop-row"><strong>${index + 1}</strong><span class="stop-name">${escapeHtml(stop.stop_name)}</span></div>
                 `).join(''));
@@ -1852,6 +1858,51 @@
                 console.warn('Road-snapped route unavailable; using GTFS geometry', error);
                 return false;
             }
+        }
+
+        async function drawVerifiedRouteOnRoads(coordinates, color) {
+            if (coordinates.length < 2 || !google.maps.DirectionsService) return false;
+            const points = coordinates.map(point => ({ lat:Number(point[0]), lng:Number(point[1]) }));
+            const chunks = [];
+            // Directions supports a limited number of waypoints. Twenty-three
+            // anchors per request keeps the verified trace influential while
+            // avoiding one request for every pair of points.
+            for (let start = 0; start < points.length - 1; start += 22) {
+                chunks.push(points.slice(start, Math.min(start + 23, points.length)));
+            }
+            const service = new google.maps.DirectionsService();
+            const bounds = new google.maps.LatLngBounds();
+            let renderedSegments = 0;
+            for (const chunk of chunks) {
+                let path = chunk.map(point => new google.maps.LatLng(point.lat, point.lng));
+                try {
+                    const directions = await new Promise((resolve, reject) => service.route({
+                        origin:chunk[0], destination:chunk[chunk.length - 1],
+                        waypoints:chunk.slice(1, -1).map(location => ({ location, stopover:false })),
+                        optimizeWaypoints:false,
+                        travelMode:google.maps.TravelMode.DRIVING,
+                    }, (response, status) => status === google.maps.DirectionsStatus.OK ? resolve(response) : reject(new Error(status))));
+                    const candidate = directions.routes[0];
+                    const tracedLength = chunk.slice(1).reduce((total, point, index) => total + distanceMetres(chunk[index], point), 0);
+                    const routedLength = candidate.legs.reduce((total, leg) => total + Number(leg.distance?.value || 0), 0);
+                    // Reject implausible highway loops while accepting ordinary
+                    // road curvature around sparse trace points.
+                    if (tracedLength > 0 && routedLength <= tracedLength * 1.8) path = candidate.overview_path;
+                } catch (error) {
+                    console.warn('Verified route chunk could not be road matched', error);
+                }
+                const outline = new google.maps.Polyline({
+                    map:map.native, path, strokeColor:'#7a163f', strokeWeight:12, strokeOpacity:.95, zIndex:4,
+                });
+                const routeLine = new google.maps.Polyline({
+                    map:map.native, path, strokeColor:color, strokeWeight:8, strokeOpacity:1, zIndex:5,
+                });
+                routeDirectionsRenderers.push(outline, routeLine);
+                path.forEach(point => bounds.extend(point));
+                renderedSegments++;
+            }
+            if (renderedSegments && !bounds.isEmpty()) map.native.fitBounds(bounds, 45);
+            return renderedSegments > 0;
         }
 
         function selectAgencyForPlace(place) {
