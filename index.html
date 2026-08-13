@@ -989,6 +989,11 @@
                 if (error?.name !== 'AbortError') window.showMenuNotice('Unable to share right now');
             }
         };
+        window.toggleTheme = function() {
+            const enabled = !document.body.classList.contains('dark-mode');
+            document.body.classList.toggle('dark-mode', enabled);
+            window.__mariBusSetMapTheme?.(enabled);
+        };
     </script>
     <script src="/static/google-maps-adapter.js"></script>
 
@@ -998,6 +1003,36 @@
         const API_BASE = location.protocol === 'file:' || IS_LOCAL_FRONTEND ? 'http://localhost:5000' : location.origin;
         const map = L.map('map', { zoomControl: false }).setView([3.1390, 101.6869], 12);
         L.control.zoom({ position: 'bottomleft' }).addTo(map);
+
+        const GOOGLE_DARK_MAP_STYLES = [
+            { elementType:'geometry', stylers:[{ color:'#1d2c4d' }] },
+            { elementType:'labels.text.fill', stylers:[{ color:'#8ec3b9' }] },
+            { elementType:'labels.text.stroke', stylers:[{ color:'#1a3646' }] },
+            { featureType:'administrative.country', elementType:'geometry.stroke', stylers:[{ color:'#4b6878' }] },
+            { featureType:'administrative.land_parcel', elementType:'labels.text.fill', stylers:[{ color:'#64779e' }] },
+            { featureType:'administrative.province', elementType:'geometry.stroke', stylers:[{ color:'#4b6878' }] },
+            { featureType:'landscape.man_made', elementType:'geometry.stroke', stylers:[{ color:'#334e87' }] },
+            { featureType:'landscape.natural', elementType:'geometry', stylers:[{ color:'#023e58' }] },
+            { featureType:'poi', elementType:'geometry', stylers:[{ color:'#283d6a' }] },
+            { featureType:'poi', elementType:'labels.text.fill', stylers:[{ color:'#6f9ba5' }] },
+            { featureType:'poi', elementType:'labels.text.stroke', stylers:[{ color:'#1d2c4d' }] },
+            { featureType:'poi.park', elementType:'geometry.fill', stylers:[{ color:'#023e58' }] },
+            { featureType:'poi.park', elementType:'labels.text.fill', stylers:[{ color:'#3c7680' }] },
+            { featureType:'road', elementType:'geometry', stylers:[{ color:'#304a7d' }] },
+            { featureType:'road', elementType:'labels.text.fill', stylers:[{ color:'#98a5be' }] },
+            { featureType:'road', elementType:'labels.text.stroke', stylers:[{ color:'#1d2c4d' }] },
+            { featureType:'road.highway', elementType:'geometry', stylers:[{ color:'#2c6675' }] },
+            { featureType:'road.highway', elementType:'geometry.stroke', stylers:[{ color:'#255763' }] },
+            { featureType:'road.highway', elementType:'labels.text.fill', stylers:[{ color:'#b0d5ce' }] },
+            { featureType:'transit', elementType:'labels.text.fill', stylers:[{ color:'#98a5be' }] },
+            { featureType:'transit', elementType:'labels.text.stroke', stylers:[{ color:'#1d2c4d' }] },
+            { featureType:'transit.line', elementType:'geometry.fill', stylers:[{ color:'#283d6a' }] },
+            { featureType:'transit.station', elementType:'geometry', stylers:[{ color:'#3a4762' }] },
+            { featureType:'water', elementType:'geometry', stylers:[{ color:'#0e1626' }] },
+            { featureType:'water', elementType:'labels.text.fill', stylers:[{ color:'#4e6d70' }] }
+        ];
+        window.__mariBusSetMapTheme = enabled => map.native.setOptions({ styles:enabled ? GOOGLE_DARK_MAP_STYLES : null });
+        window.__mariBusSetMapTheme(document.body.classList.contains('dark-mode'));
 
         // 2. Light and Dark Map Layer URLs
         const lightTileUrl = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
@@ -1046,10 +1081,11 @@
 
         // 3. The Toggle Theme Function
         function toggleTheme() {
-            isDarkMode = !isDarkMode;
+            isDarkMode = !document.body.classList.contains('dark-mode');
 
             // This single line instantly triggers the CSS filter to invert the map!
             document.body.classList.toggle('dark-mode', isDarkMode);
+            window.__mariBusSetMapTheme(isDarkMode);
 
             document.getElementById('sidebar-theme-icon').innerHTML = isDarkMode
                 ? '<circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path>'
