@@ -109,7 +109,7 @@
             const pillSvg = text ? `<svg xmlns="http://www.w3.org/2000/svg" width="${pillWidth}" height="34" viewBox="0 0 ${pillWidth} 34"><rect x="1" y="1" width="${pillWidth - 2}" height="32" rx="16" fill="${markerColor}" stroke="white" stroke-width="2"/><text x="50%" y="22" text-anchor="middle" font-family="Manrope,Arial,sans-serif" font-size="12" font-weight="800" fill="white">${String(text).replace(/[&<>"']/g, '')}</text></svg>` : '';
             this.native = new google.maps.Marker({
                 map:nativeMap, position:this.point,
-                icon: isStop ? { path:google.maps.SymbolPath.CIRCLE, scale:7, fillColor:'#ffffff', fillOpacity:1, strokeColor:this.options.icon?.color || '#2563eb', strokeWeight:4 }
+                icon: isStop ? { path:google.maps.SymbolPath.CIRCLE, scale:5, fillColor:'#ffffff', fillOpacity:1, strokeColor:'#475569', strokeWeight:1.5 }
                     : text ? { url:`data:image/svg+xml;charset=UTF-8,${encodeURIComponent(pillSvg)}`, scaledSize:new google.maps.Size(pillWidth, 34), anchor:new google.maps.Point(pillWidth / 2, 17) }
                     : undefined,
                 title:this.options.title || '',
