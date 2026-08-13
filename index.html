@@ -74,11 +74,8 @@
             box-shadow: 0 2px 10px var(--shadow-color);
             transition: background-color 0.3s;
         }
-        /* 1. This centers the brand element container inside the flex bar */
-        .brand { 
-            display: flex; align-items: center; gap: 8px; 
-            flex:0 0 auto;
-        }
+        #menu-button { width:40px; height:40px; flex:0 0 40px; display:grid; place-items:center; border:0; border-radius:50%; background:transparent; color:var(--text-main); cursor:pointer; }
+        #menu-button:hover { background:var(--input-bg); }
 
         .logo-icon { font-size: 24px; }
         .logo-text { 
@@ -98,6 +95,30 @@
         body.dark-mode #theme-toggle-header { color:#ffffff; }
         .ui-icon { width:20px; height:20px; display:block; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
         .inline-icon { width:15px; height:15px; display:inline-block; vertical-align:-2px; margin-right:3px; }
+
+        #sidebar-backdrop { position:fixed; inset:0; z-index:3990; border:0; background:rgba(15,23,42,.45); opacity:0; pointer-events:none; transition:opacity .25s ease; }
+        #app-sidebar { position:fixed; inset:0 auto 0 0; z-index:4000; width:min(330px, 86vw); display:flex; flex-direction:column; padding:22px 16px 18px; box-sizing:border-box; background:var(--sheet-bg); color:var(--text-main); box-shadow:12px 0 35px rgba(15,23,42,.25); transform:translateX(-105%); transition:transform .28s cubic-bezier(.2,.8,.2,1); }
+        body.sidebar-open { overflow:hidden; }
+        body.sidebar-open #sidebar-backdrop { opacity:1; pointer-events:auto; }
+        body.sidebar-open #app-sidebar { transform:translateX(0); }
+        .sidebar-brand { display:flex; align-items:center; justify-content:space-between; padding:4px 8px 18px; border-bottom:1px solid var(--border-color); }
+        .sidebar-brand strong { font-size:24px; font-weight:900; letter-spacing:-.7px; }
+        .sidebar-close { width:36px; height:36px; border:0; border-radius:50%; background:var(--input-bg); color:inherit; font-size:24px; cursor:pointer; }
+        .sidebar-menu { display:grid; gap:4px; padding:14px 0; }
+        .sidebar-item { width:100%; min-height:48px; display:flex; align-items:center; gap:13px; padding:0 12px; border:0; border-radius:12px; background:transparent; color:inherit; font:inherit; font-size:14px; font-weight:650; text-align:left; text-decoration:none; cursor:pointer; box-sizing:border-box; }
+        .sidebar-item:hover { background:var(--input-bg); }
+        .drawer-icon { width:20px; height:20px; flex:0 0 20px; fill:none; stroke:currentColor; stroke-width:1.9; stroke-linecap:round; stroke-linejoin:round; color:var(--text-muted); }
+        .sidebar-item-copy { flex:1; }
+        .sidebar-item small { display:block; margin-top:2px; color:var(--text-muted); font-size:10px; font-weight:600; }
+        .sidebar-theme-switch { width:38px; height:22px; position:relative; flex:0 0 38px; border-radius:999px; background:#cbd5e1; transition:background .2s; }
+        .sidebar-theme-switch::after { content:''; position:absolute; top:3px; left:3px; width:16px; height:16px; border-radius:50%; background:#fff; box-shadow:0 1px 4px rgba(15,23,42,.25); transition:transform .2s; }
+        body.dark-mode .sidebar-theme-switch { background:#2563eb; }
+        body.dark-mode .sidebar-theme-switch::after { transform:translateX(16px); }
+        .sidebar-signin { margin-top:auto; border-top:1px solid var(--border-color); padding-top:14px; }
+        .sidebar-signin .sidebar-item { background:#2563eb; color:#fff; justify-content:center; }
+        .sidebar-signin .drawer-icon { color:#fff; }
+        #menu-toast { position:fixed; z-index:4100; left:50%; bottom:24px; max-width:calc(100vw - 32px); padding:10px 14px; border-radius:999px; background:#111827; color:#fff; font-size:12px; font-weight:700; opacity:0; pointer-events:none; transform:translate(-50%, 15px); transition:opacity .2s, transform .2s; }
+        #menu-toast.visible { opacity:1; transform:translate(-50%, 0); }
 
         #header-journey-search {
             flex:1; max-width:620px; height:44px; margin:0 auto;
@@ -736,7 +757,7 @@
             #bottom-sheet:not(.detail-mode) .select-value { gap:9px; font-size:14px; }
             #bottom-sheet:not(.detail-mode) #app-footer { display:none; }
             body:not(:has(#bottom-sheet.detail-mode)) #fab-locate { bottom:145px; }
-            #top-bar.search-focused .brand,
+            #top-bar.search-focused #menu-button,
             #top-bar.search-focused #theme-toggle-header { display:none; }
             #top-bar.search-focused #header-journey-search {
                 width:100%;
@@ -817,10 +838,9 @@
 
 <body>
     <header id="top-bar">
-        <div class="brand">
-            <span class="logo-icon"></span>
-            <span class="logo-text">MARIBUS</span>
-        </div>
+        <button id="menu-button" type="button" onclick="toggleSidebar(true)" aria-label="Open menu" aria-expanded="false">
+            <svg class="ui-icon" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"></path></svg>
+        </button>
         <div id="header-journey-search">
             <div id="journey-origin-row" class="journey-input-row">
                 <span class="point-label">A</span>
@@ -834,8 +854,23 @@
                 <button id="journey-swap-button" type="button" onclick="swapJourneyPoints()" title="Swap locations" aria-label="Swap locations">&#8645;</button>
             </div>
         </div>
-        <button id="theme-toggle-header" onclick="toggleTheme()" title="Toggle Dark Mode" aria-label="Toggle dark mode"><svg class="ui-icon" viewBox="0 0 24 24"><path d="M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5 8.5 8.5 0 1 0 20.5 14.2Z"></path></svg></button>
     </header>
+
+    <button id="sidebar-backdrop" type="button" onclick="toggleSidebar(false)" aria-label="Close menu"></button>
+    <aside id="app-sidebar" aria-label="Main menu" aria-hidden="true">
+        <div class="sidebar-brand"><strong>MARIBUS</strong><button class="sidebar-close" type="button" onclick="toggleSidebar(false)" aria-label="Close menu">&times;</button></div>
+        <nav class="sidebar-menu">
+            <button class="sidebar-item" type="button" onclick="showMenuNotice('Ad-free version is coming soon')"><svg class="drawer-icon" viewBox="0 0 24 24"><path d="M4 7h16v12H4zM7 4h10v3M8 11h8M8 15h5"></path></svg><span class="sidebar-item-copy">Ad-free version<small>Enjoy MariBus without distractions</small></span></button>
+            <button class="sidebar-item" type="button" onclick="showMenuNotice('Saved routes are coming soon')"><svg class="drawer-icon" viewBox="0 0 24 24"><path d="M6 4h12v17l-6-4-6 4z"></path></svg><span class="sidebar-item-copy">Saved routes</span></button>
+            <button class="sidebar-item" type="button" onclick="showMenuNotice('Notifications are coming soon')"><svg class="drawer-icon" viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"></path></svg><span class="sidebar-item-copy">Notifications</span></button>
+            <a class="sidebar-item" href="mailto:?subject=MariBus%20feedback" onclick="toggleSidebar(false)"><svg class="drawer-icon" viewBox="0 0 24 24"><path d="M4 5h16v12H8l-4 4zM8 9h8M8 13h5"></path></svg><span class="sidebar-item-copy">User feedback</span></a>
+            <button class="sidebar-item" type="button" onclick="shareMariBus()"><svg class="drawer-icon" viewBox="0 0 24 24"><circle cx="18" cy="5" r="2.5"></circle><circle cx="6" cy="12" r="2.5"></circle><circle cx="18" cy="19" r="2.5"></circle><path d="m8.2 10.8 7.6-4.5M8.2 13.2l7.6 4.5"></path></svg><span class="sidebar-item-copy">Share us</span></button>
+            <button class="sidebar-item" type="button" onclick="showMenuNotice('Thank you! App rating will be available soon')"><svg class="drawer-icon" viewBox="0 0 24 24"><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-2.9-5.6 2.9 1.1-6.2L3 9.6l6.2-.9z"></path></svg><span class="sidebar-item-copy">Rate us</span></button>
+            <button class="sidebar-item" type="button" onclick="toggleTheme()"><svg id="sidebar-theme-icon" class="drawer-icon" viewBox="0 0 24 24"><path d="M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5 8.5 8.5 0 1 0 20.5 14.2Z"></path></svg><span class="sidebar-item-copy">Dark mode</span><span class="sidebar-theme-switch" aria-hidden="true"></span></button>
+        </nav>
+        <div class="sidebar-signin"><button class="sidebar-item" type="button" onclick="showMenuNotice('Sign in is coming soon')"><svg class="drawer-icon" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg><span>Sign in</span></button></div>
+    </aside>
+    <div id="menu-toast" role="status" aria-live="polite"></div>
 
     <small id="journey-from-match" hidden></small>
     <small id="journey-to-match" hidden></small>
@@ -928,6 +963,33 @@
     </div>
     
 
+    <script>
+        window.toggleSidebar = function(forceOpen) {
+            const shouldOpen = typeof forceOpen === 'boolean' ? forceOpen : !document.body.classList.contains('sidebar-open');
+            document.body.classList.toggle('sidebar-open', shouldOpen);
+            document.getElementById('app-sidebar')?.setAttribute('aria-hidden', String(!shouldOpen));
+            document.getElementById('menu-button')?.setAttribute('aria-expanded', String(shouldOpen));
+        };
+        window.showMenuNotice = function(message) {
+            const toast = document.getElementById('menu-toast');
+            toast.textContent = message;
+            toast.classList.add('visible');
+            clearTimeout(window.menuToastTimer);
+            window.menuToastTimer = setTimeout(() => toast.classList.remove('visible'), 2200);
+        };
+        window.shareMariBus = async function() {
+            const shareData = { title:'MariBus', text:'Track buses and plan bus journeys with MariBus.', url:location.origin };
+            try {
+                if (navigator.share) await navigator.share(shareData);
+                else {
+                    await navigator.clipboard.writeText(location.origin);
+                    window.showMenuNotice('MariBus link copied');
+                }
+            } catch (error) {
+                if (error?.name !== 'AbortError') window.showMenuNotice('Unable to share right now');
+            }
+        };
+    </script>
     <script src="/static/google-maps-adapter.js"></script>
 
     <script>
@@ -948,6 +1010,39 @@
         }).addTo(map);
 
         let isDarkMode = false;
+        let menuToastTimer = null;
+
+        function toggleSidebar(forceOpen) {
+            const shouldOpen = typeof forceOpen === 'boolean' ? forceOpen : !document.body.classList.contains('sidebar-open');
+            document.body.classList.toggle('sidebar-open', shouldOpen);
+            document.getElementById('app-sidebar').setAttribute('aria-hidden', String(!shouldOpen));
+            document.getElementById('menu-button').setAttribute('aria-expanded', String(shouldOpen));
+        }
+
+        function showMenuNotice(message) {
+            const toast = document.getElementById('menu-toast');
+            toast.textContent = message;
+            toast.classList.add('visible');
+            if (menuToastTimer) clearTimeout(menuToastTimer);
+            menuToastTimer = setTimeout(() => toast.classList.remove('visible'), 2200);
+        }
+
+        async function shareMariBus() {
+            const shareData = { title:'MariBus', text:'Track buses and plan bus journeys with MariBus.', url:location.origin };
+            try {
+                if (navigator.share) await navigator.share(shareData);
+                else {
+                    await navigator.clipboard.writeText(location.origin);
+                    showMenuNotice('MariBus link copied');
+                }
+            } catch (error) {
+                if (error?.name !== 'AbortError') showMenuNotice('Unable to share right now');
+            }
+        }
+
+        document.addEventListener('keydown', event => {
+            if (event.key === 'Escape') toggleSidebar(false);
+        });
 
         // 3. The Toggle Theme Function
         function toggleTheme() {
@@ -956,8 +1051,9 @@
             // This single line instantly triggers the CSS filter to invert the map!
             document.body.classList.toggle('dark-mode', isDarkMode);
 
-            // Update the button icon in the top header
-            document.getElementById('theme-toggle-header').innerHTML = iconSvg(isDarkMode ? 'sun' : 'moon');
+            document.getElementById('sidebar-theme-icon').innerHTML = isDarkMode
+                ? '<circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path>'
+                : '<path d="M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5 8.5 8.5 0 1 0 20.5 14.2Z"></path>';
             
             // Note: We completely removed the map.removeLayer() stuff! 
             // The map will no longer flicker or reload when switching themes.
@@ -2716,7 +2812,7 @@
         Object.assign(window, {
             toggleTheme, locateMe, searchBus, selectAgencyOption, toggleAgencyDropdown,
             closeTransitPanel, resumeTransitPanel, showRoute, toggleJourneyPlanner, showMapSearch, planJourney,
-            swapJourneyPoints, useCurrentLocationForJourney
+            swapJourneyPoints, useCurrentLocationForJourney, toggleSidebar, showMenuNotice, shareMariBus
         });
         initializeJourneyPlanner();
         initializeBottomSheetDrag();
