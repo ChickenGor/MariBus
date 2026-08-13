@@ -771,7 +771,18 @@
                 border-width:1px;
                 border-radius:14px;
             }
-            #bottom-sheet.detail-mode:not(.sheet-half):not(.sheet-expanded) .panel-heading { min-height:22px; }
+            #bottom-sheet.detail-mode:not(.sheet-half):not(.sheet-expanded) .panel-heading {
+                position:static;
+                min-height:0;
+                height:0;
+            }
+            #bottom-sheet.detail-mode:not(.sheet-half):not(.sheet-expanded) .panel-close {
+                position:absolute;
+                top:10px;
+                right:14px;
+                z-index:6;
+                padding:2px 6px;
+            }
             #bottom-sheet.detail-mode:not(.sheet-half):not(.sheet-expanded) .journey-card.modern:not(.selected) { display:none; }
             #bottom-sheet.detail-mode:not(.sheet-half):not(.sheet-expanded) .journey-card.modern.selected {
                 border-color:rgba(37,99,235,.45);
