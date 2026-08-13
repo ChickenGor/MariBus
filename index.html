@@ -755,6 +755,24 @@
                 touch-action:none;
             }
             #bottom-sheet.detail-mode.sheet-dragging > .drag-handle { cursor:grabbing; }
+            #bottom-sheet.detail-mode:not(.sheet-half):not(.sheet-expanded) .journey-card.modern {
+                padding:10px 12px;
+                margin:4px 0 8px;
+                border-width:1px;
+                border-radius:14px;
+            }
+            #bottom-sheet.detail-mode:not(.sheet-half):not(.sheet-expanded) .journey-card.modern.selected {
+                border-color:rgba(37,99,235,.45);
+            }
+            #bottom-sheet.detail-mode:not(.sheet-half):not(.sheet-expanded) .journey-card.modern .journey-board,
+            #bottom-sheet.detail-mode:not(.sheet-half):not(.sheet-expanded) .journey-card.modern .journey-live-progress,
+            #bottom-sheet.detail-mode:not(.sheet-half):not(.sheet-expanded) .journey-card.modern .journey-alternatives,
+            #bottom-sheet.detail-mode:not(.sheet-half):not(.sheet-expanded) .journey-card.modern .route-action {
+                display:none;
+            }
+            #bottom-sheet.detail-mode:not(.sheet-half):not(.sheet-expanded) .journey-card.modern .journey-total { font-size:17px; }
+            #bottom-sheet.detail-mode:not(.sheet-half):not(.sheet-expanded) .journey-card.modern .journey-main-time { font-size:14px; }
+            #bottom-sheet.detail-mode:not(.sheet-half):not(.sheet-expanded) .journey-card.modern .journey-steps { margin-top:6px; }
             .planner-controls { flex-wrap:wrap; }
             .planner-controls input { flex-basis:40%; }
             #plan-journey-button { flex-basis:100%; }
