@@ -1,1 +1,40 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Sign in · MariBus</title><link rel="stylesheet" href="/static/pages.css"></head><body><div class="page"><header class="top"><a class="back" href="/" aria-label="Back to map">‹</a><span class="brand">MARIBUS</span></header><main class="content"><section class="hero"><p class="eyebrow">Your MariBus</p><h1>Sign in</h1><p>Sync saved routes, preferences and notifications across your devices.</p></section><div class="card stack"><label>Email address<input class="field" type="email" autocomplete="email" placeholder="you@example.com"></label><label>Password<input class="field" type="password" autocomplete="current-password" placeholder="Your password"></label><button class="button" data-coming="Sign in will be available soon">Sign in</button><button class="button secondary" data-coming="Account creation will be available soon">Create an account</button></div></main><footer class="footer">© 2026 Chicken Rice Developer Studio</footer></div><script src="/static/pages.js"></script></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Account · MariBus</title>
+  <link rel="stylesheet" href="/static/pages.css">
+</head>
+<body>
+<div class="page auth-page">
+  <header class="top"><a class="back" href="/" aria-label="Back to map">&lsaquo;</a><span class="brand">MARIBUS</span></header>
+  <main class="content auth-content">
+    <section class="hero auth-hero"><p class="eyebrow">Your MariBus</p><h1>Welcome aboard.</h1><p>Sign in to sync routes, favourite stops and notifications across your devices.</p></section>
+
+    <section id="auth-setup" class="card auth-setup" hidden><h2>Connect Firebase to continue</h2><p>Add the Firebase web configuration to your Vercel environment variables, then enable Email/Password and Google in Firebase Authentication.</p></section>
+
+    <section id="auth-card" class="card auth-card">
+      <div class="auth-tabs" role="tablist"><button class="active" type="button" data-auth-tab="login">Sign in</button><button type="button" data-auth-tab="register">Create account</button></div>
+      <button id="google-auth" class="button google-button" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M21.6 12.2c0-.7-.1-1.5-.2-2.2H12v4.3h5.4a4.7 4.7 0 0 1-2 3v2.8h3.5c2-1.9 3.2-4.6 3.2-7.9Z"/><path fill="#34A853" d="M12 22c2.9 0 5.3-1 7-2.6l-3.5-2.8c-1 .7-2.2 1-3.5 1a6.2 6.2 0 0 1-5.8-4.3H2.6v2.8A10.6 10.6 0 0 0 12 22Z"/><path fill="#FBBC05" d="M6.2 13.3a6.4 6.4 0 0 1 0-4V6.5H2.6a10.6 10.6 0 0 0 0 9.6l3.6-2.8Z"/><path fill="#EA4335" d="M12 5.8c1.6 0 3 .5 4.1 1.6l3.1-3A10.3 10.3 0 0 0 2.6 6.5l3.6 2.8A6.2 6.2 0 0 1 12 5.8Z"/></svg>Continue with Google</button>
+      <div class="auth-divider"><span>or use email</span></div>
+
+      <form id="email-auth-form" class="stack">
+        <label id="name-field" hidden>Full name<input id="auth-name" class="field" type="text" autocomplete="name" placeholder="Your name"></label>
+        <label>Email address<input id="auth-email" class="field" type="email" autocomplete="email" placeholder="you@example.com" required></label>
+        <label>Password<input id="auth-password" class="field" type="password" autocomplete="current-password" minlength="6" placeholder="At least 6 characters" required></label>
+        <button id="email-auth-submit" class="button" type="submit">Sign in</button>
+        <button id="forgot-password" class="text-button" type="button">Forgot password?</button>
+      </form>
+      <p id="auth-message" class="auth-message" role="status" aria-live="polite"></p>
+    </section>
+
+    <section id="account-card" class="card account-card" hidden>
+      <div id="account-avatar" class="account-avatar">M</div><p class="eyebrow">Signed in</p><h2 id="account-name">MariBus rider</h2><p id="account-email"></p><span class="pill">Free account</span>
+      <div class="stack account-actions"><a class="button" href="/">Continue to MariBus</a><button id="sign-out" class="button secondary" type="button">Sign out</button></div>
+    </section>
+  </main>
+  <footer class="footer">&copy; 2026 Chicken Rice Developer Studio</footer>
+</div>
+<script type="module" src="/static/auth.js"></script>
+</body></html>

@@ -208,12 +208,22 @@ def health():
 @app.get("/api/config")
 def frontend_config():
     api_key = os.getenv("GOOGLE_MAPS_API_KEY", "").strip()
+    firebase_config = {
+        "apiKey": os.getenv("FIREBASE_API_KEY", "").strip(),
+        "authDomain": os.getenv("FIREBASE_AUTH_DOMAIN", "").strip(),
+        "projectId": os.getenv("FIREBASE_PROJECT_ID", "").strip(),
+        "storageBucket": os.getenv("FIREBASE_STORAGE_BUCKET", "").strip(),
+        "messagingSenderId": os.getenv("FIREBASE_MESSAGING_SENDER_ID", "").strip(),
+        "appId": os.getenv("FIREBASE_APP_ID", "").strip(),
+    }
     return jsonify({
         "success": True,
         "google_maps_api_key": api_key,
         "google_maps_enabled": bool(api_key),
         "multimodal_routing_enabled": bool(os.getenv("OTP_GRAPHQL_URL", "").strip()),
         "routing_version": ROUTING_VERSION,
+        "firebase_enabled": all(firebase_config.values()),
+        "firebase_config": firebase_config,
     })
 
 
