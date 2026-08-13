@@ -1430,6 +1430,13 @@
             sheet.scrollTop = 0;
         }
 
+        function openRouteTransitPanel(title, subtitle, html) {
+            openTransitPanel(title, subtitle, html);
+            if (window.innerWidth < 768) {
+                document.getElementById('bottom-sheet').classList.add('sheet-half');
+            }
+        }
+
         function initializeBottomSheetDrag() {
             const sheet = document.getElementById('bottom-sheet');
             const handle = sheet.querySelector('.drag-handle');
@@ -1700,7 +1707,7 @@
             liveJourneyTrackingTimer = null;
             if (routeBrowseTimer) clearInterval(routeBrowseTimer);
             routeBrowseTimer = null;
-            openTransitPanel('Route', routeId, '<p class="panel-message">Loading route…</p>');
+            openRouteTransitPanel('Route', routeId, '<p class="panel-message">Loading route…</p>');
             try {
                 const params = new URLSearchParams({ agency });
                 if (directionId !== null && directionId !== undefined && directionId !== '') params.set('direction_id', directionId);
@@ -1734,14 +1741,14 @@
                 const title = `${routeLabel} ${data.trip.trip_headsign || ''}`.trim();
                 const geometryLabel = data.geometry_source === 'verified-override'
                     ? (roadMatched ? 'verified • road matched' : 'verified route') : 'official stops';
-                openTransitPanel(title, `${data.stops.length} stops • ${geometryLabel}`, `<div id="route-live-list" class="route-live-list"><p class="panel-message">Checking live bus locations…</p></div>` + data.stops.map((stop, index) => `
+                openRouteTransitPanel(title, `${data.stops.length} stops • ${geometryLabel}`, `<div id="route-live-list" class="route-live-list"><p class="panel-message">Checking live bus locations…</p></div>` + data.stops.map((stop, index) => `
                     <div class="stop-row"><strong>${index + 1}</strong><span class="stop-name">${escapeHtml(stop.stop_name)}</span></div>
                 `).join(''));
                 await updateBrowsedRouteVehicles(routeId, publicCode || routeLabel, agency, data.trip.direction_id, data.stops);
                 if (routeBrowseTimer) clearInterval(routeBrowseTimer);
                 routeBrowseTimer = setInterval(() => updateBrowsedRouteVehicles(routeId, publicCode || routeLabel, agency, data.trip.direction_id, data.stops), 30000);
             } catch (error) {
-                openTransitPanel('Route unavailable', routeId, '<p class="panel-message">Route geometry is not available yet. Rebuild the GTFS database and try again.</p>');
+                openRouteTransitPanel('Route unavailable', routeId, '<p class="panel-message">Route geometry is not available yet. Rebuild the GTFS database and try again.</p>');
             }
         }
 
