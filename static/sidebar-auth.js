@@ -14,7 +14,7 @@ try{
   if(!config.firebase_enabled)throw new Error('Firebase is not configured');
   const app=getApps()[0]||initializeApp(config.firebase_config);const auth=getAuth(app);const db=getFirestore(app);
   onAuthStateChanged(auth,async user=>{
-    if(!user){signedOut.hidden=false;signedIn.hidden=true;details.hidden=true;updateAdVisibility(false);return;}
+    if(!user){signedOut.hidden=false;signedIn.hidden=true;details.hidden=true;updateAdVisibility(false);document.querySelector('#sidebar-plus-title').textContent='Upgrade to Plus';document.querySelector('#sidebar-plus-copy').textContent='Unlock more routes, alerts and an ad-free experience';return;}
     let profile={};try{const snapshot=await getDoc(doc(db,'users',user.uid));if(snapshot.exists())profile=snapshot.data();}catch(error){console.warn('MariBus profile unavailable',error);}
     const username=profile.username||user.displayName||user.email?.split('@')[0]||'MariBus rider';
     signedOut.hidden=true;signedIn.hidden=false;
@@ -27,6 +27,8 @@ try{
     const end=timestampDate(profile.subscriptionEnd);const remaining=end?Math.max(0,Math.ceil((end-Date.now())/86400000)):0;
     const active=profile.subscriptionPlan&&!['free','basic'].includes(profile.subscriptionPlan)&&remaining>0;
     updateAdVisibility(active);
+    document.querySelector('#sidebar-plus-title').textContent=active?'Manage subscription':'Upgrade to Plus';
+    document.querySelector('#sidebar-plus-copy').textContent=active?(end?`Plus active until ${end.toLocaleDateString('en-MY',{day:'numeric',month:'short',year:'numeric'})}`:'View your Plus plan'):'Unlock more routes, alerts and an ad-free experience';
     document.querySelector('#subscription-label').textContent=active?'Plus':'Basic';
     document.querySelector('#subscription-expiry').textContent=active&&end
       ? `Active until ${end.toLocaleDateString('en-MY',{day:'numeric',month:'short',year:'numeric'})}`

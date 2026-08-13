@@ -1,4 +1,5 @@
 import json
+import base64
 import math
 import os
 import sqlite3
@@ -225,6 +226,45 @@ def frontend_config():
         "firebase_enabled": all(firebase_config.values()),
         "firebase_config": firebase_config,
     })
+
+
+@app.post("/api/feedback")
+def send_feedback():
+    if request.form.get("website"):
+        return jsonify({"success": True})
+    api_key = os.getenv("RESEND_API_KEY", "").strip()
+    recipient = os.getenv("FEEDBACK_TO_EMAIL", "").strip()
+    sender = os.getenv("FEEDBACK_FROM_EMAIL", "MariBus Feedback <onboarding@resend.dev>").strip()
+    if not api_key or not recipient:
+        return jsonify({"success": False, "error": "Feedback email is not configured yet."}), 503
+    topic = request.form.get("topic", "Other").strip()[:100]
+    reply_email = request.form.get("reply_email", "").strip()[:254]
+    message = request.form.get("message", "").strip()
+    if len(message) < 10 or len(message) > 4000:
+        return jsonify({"success": False, "error": "Feedback must contain 10 to 4000 characters."}), 400
+    payload = {
+        "from": sender,
+        "to": [recipient],
+        "subject": f"MariBus feedback: {topic}",
+        "text": f"Topic: {topic}\nReply email: {reply_email or 'Not provided'}\n\n{message}",
+    }
+    if reply_email:
+        payload["reply_to"] = reply_email
+    photo = request.files.get("photo")
+    if photo and photo.filename:
+        allowed = {"image/jpeg", "image/png", "image/webp", "image/gif"}
+        content = photo.read(5 * 1024 * 1024 + 1)
+        if photo.mimetype not in allowed or len(content) > 5 * 1024 * 1024:
+            return jsonify({"success": False, "error": "Upload a JPG, PNG, WebP or GIF smaller than 5 MB."}), 400
+        safe_name = "".join(character for character in photo.filename if character.isalnum() or character in "._-") or "feedback-image"
+        payload["attachments"] = [{"filename": safe_name, "content": base64.b64encode(content).decode("ascii")}]
+    try:
+        response = requests.post("https://api.resend.com/emails", headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}, json=payload, timeout=15)
+        response.raise_for_status()
+    except requests.RequestException:
+        app.logger.exception("Feedback email delivery failed")
+        return jsonify({"success": False, "error": "Email delivery failed. Please try again shortly."}), 502
+    return jsonify({"success": True})
 
 
 @app.get("/")
