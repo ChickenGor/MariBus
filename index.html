@@ -1,14 +1,13 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>MariBus Malaysia - Pro Tracker</title>
-
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.css" />
-    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.Default.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 
     <style>
         /* 1. CSS Variables for Light/Dark Theming */
@@ -20,6 +19,9 @@
             --border-color: #e5e7eb;
             --input-bg: #f9fafb;
             --shadow-color: rgba(0, 0, 0, 0.1);
+            --rapid-color: #f60404;
+            --mybas-color: #f93999;
+            --mrt-feeder-color: #f60404;
         }
 
         body.dark-mode {
@@ -36,7 +38,7 @@
         html {
             margin: 0;
             padding: 0;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            font-family: "Manrope", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
             height: 100%;
             overflow: hidden;
             background-color: var(--bg-color);
@@ -64,20 +66,18 @@
         /* --- TOP APP BAR --- */
         #top-bar {
             position: absolute;
-            top: 0; left: 0; width: 100%; height: 60px;
+            top: 0; left: 0; width: 100%; height: 70px;
             background-color: var(--sheet-bg);
             z-index: 2000;
-            display: flex; align-items: center; justify-content: space-between;
-            padding: 0 20px; box-sizing: border-box;
+            display: flex; align-items: center; gap:14px;
+            padding: 0 16px; box-sizing: border-box;
             box-shadow: 0 2px 10px var(--shadow-color);
             transition: background-color 0.3s;
         }
         /* 1. This centers the brand element container inside the flex bar */
         .brand { 
             display: flex; align-items: center; gap: 8px; 
-            position: absolute;
-            left: 50%;
-            transform: translateX(-50%);
+            flex:0 0 auto;
         }
 
         .logo-icon { font-size: 24px; }
@@ -95,6 +95,27 @@
             background: none; border: none; font-size: 20px; cursor: pointer; padding: 5px;
             margin-left: auto; 
         }
+        .ui-icon { width:20px; height:20px; display:block; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+        .inline-icon { width:15px; height:15px; display:inline-block; vertical-align:-2px; margin-right:3px; }
+
+        #header-journey-search {
+            flex:1; max-width:620px; height:44px; margin:0 auto;
+            display:flex; align-items:center; padding:0 12px;
+            border:1px solid var(--border-color); border-radius:999px;
+            background:var(--input-bg); color:var(--text-main);
+            box-shadow:0 2px 8px var(--shadow-color); font-size:15px; text-align:left;
+        }
+        #header-journey-search.expanded { position:absolute; top:78px; left:12px; right:12px; z-index:2050; width:auto; max-width:620px; height:auto; margin:auto; padding:6px 12px; flex-direction:column; align-items:stretch; border-radius:20px; background:var(--sheet-bg); }
+        .journey-input-row { width:100%; min-height:40px; display:flex; align-items:center; gap:10px; }
+        #journey-origin-row { display:none; }
+        #header-journey-search.expanded #journey-origin-row { display:flex; }
+        .journey-divider { display:none; height:1px; margin-left:30px; background:var(--border-color); }
+        #header-journey-search.expanded .journey-divider { display:block; }
+        .point-label { width:20px; flex:0 0 20px; text-align:center; color:#2563eb; font-weight:850; font-size:15px; }
+        #header-journey-search input { flex:1; min-width:0; border:0; outline:0; background:transparent; color:var(--text-main); font:inherit; }
+        #journey-location-button { width:34px; height:34px; flex:0 0 34px; border:0; border-radius:50%; background:#2563eb; color:#fff; font-size:17px; cursor:pointer; }
+        #journey-swap-button { display:none; width:34px; height:34px; flex:0 0 34px; border:0; border-radius:50%; background:transparent; color:var(--text-main); font-size:20px; cursor:pointer; }
+        #header-journey-search.expanded #journey-swap-button { display:block; }
 
         /* Floating Top Search Bar */
         #top-search-container {
@@ -108,7 +129,7 @@
             z-index: 1000;
             border-radius: 50px;
             box-shadow: 0 4px 15px var(--shadow-color);
-            display: flex;
+            display: none;
             align-items: center;
             padding: 5px 15px;
             box-sizing: border-box;
@@ -133,6 +154,43 @@
             cursor: pointer;
             padding: 5px;
         }
+
+        .map-setup-message { height:100%; display:flex; flex-direction:column; justify-content:center; align-items:center; gap:8px; padding:30px; box-sizing:border-box; text-align:center; background:#eef2ff; color:#1e293b; }
+        .map-setup-message strong { font-size:20px; }
+        .map-setup-message span { max-width:460px; color:#64748b; }
+
+        #planner-toggle { position:absolute; z-index:1000; top:137px; left:50%; transform:translateX(-50%); border:0; border-radius:999px; padding:9px 16px; background:#2563eb; color:#fff; font-weight:800; cursor:pointer; box-shadow:0 5px 15px rgba(37,99,235,.3); }
+        #journey-planner { display:none; position:absolute; z-index:2050; top:80px; left:50%; transform:translateX(-50%); width:min(410px, calc(100vw - 24px)); padding:14px; box-sizing:border-box; background:var(--sheet-bg); border-radius:18px; box-shadow:0 12px 35px var(--shadow-color); }
+        #journey-planner.open { display:block; }
+        /* Google Places appends autocomplete results directly under <body>.
+           Keep them above the bottom service sheet and all map controls. */
+        .pac-container {
+            z-index: 3000 !important;
+            border: 0 !important;
+            border-radius: 0 0 14px 14px !important;
+            box-shadow: 0 12px 28px rgba(15, 23, 42, .22) !important;
+            font-family: inherit !important;
+        }
+        .pac-item { padding: 10px 12px; cursor: pointer; }
+        .pac-item:hover { background: #eef2ff; }
+        body.route-code-entry .pac-container { display:none !important; }
+        .planner-title { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
+        .planner-title strong { font-size:16px; }
+        .planner-field { position:relative; margin-bottom:9px; }
+        .planner-field input { width:100%; box-sizing:border-box; border:1px solid rgba(148,163,184,.35); border-radius:11px; padding:11px 12px; background:transparent; color:var(--text-main); font-size:14px; outline:none; }
+        .planner-match { display:block; min-height:16px; padding:3px 4px 0; color:var(--text-muted); font-size:11px; }
+        .location-choice { border:0; background:transparent; color:#2563eb; font-weight:750; cursor:pointer; padding:0 0 9px; }
+        .planner-suggestions { display:none; position:absolute; top:45px; left:0; right:0; z-index:5; max-height:180px; overflow-y:auto; background:var(--sheet-bg); border-radius:10px; box-shadow:0 8px 25px var(--shadow-color); }
+        .planner-suggestions.open { display:block; }
+        .suggestion-button { display:block; width:100%; text-align:left; border:0; border-bottom:1px solid rgba(148,163,184,.2); padding:10px; background:transparent; color:var(--text-main); cursor:pointer; }
+        .planner-controls { display:flex; gap:8px; align-items:center; }
+        .planner-controls input { min-width:0; flex:1; border:1px solid rgba(148,163,184,.35); border-radius:10px; padding:9px; background:transparent; color:var(--text-main); }
+        #plan-journey-button { flex:1; border:0; border-radius:10px; padding:10px; background:#2563eb; color:white; font-weight:800; cursor:pointer; }
+        .journey-card { border:1px solid rgba(148,163,184,.25); border-radius:14px; padding:13px; margin:10px 0; }
+        .journey-summary { display:flex; justify-content:space-between; gap:10px; align-items:center; }
+        .journey-route { display:inline-block; max-width:90px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; border-radius:8px; padding:5px 9px; color:white; font-size:14px; line-height:1.2; font-weight:900; vertical-align:middle; }
+        .journey-time { font-size:16px; font-weight:850; }
+        .journey-meta { margin-top:9px; color:var(--text-muted); font-size:12px; }
 
         /* Floating Action Buttons */
         .fab-btn {
@@ -307,11 +365,15 @@
         }
 
         .rapid-pill {
-            background-color: #f60404;
+            background-color: var(--rapid-color);
         }
 
         .mybas-pill {
-            background-color: #f93999;
+            background-color: var(--mybas-color);
+        }
+
+        .mrtfeeder-pill {
+            background-color: var(--mrt-feeder-color);
         }
 
         .default-pill {
@@ -346,6 +408,8 @@
 
         @media (min-width: 768px) {
             #top-search-container { left: 20px; top: 80px; transform: none; width: 300px; }
+            #planner-toggle { left:20px; top:137px; transform:none; }
+            #journey-planner { left:20px; top:80px; transform:none; width:410px; }
             #bottom-sheet {
                 top: 80px;
                 right: 20px;
@@ -504,8 +568,8 @@
         
         /* The colored dots matching the map pills */
         .agency-dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; flex-shrink: 0; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
-        .dot-rapid { background-color: #ff0101; }
-        .dot-mybas { background-color: #ff0080; }
+        .dot-rapid { background-color: var(--rapid-color); }
+        .dot-mybas { background-color: var(--mybas-color); }
         .dot-ktmb { background-color: #0205a2; }
         
         /* Custom sleek scrollbar for the menu */
@@ -520,7 +584,8 @@
 
         /* --- BRANDING FOOTER (UPDATED) --- */
         #app-footer {
-            margin-top: 10px;
+            margin-top: 24px;
+            margin-bottom: -20px;
             display: flex;
             justify-content: center;
             align-items: center;
@@ -529,7 +594,7 @@
         }
         
         .footer-text {
-            font-family: sans-serif;
+            font-family: "Manrope", sans-serif;
             font-size: 11px;
             font-weight: 600;
             color: var(--text-muted);
@@ -539,30 +604,158 @@
             opacity: 0.7; /* Slightly subtle so it doesn't distract from the selector */
         }
 
+        #transit-panel {
+            position: static;
+            width: 100%;
+            max-height: none;
+            overflow-y: auto;
+            border-radius: 0;
+            padding: 0;
+            background: transparent;
+            color: var(--text-main, #111827);
+            box-shadow: none;
+            display: none;
+        }
+        #transit-panel.open { display: block; }
+        #bottom-sheet.detail-mode { max-height: min(68vh, 620px); overflow-y: auto; }
+        #bottom-sheet.detail-mode > .drag-handle,
+        #bottom-sheet.detail-mode > .sheet-header,
+        #bottom-sheet.detail-mode > .custom-select { display:none; }
+        .panel-heading { display:flex; justify-content:space-between; gap:12px; align-items:flex-start; }
+        .panel-heading h3 { margin:0; font-size:17px; }
+        .panel-subtitle { margin:4px 0 12px; color:var(--text-muted); font-size:12px; }
+        .panel-close { border:0; background:transparent; color:inherit; font-size:22px; cursor:pointer; }
+        .arrival-row, .stop-row { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:11px 0; border-top:1px solid rgba(148,163,184,.22); }
+        .arrival-route { font-weight:800; min-width:48px; }
+        .arrival-destination, .stop-name { flex:1; font-size:13px; }
+        .arrival-minutes { font-weight:800; color:#2563eb; white-space:nowrap; }
+        .route-action { width:100%; border:0; border-radius:10px; padding:9px 12px; margin-top:10px; background:#2563eb; color:white; font-weight:700; cursor:pointer; }
+        .stop-marker { width:14px; height:14px; border-radius:50%; background:#fff; border:4px solid #2563eb; box-shadow:0 2px 7px rgba(15,23,42,.35); }
+        .panel-message { color:var(--text-muted); font-size:13px; padding:8px 0; }
+        .route-loader-panel { min-height:170px; display:flex; align-items:center; justify-content:center; padding:12px 0 30px; }
+        #wifi-loader { --front-color:#f93999; --back-color:#d8dbea; --text-color:var(--text-main); width:64px; height:64px; border-radius:50px; position:relative; display:flex; justify-content:center; align-items:center; }
+        #wifi-loader svg { position:absolute; display:flex; justify-content:center; align-items:center; }
+        #wifi-loader svg circle { position:absolute; fill:none; stroke-width:6px; stroke-linecap:round; stroke-linejoin:round; transform:rotate(-100deg); transform-origin:center; }
+        #wifi-loader svg circle.back { stroke:var(--back-color); }
+        #wifi-loader svg circle.front { stroke:var(--front-color); }
+        #wifi-loader svg.circle-outer { height:86px; width:86px; }
+        #wifi-loader svg.circle-outer circle { stroke-dasharray:62.75 188.25; }
+        #wifi-loader svg.circle-outer circle.back { animation:circle-outer135 1.8s ease infinite .3s; }
+        #wifi-loader svg.circle-outer circle.front { animation:circle-outer135 1.8s ease infinite .15s; }
+        #wifi-loader svg.circle-middle { height:60px; width:60px; }
+        #wifi-loader svg.circle-middle circle { stroke-dasharray:42.5 127.5; }
+        #wifi-loader svg.circle-middle circle.back { animation:circle-middle6123 1.8s ease infinite .25s; }
+        #wifi-loader svg.circle-middle circle.front { animation:circle-middle6123 1.8s ease infinite .1s; }
+        #wifi-loader svg.circle-inner { height:34px; width:34px; }
+        #wifi-loader svg.circle-inner circle { stroke-dasharray:22 66; }
+        #wifi-loader svg.circle-inner circle.back { animation:circle-inner162 1.8s ease infinite .2s; }
+        #wifi-loader svg.circle-inner circle.front { animation:circle-inner162 1.8s ease infinite .05s; }
+        #wifi-loader .text { position:absolute; bottom:-42px; display:flex; justify-content:center; align-items:center; text-transform:lowercase; font-weight:700; font-size:14px; letter-spacing:.2px; white-space:nowrap; }
+        #wifi-loader .text::before, #wifi-loader .text::after { content:attr(data-text); }
+        #wifi-loader .text::before { color:var(--text-color); }
+        #wifi-loader .text::after { color:var(--front-color); animation:text-animation76 3.6s ease infinite; position:absolute; left:0; }
+        @keyframes circle-outer135 { 0%{stroke-dashoffset:25} 25%{stroke-dashoffset:0} 65%{stroke-dashoffset:301} 80%,100%{stroke-dashoffset:276} }
+        @keyframes circle-middle6123 { 0%{stroke-dashoffset:17} 25%{stroke-dashoffset:0} 65%{stroke-dashoffset:204} 80%,100%{stroke-dashoffset:187} }
+        @keyframes circle-inner162 { 0%{stroke-dashoffset:9} 25%{stroke-dashoffset:0} 65%{stroke-dashoffset:106} 80%,100%{stroke-dashoffset:97} }
+        @keyframes text-animation76 { 0%{clip-path:inset(0 100% 0 0)} 50%{clip-path:inset(0)} 100%{clip-path:inset(0 0 0 100%)} }
+        @media (prefers-reduced-motion:reduce) { #wifi-loader * { animation-duration:4s !important; } }
+        .journey-card.modern { cursor:pointer; padding:12px; margin:8px 0; transition:border-color .2s, background .2s; }
+        .journey-card.modern.selected { border:2px solid #2563eb; background:rgba(37,99,235,.04); }
+        .journey-option-top { display:block; }
+        .journey-option-head { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+        .journey-total { font-size:19px; line-height:1.1; font-weight:900; letter-spacing:-.4px; white-space:nowrap; }
+        .journey-total small { display:block; margin-top:5px; font-size:12px; letter-spacing:0; color:var(--text-muted); }
+        .journey-main-time { font-size:15px; font-weight:900; white-space:nowrap; }
+        .journey-steps { display:flex; align-items:center; flex-wrap:wrap; gap:6px; margin-top:8px; color:var(--text-muted); font-size:12px; }
+        .journey-board { margin-top:7px; color:var(--text-muted); font-size:11px; line-height:1.4; }
+        .journey-alternatives { margin-top:5px; color:var(--text-muted); font-size:10px; }
+        .journey-card.modern .route-action { margin-top:8px; padding:8px 12px; }
+        .live-journey-status { display:flex; align-items:center; gap:7px; margin-top:8px; padding:7px 9px; border-radius:9px; background:var(--input-bg); color:var(--text-muted); font-size:11px; }
+        .live-journey-status.live { color:#15803d; background:rgba(22,163,74,.1); font-weight:750; }
+        .live-dot { width:7px; height:7px; flex:0 0 7px; border-radius:50%; background:#94a3b8; }
+        .live-journey-status.live .live-dot { background:#16a34a; box-shadow:0 0 0 4px rgba(22,163,74,.14); }
+        .journey-live-progress { margin-top:9px; padding:9px 10px 8px; border-radius:10px; background:var(--input-bg); }
+        .journey-progress-track { position:relative; height:6px; margin:8px 7px 7px; border-radius:999px; background:#dbe2ea; }
+        .journey-progress-fill { position:absolute; inset:0 auto 0 0; width:0; border-radius:inherit; background:#16a34a; transition:width .45s ease; }
+        .journey-progress-node { position:absolute; top:50%; width:13px; height:13px; border:3px solid #fff; border-radius:50%; background:#94a3b8; box-shadow:0 0 0 1px #94a3b8; transform:translate(-50%,-50%); }
+        .journey-progress-node.a { left:50%; }
+        .journey-progress-node.b { left:100%; }
+        .journey-progress-bus { position:absolute; z-index:2; top:50%; left:0; width:19px; height:19px; display:grid; place-items:center; border:2px solid #fff; border-radius:50%; background:#16a34a; color:#fff; box-shadow:0 1px 5px rgba(15,23,42,.25); transform:translate(-50%,-50%); transition:left .45s ease; }
+        .journey-progress-bus svg { width:11px; height:11px; }
+        .journey-progress-labels { display:grid; grid-template-columns:1fr 1fr; margin:0 0 0 50%; color:var(--text-muted); font-size:10px; font-weight:850; }
+        .journey-progress-labels span:last-child { text-align:right; }
+        .journey-progress-message { color:var(--text-muted); font-size:10px; line-height:1.35; }
+        .journey-live-progress.live .journey-progress-message { color:#15803d; font-weight:750; }
+        .route-live-list { display:grid; gap:10px; margin-bottom:12px; }
+        .route-live-bus { padding:8px 4px 7px; color:var(--text-main); }
+        .route-live-bus-head { display:flex; justify-content:space-between; align-items:center; gap:10px; padding:0 2px; color:var(--text-muted); font-size:10px; font-weight:800; }
+        .route-live-bus-head strong { color:var(--route-live-color); }
+        .route-live-eta { padding:4px 7px; border-radius:999px; background:color-mix(in srgb, var(--route-live-color) 10%, transparent); color:var(--route-live-color); white-space:nowrap; }
+        .route-live-bus-track { position:relative; height:5px; margin:17px 12px 8px; border-radius:999px; background:#dbe2ea; }
+        .route-live-bus-fill { height:100%; border-radius:inherit; background:var(--route-live-color); }
+        .route-live-bus-marker { position:absolute; top:50%; width:22px; height:22px; display:grid; place-items:center; border:2px solid #fff; border-radius:50%; background:var(--route-live-color); color:#fff; box-shadow:0 1px 4px rgba(15,23,42,.25); transform:translate(-50%,-50%); }
+        .route-live-bus-marker svg { width:12px; height:12px; }
+        .route-live-stop-marker { position:absolute; top:50%; right:0; width:15px; height:15px; border:3px solid #fff; border-radius:50%; background:#94a3b8; box-shadow:0 0 0 2px #94a3b8; transform:translate(50%,-50%); }
+        .route-live-segment { display:flex; justify-content:space-between; gap:12px; padding:0 2px; color:var(--text-muted); font-size:9px; }
+        .route-live-segment span:last-child { text-align:right; }
+        .route-live-bus-next { padding:7px 2px 0; color:var(--text-muted); font-size:10px; }
+        .route-live-bus-next strong { display:block; margin-top:2px; color:var(--text-main); font-size:12px; }
+        .extra-stops { margin:8px 0; border:1px solid var(--border-color); border-radius:10px; overflow:hidden; }
+        .extra-stops summary { padding:10px 12px; cursor:pointer; color:var(--text-muted); font-size:12px; font-weight:750; background:var(--input-bg); }
+        .extra-stops .stop-row { padding-left:12px; padding-right:12px; opacity:.78; }
+        .journey-stop-label { min-width:24px; color:#2563eb; font-weight:900; }
+        .stop-row.bus-next-stop { background:rgba(22,163,74,.08); border-radius:9px; padding-left:8px; padding-right:8px; }
+        .bus-stop-badge { margin-left:auto; padding:4px 7px; border-radius:999px; background:#16a34a; color:#fff; font-size:10px; font-weight:800; white-space:nowrap; }
+        .extra-stops.bus-before summary { color:#15803d; background:rgba(22,163,74,.1); }
+
+        @media (max-width: 767px) {
+            #top-bar { gap:8px; padding:0 10px; }
+            .logo-text { font-size:15px; }
+            #header-journey-search { height:42px; padding:0 12px; font-size:14px; }
+            #header-journey-search.expanded { top:78px; }
+            #bottom-sheet.detail-mode { max-height:58vh; padding-top:20px; }
+            .planner-controls { flex-wrap:wrap; }
+            .planner-controls input { flex-basis:40%; }
+            #plan-journey-button { flex-basis:100%; }
+        }
+
        
 
     </style>
 </head>
 
 <body>
-
     <header id="top-bar">
         <div class="brand">
             <span class="logo-icon"></span>
             <span class="logo-text">MARIBUS</span>
         </div>
-        <button id="theme-toggle-header" onclick="toggleTheme()" title="Toggle Dark Mode">🌙</button>
+        <div id="header-journey-search">
+            <div id="journey-origin-row" class="journey-input-row">
+                <span class="point-label">A</span>
+                <input id="journey-from" autocomplete="off" placeholder="Starting point" aria-label="Starting point">
+                <button id="journey-location-button" onclick="useCurrentLocationForJourney(true)" title="Use current location" aria-label="Use current location"><svg class="ui-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><circle cx="12" cy="12" r="8"></circle></svg></button>
+            </div>
+            <div class="journey-divider"></div>
+            <div class="journey-input-row">
+                <span id="destination-prefix" class="point-label"><svg class="ui-icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>
+                <input id="journey-to" autocomplete="off" placeholder="Where do you want to go?" aria-label="Destination">
+                <button id="journey-swap-button" onclick="swapJourneyPoints()" title="Swap locations" aria-label="Swap locations">&#8645;</button>
+            </div>
+        </div>
+        <button id="theme-toggle-header" onclick="toggleTheme()" title="Toggle Dark Mode" aria-label="Toggle dark mode"><svg class="ui-icon" viewBox="0 0 24 24"><path d="M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5 8.5 8.5 0 1 0 20.5 14.2Z"></path></svg></button>
     </header>
 
-    <div id="top-search-container">
-        <input type="text" id="search-input" placeholder="Vehicle ID or Route (e.g. 220)">
-        <button onclick="searchBus()">🔍</button>
-    </div>
+    <small id="journey-from-match" hidden></small>
+    <small id="journey-to-match" hidden></small>
+    <div id="journey-from-suggestions" class="planner-suggestions"></div>
+    <div id="journey-to-suggestions" class="planner-suggestions"></div>
+    <input id="journey-date" type="hidden">
+    <input id="journey-time" type="hidden">
 
     <div id="map"></div>
 
-    
-    <button id="fab-locate" class="fab-btn" onclick="locateMe()" title="Locate Me">🎯</button>
+    <button id="fab-locate" class="fab-btn" onclick="locateMe()" title="Locate Me" aria-label="Locate me"><svg class="ui-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M12 2v3M12 19v3M2 12h3M19 12h3"></path><circle cx="12" cy="12" r="7"></circle></svg></button>
 
     <div id="bottom-sheet">
         <div class="drag-handle"></div>
@@ -577,18 +770,15 @@
             <div class="select-trigger" onclick="toggleAgencyDropdown()">
                 <div class="select-value">
                     <div class="agency-dot dot-rapid" id="selected-dot"></div>
-                    <span class="text" id="selected-text">RapidKL Buses</span>
+                    <span class="text" id="selected-text">Rapid KL + MRT Feeder</span>
                 </div>
                 <svg class="chevron" viewBox="0 0 24 24"><path d="M7 10l5 5 5-5z"/></svg>
             </div>
             
             <div class="select-dropdown">
                 <!-- RapidKL & Trains -->
-                <div class="select-option active" data-value="rapid-bus-kl" onclick="selectAgencyOption('rapid-bus-kl', 'RapidKL Buses', 'dot-rapid')">
-                    <div class="agency-dot dot-rapid"></div><span class="text">RapidKL Buses</span>
-                </div>
-                <div class="select-option" data-value="rapid-bus-mrtfeeder" onclick="selectAgencyOption('rapid-bus-mrtfeeder', 'MRT Feeder Buses', 'dot-rapid')">
-                    <div class="agency-dot dot-rapid"></div><span class="text">MRT Feeder Buses</span>
+                <div class="select-option active" data-value="rapid-bus-kl" onclick="selectAgencyOption('rapid-bus-kl', 'Rapid KL + MRT Feeder', 'dot-rapid')">
+                    <div class="agency-dot dot-rapid"></div><span class="text">Rapid KL + MRT Feeder</span>
                 </div>
                 <div class="select-option" data-value="ktmb" onclick="selectAgencyOption('ktmb', 'KTMB Trains', 'dot-ktmb')">
                     <div class="agency-dot dot-ktmb"></div><span class="text">KTMB Trains</span>
@@ -632,13 +822,22 @@
         
         <!-- Hidden input preserves compatibility with your existing JS -->
         <input type="hidden" id="agency-select" value="rapid-bus-kl">
+        <section id="transit-panel" aria-live="polite">
+            <div class="panel-heading">
+                <div><h3 id="panel-title">Transit details</h3><p class="panel-subtitle" id="panel-subtitle"></p></div>
+                <button class="panel-close" onclick="closeTransitPanel()" aria-label="Back to active service">&times;</button>
+            </div>
+            <div id="panel-content"></div>
+        </section>
     </div>
     
 
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js"></script>
+    <script src="/static/google-maps-adapter.js"></script>
 
     <script>
+        window.addEventListener('google-maps-ready', () => {
+        const API_BASE = (location.protocol === 'file:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')
+            ? 'http://localhost:5000' : 'https://maribus.onrender.com';
         const map = L.map('map', { zoomControl: false }).setView([3.1390, 101.6869], 12);
         L.control.zoom({ position: 'bottomleft' }).addTo(map);
 
@@ -662,7 +861,7 @@
             document.body.classList.toggle('dark-mode', isDarkMode);
 
             // Update the button icon in the top header
-            document.getElementById('theme-toggle-header').innerText = isDarkMode ? '☀️' : '🌙';
+            document.getElementById('theme-toggle-header').innerHTML = iconSvg(isDarkMode ? 'sun' : 'moon');
             
             // Note: We completely removed the map.removeLayer() stuff! 
             // The map will no longer flicker or reload when switching themes.
@@ -695,8 +894,23 @@
 
         let busMarkersDict = {};
         let routeMarkersDict = {};
+        let stopMarkersLayer = L.layerGroup().addTo(map);
+        let activeRouteLayer = L.layerGroup().addTo(map);
+        let journeyPlaceLayer = L.layerGroup().addTo(map);
+        let journeyLiveVehicleLayer = L.layerGroup().addTo(map);
+        let walkingDirectionsRenderer = null;
+        let routeDirectionsRenderers = [];
+        let liveJourneyTrackingTimer = null;
+        let routeBrowseTimer = null;
+        let activeTrackedJourneyIndex = 0;
+        let currentJourneyOptions = [];
+        let journeyMapFocused = false;
         let countdownValue = 30;
         let countdownInterval;
+        const journeySelection = { from: null, to: null };
+        const journeySearchTimers = {};
+        let routeCodeSearchTimer = null;
+        let autoPlanAfterLocation = false;
 
         const agencyLocations = {
             "rapid-bus-kl": { lat: 3.1390, lng: 101.6869, zoom: 12 },
@@ -732,6 +946,10 @@
         }
 
         async function fetchBuses() {
+            if (journeyMapFocused) {
+                startCountdown();
+                return;
+            }
             const selectedAgency = document.getElementById('agency-select').value;
             // 1. TRIGGER SYNCING STATE
             const syncDot = document.getElementById('sync-dot');
@@ -742,9 +960,15 @@
             startCountdown();
 
             try {
-                const response = await fetch(`https://maribus.onrender.com/api/live-buses?agency=${selectedAgency}`);
-                const result = await response.json();
-                if (!result.success) return;
+                const agenciesToLoad = selectedAgency === 'rapid-bus-kl'
+                    ? ['rapid-bus-kl', 'rapid-bus-mrtfeeder']
+                    : [selectedAgency];
+                const feedResults = await Promise.all(agenciesToLoad.map(async agency => {
+                    const response = await fetch(`${API_BASE}/api/live-buses?agency=${encodeURIComponent(agency)}`);
+                    const result = await response.json();
+                    return result.success ? result.data.map(vehicle => ({ ...vehicle, source_agency:agency })) : [];
+                }));
+                const vehicles = feedResults.flat();
 
                 markersGroup.clearLayers();
                 busMarkersDict = {};
@@ -752,37 +976,46 @@
 
                 let newMarkers = [];
 
-                result.data.forEach(vehicle => {
+                vehicles.forEach(vehicle => {
                     if (vehicle.position && vehicle.vehicle && vehicle.vehicle.id) {
+                        const sourceAgency = vehicle.source_agency || selectedAgency;
                         const vehicleId = vehicle.vehicle.id;
+                        const safeVehicleId = escapeHtml(vehicleId);
                         
                         // 1. Define default names so the script never crashes
-                        let routeShortName = (selectedAgency === 'ktmb') ? "KTM" : "Bus"; 
+                        let routeShortName = (sourceAgency === 'ktmb') ? "KTM" : "Bus";
                         let longName = "Active Fleet Vehicle"; 
+                        let destinationName = '';
                         
                         if (vehicle.route_info) {
                             let shortName = vehicle.route_info.short_name;
                             longName = vehicle.route_info.long_name; // Update longName if we have it
+                            destinationName = vehicle.route_info.destination || vehicle.route_info.headsign || '';
 
-                            if (selectedAgency === 'ktmb' && shortName === "Bus") {
+                            if (sourceAgency === 'ktmb' && shortName === "Bus") {
                                 shortName = "KTM";
                                 longName = "Active Rail Vehicle";
                             }
 
                             if (shortName && shortName !== "Unknown") {
-                                routeShortName = shortName;
+                                // Some feeds put the full corridor description in
+                                // route_short_name while the realtime routeId is the
+                                // actual public number (for example A34 or A35).
+                                routeShortName = compactRouteLabel(vehicle.trip?.routeId, shortName);
                             }
                         }
 
                         let pillClass = 'default-pill';
                         let emoji = '';
                         
-                        if (selectedAgency === 'ktmb') {
+                        if (sourceAgency === 'ktmb') {
                             pillClass = 'train-pill';
-                            emoji = '🚆 ';
-                        } else if (selectedAgency.includes('mybas')) {
+                            emoji = iconSvg('train', 'inline-icon');
+                        } else if (sourceAgency.includes('mybas')) {
                             pillClass = 'mybas-pill';
-                        } else if (selectedAgency.includes('rapid-bus')) {
+                        } else if (sourceAgency === 'rapid-bus-mrtfeeder') {
+                            pillClass = 'mrtfeeder-pill';
+                        } else if (sourceAgency.includes('rapid-bus')) {
                             pillClass = 'rapid-pill';
                         }
 
@@ -791,7 +1024,7 @@
 
                         let iconHtml = `
                             <div class="marker-wrapper">
-                                <div class="route-pill ${pillClass}">${emoji}${routeShortName}</div>
+                            <div class="route-pill ${pillClass}">${emoji}${escapeHtml(routeShortName)}</div>
                                 ${hasValidBearing ? `
                                 <div class="direction-arrow">
                                     <svg class="arrow-svg" style="transform: rotate(${bearing}deg);" viewBox="0 0 24 24">
@@ -818,13 +1051,15 @@
                         const popupHtml = `
                             <div class="custom-popup">
                                 <div class="popup-header">
-                                    <span class="route-badge ${pillClass}">${emoji}${routeShortName}</span>
-                                    <div class="route-name">${longName}</div>
+                                    <span class="route-badge ${pillClass}">${emoji}${escapeHtml(routeShortName)}</span>
+                                    <div class="route-name">${escapeHtml(longName)}</div>
                                 </div>
                                 <div class="popup-body">
-                                    <div class="info-row"><span>Vehicle ID</span><strong>${vehicleId}</strong></div>
-                                    <div class="info-row"><span>Trip ID</span><strong>${vehicle.trip?.tripId || 'N/A'}</strong></div>
+                                    <div class="info-row"><span>Vehicle ID</span><strong>${safeVehicleId}</strong></div>
+                                    ${destinationName ? `<div class="info-row"><span>Destination</span><strong>${escapeHtml(destinationName)}</strong></div>` : ''}
+                                    <div class="info-row"><span>Trip ID</span><strong>${escapeHtml(vehicle.trip?.tripId || 'N/A')}</strong></div>
                                     ${speedHtml}
+                                    ${vehicle.trip?.routeId ? `<button class="route-action" onclick="showRoute(decodeURIComponent('${encodeURIComponent(vehicle.trip.routeId).replace(/'/g, '%27')}'), '${escapeHtml(sourceAgency)}')">View route and stops</button>` : ''}
                                 </div>
                             </div>
                         `;
@@ -870,13 +1105,22 @@
         });
 
         // Handle the selection
-        function selectAgencyOption(value, text, dotClass, skipFlyTo = false) {
+        function selectAgencyOption(value, text, dotClass, skipFlyTo = false, preserveJourney = false) {
             // 1. Update the hidden input for the API fetcher
             document.getElementById('agency-select').value = value;
             
             // 2. Update the main button text and dot color
             document.getElementById('selected-text').innerText = text;
             document.getElementById('selected-dot').className = `agency-dot ${dotClass}`;
+            if (!preserveJourney) {
+                journeySelection.from = null;
+                journeySelection.to = null;
+                document.getElementById('journey-from').value = '';
+                document.getElementById('journey-to').value = '';
+                document.getElementById('journey-from-match').textContent = '';
+                document.getElementById('journey-to-match').textContent = '';
+                journeyPlaceLayer.clearLayers();
+            }
             
             // 3. Highlight the correct item in the list
             document.querySelectorAll('.select-option').forEach(opt => {
@@ -897,15 +1141,14 @@
             }
             
             // 6. Fetch the new buses!
+            stopMarkersLayer.clearLayers();
+            activeRouteLayer.clearLayers();
+            closeTransitPanel();
             fetchBuses();
         }
 
-        document.getElementById('search-input').addEventListener('keypress', function (e) {
-            if (e.key === 'Enter') searchBus();
-        });
-
-        function searchBus() {
-            const query = document.getElementById('search-input').value.trim().toUpperCase();
+        async function searchBus() {
+            const query = document.getElementById('search-input')?.value.trim().toUpperCase();
             if (!query) return;
 
             const targetMarker = busMarkersDict[query];
@@ -934,7 +1177,1238 @@
                 return;
             }
 
-            alert(`Could not find Vehicle ID or Route '${query}'.`);
+            await searchStops(query);
+        }
+
+        function escapeHtml(value) {
+            return String(value ?? '').replace(/[&<>'"]/g, character => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
+            })[character]);
+        }
+
+        function openTransitPanel(title, subtitle, html) {
+            document.getElementById('panel-title').textContent = title;
+            document.getElementById('panel-subtitle').textContent = subtitle || '';
+            document.getElementById('panel-content').innerHTML = html;
+            document.getElementById('transit-panel').classList.add('open');
+            document.getElementById('bottom-sheet').classList.add('detail-mode');
+            document.getElementById('bottom-sheet').scrollTop = 0;
+        }
+
+        function setRouteLoading(isLoading) {
+            if (!isLoading) return;
+            openTransitPanel('', '', `<div class="route-loader-panel" role="status" aria-live="polite" aria-label="Searching for routes">
+                <div id="wifi-loader">
+                    <svg class="circle-outer" viewBox="0 0 86 86"><circle class="back" cx="43" cy="43" r="40"></circle><circle class="front" cx="43" cy="43" r="40"></circle></svg>
+                    <svg class="circle-middle" viewBox="0 0 60 60"><circle class="back" cx="30" cy="30" r="27"></circle><circle class="front" cx="30" cy="30" r="27"></circle></svg>
+                    <svg class="circle-inner" viewBox="0 0 34 34"><circle class="back" cx="17" cy="17" r="14"></circle><circle class="front" cx="17" cy="17" r="14"></circle></svg>
+                    <div class="text" data-text="Searching routes"></div>
+                </div>
+            </div>`);
+        }
+
+        function iconSvg(name, className = 'ui-icon') {
+            const paths = {
+                search:'<circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path>',
+                moon:'<path d="M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5 8.5 8.5 0 1 0 20.5 14.2Z"></path>',
+                sun:'<circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path>',
+                walk:'<circle cx="12" cy="4" r="2"></circle><path d="m10 22 1-7-3-3 2-5 4 3 3 1M14 22l-2-7M8 12l-3 4"></path>',
+                bus:'<rect x="4" y="3" width="16" height="15" rx="3"></rect><path d="M7 7h10M7 12h.01M17 12h.01M7 21v-3M17 21v-3"></path>',
+                train:'<rect x="5" y="3" width="14" height="15" rx="3"></rect><path d="M8 7h8M8 12h.01M16 12h.01M8 21l2-3M16 21l-2-3"></path>',
+            };
+            return `<svg class="${className}" viewBox="0 0 24 24">${paths[name] || ''}</svg>`;
+        }
+
+        function closeTransitPanel() {
+            document.getElementById('transit-panel').classList.remove('open');
+            document.getElementById('bottom-sheet').classList.remove('detail-mode');
+            journeyLiveVehicleLayer.clearLayers();
+            if (routeBrowseTimer) clearInterval(routeBrowseTimer);
+            routeBrowseTimer = null;
+            journeyMapFocused = false;
+            fetchBuses();
+        }
+
+        function focusJourneyMap() {
+            // A route label from another live vehicle can look like part of the
+            // selected journey. Hide the fleet layer while inspecting A-to-B.
+            markersGroup.clearLayers();
+            journeyMapFocused = true;
+        }
+
+        function createStopMarker(stop, color = null) {
+            const markerColor = color || safeRouteColor('');
+            const icon = L.divIcon({ html: `<div class="stop-marker" style="border-color:${markerColor}"></div>`, className: '', iconSize:[14,14], iconAnchor:[7,7] });
+            const marker = L.marker([Number(stop.stop_lat), Number(stop.stop_lon)], { icon })
+                .bindTooltip(escapeHtml(stop.stop_name), { direction:'top' });
+            marker.on('click', () => showStopArrivals(stop));
+            return marker;
+        }
+
+        async function loadNearbyStops(lat, lng) {
+            const agency = document.getElementById('agency-select').value;
+            try {
+                const response = await fetch(`${API_BASE}/api/stops?agency=${encodeURIComponent(agency)}&lat=${lat}&lng=${lng}&radius_km=2&limit=40`);
+                const result = await response.json();
+                if (!result.success) return;
+                stopMarkersLayer.clearLayers();
+                result.data.forEach(stop => createStopMarker(stop).addTo(stopMarkersLayer));
+                if (result.data.length) {
+                    openTransitPanel('Stops near you', `${result.data.length} stops within 2 km`, result.data.slice(0, 8).map(stop => `
+                        <div class="stop-row"><span class="stop-name">${escapeHtml(stop.stop_name)}</span><strong>${stop.distance_m} m</strong></div>
+                    `).join(''));
+                }
+            } catch (error) {
+                console.error('Could not load nearby stops', error);
+            }
+        }
+
+        async function searchStops(query) {
+            const agency = document.getElementById('agency-select').value;
+            try {
+                const response = await fetch(`${API_BASE}/api/stops?agency=${encodeURIComponent(agency)}&q=${encodeURIComponent(query)}&limit=20`);
+                const result = await response.json();
+                if (!result.success || !result.data.length) {
+                    openTransitPanel('No results', '', '<p class="panel-message">No active vehicle, route, or stop matched your search.</p>');
+                    return;
+                }
+                stopMarkersLayer.clearLayers();
+                const markers = result.data.map(stop => createStopMarker(stop).addTo(stopMarkersLayer));
+                map.fitBounds(L.featureGroup(markers).getBounds(), { padding:[50,50], maxZoom:16 });
+                openTransitPanel('Matching stops', `${result.data.length} results`, result.data.map(stop => `
+                    <button class="route-action" data-stop-id="${escapeHtml(stop.stop_id)}">${escapeHtml(stop.stop_name)}</button>
+                `).join(''));
+                document.querySelectorAll('#panel-content [data-stop-id]').forEach((button, index) => {
+                    button.addEventListener('click', () => showStopArrivals(result.data[index]));
+                });
+            } catch (error) {
+                openTransitPanel('Stops unavailable', '', '<p class="panel-message">The stop database could not be reached.</p>');
+            }
+        }
+
+        async function showStopArrivals(stop) {
+            const agency = document.getElementById('agency-select').value;
+            openTransitPanel(stop.stop_name, stop.stop_code ? `Stop ${stop.stop_code}` : 'Scheduled arrivals', '<p class="panel-message">Loading arrivals…</p>');
+            try {
+                const response = await fetch(`${API_BASE}/api/stops/${encodeURIComponent(stop.stop_id)}/arrivals?agency=${encodeURIComponent(agency)}`);
+                const result = await response.json();
+                const html = result.success && result.data.length ? result.data.map(arrival => `
+                    <div class="arrival-row">
+                        <span class="arrival-route">${escapeHtml(arrival.route_short_name || 'Route')}</span>
+                        <span class="arrival-destination">${escapeHtml(arrival.trip_headsign || arrival.route_long_name)}</span>
+                        <span class="arrival-minutes">${arrival.minutes === 0 ? 'Due' : `${arrival.minutes} min`}</span>
+                    </div>`).join('') : '<p class="panel-message">No upcoming scheduled services found.</p>';
+                openTransitPanel(stop.stop_name, result.notice || 'Upcoming arrivals', html);
+            } catch (error) {
+                openTransitPanel(stop.stop_name, '', '<p class="panel-message">Arrivals are temporarily unavailable.</p>');
+            }
+        }
+
+        async function updateBrowsedRouteVehicles(routeId, publicCode, agency, directionId, stops) {
+            try {
+                const response = await fetch(`${API_BASE}/api/live-buses?agency=${encodeURIComponent(agency)}`);
+                const result = await response.json();
+                if (!result.success) return;
+                const acceptedCodes = new Set([routeId, publicCode].filter(Boolean).map(value => String(value).toUpperCase()));
+                const routeVehicles = result.data.filter(vehicle => vehicle.position && acceptedCodes.has(String(vehicle.trip?.routeId || '').toUpperCase()));
+                const resolvedVehicles = await Promise.all(routeVehicles.map(async vehicle => {
+                    try {
+                        const params = new URLSearchParams({ agency, trip_id:vehicle.trip?.tripId || '' });
+                        const routeResponse = await fetch(`${API_BASE}/api/routes/${encodeURIComponent(routeId)}?${params}`);
+                        const routeResult = await routeResponse.json();
+                        if (routeResult.success && directionId !== null && directionId !== undefined
+                            && String(routeResult.data.trip.direction_id) !== String(directionId)) return null;
+                    } catch (error) {
+                        // Keep the vehicle when the feed cannot resolve direction;
+                        // its nearest-stop position is still useful to the user.
+                    }
+                    const point = { lat:Number(vehicle.position.latitude), lng:Number(vehicle.position.longitude) };
+                    let nearestIndex = 0;
+                    stops.forEach((stop, index) => {
+                        if (distanceMetres(point, stop) < distanceMetres(point, stops[nearestIndex])) nearestIndex = index;
+                    });
+                    const nextIndex = Math.min(nearestIndex + 1, stops.length - 1);
+                    const nextStop = stops[nextIndex];
+                    const previousStop = stops[nearestIndex];
+                    const segmentDistance = nextStop && previousStop ? distanceMetres(previousStop, nextStop) : 0;
+                    const remainingDistance = nextStop ? distanceMetres(point, nextStop) : 0;
+                    const progress = segmentDistance > 0 ? Math.max(3, Math.min(97, (1 - remainingDistance / segmentDistance) * 100)) : 100;
+                    const liveSpeed = Number(vehicle.position.speed);
+                    const estimatedSpeed = liveSpeed >= 2 ? liveSpeed : 7;
+                    const etaMinutes = nextIndex === nearestIndex ? 0 : Math.max(1, Math.ceil((remainingDistance * 1.18) / estimatedSpeed / 60));
+                    return { vehicle, point, nearestIndex, nextIndex, nextStop, progress, etaMinutes };
+                }));
+                const vehicles = resolvedVehicles.filter(Boolean);
+                journeyLiveVehicleLayer.clearLayers();
+                const markerColor = safeRouteColor('', agency);
+                vehicles.forEach(item => {
+                    const vehicle = item.vehicle;
+                    const label = compactRouteLabel(vehicle.trip?.routeId, vehicle.route_info?.short_name || publicCode);
+                    const icon = L.divIcon({
+                        html:`<div class="marker-wrapper"><div class="route-pill" style="background-color:${markerColor}">${escapeHtml(label)}</div></div>`,
+                        className:'', iconSize:null,
+                    });
+                    L.marker([item.point.lat, item.point.lng], {
+                        icon, title:`Live ${label}`,
+                    }).bindPopup(`<div class="custom-popup"><strong>${escapeHtml(label)} live bus</strong><div>${item.etaMinutes} min to ${escapeHtml(item.nextStop?.stop_name || 'end of route')}</div></div>`)
+                        .addTo(journeyLiveVehicleLayer);
+                });
+                let liveList = document.getElementById('route-live-list');
+                if (!liveList) {
+                    liveList = document.createElement('div');
+                    liveList.id = 'route-live-list';
+                    liveList.className = 'route-live-list';
+                    document.getElementById('panel-content')?.prepend(liveList);
+                }
+                if (liveList) liveList.innerHTML = vehicles.length ? vehicles.map(item => {
+                    const vehicleName = item.vehicle.vehicle?.id || publicCode;
+                    return `<div class="route-live-bus" style="--route-live-color:${markerColor}">
+                        <div class="route-live-bus-head"><strong>${escapeHtml(vehicleName)}</strong><span class="route-live-eta">~${item.etaMinutes} min</span></div>
+                        <div class="route-live-bus-track">
+                            <div class="route-live-bus-fill" style="width:${item.progress}%"></div>
+                            <span class="route-live-bus-marker" style="left:${item.progress}%">${iconSvg('bus')}</span>
+                            <span class="route-live-stop-marker"></span>
+                        </div>
+                        <div class="route-live-segment"><span>${escapeHtml(stops[item.nearestIndex]?.stop_name || 'Previous stop')}</span><span>${escapeHtml(item.nextStop?.stop_name || 'End of route')}</span></div>
+                        <div class="route-live-bus-next">Next station<strong>${escapeHtml(item.nextStop?.stop_name || 'End of route')}</strong></div>
+                    </div>`;
+                }).join('') : '<p class="panel-message">No live buses currently matched to this direction.</p>';
+                const subtitle = document.getElementById('panel-subtitle');
+                if (subtitle && document.getElementById('transit-panel').classList.contains('open')) {
+                    const stopCount = subtitle.dataset.stopCount || subtitle.textContent.split(' • ')[0];
+                    subtitle.dataset.stopCount = stopCount;
+                    subtitle.textContent = `${stopCount} • ${vehicles.length} live bus${vehicles.length === 1 ? '' : 'es'}`;
+                }
+            } catch (error) {
+                console.warn('Route live vehicles unavailable', error);
+            }
+        }
+
+        async function showRoute(routeId, agencyOverride = null, directionId = null, tripId = null, publicCode = null) {
+            const agency = agencyOverride || document.getElementById('agency-select').value;
+            if (liveJourneyTrackingTimer) clearInterval(liveJourneyTrackingTimer);
+            liveJourneyTrackingTimer = null;
+            if (routeBrowseTimer) clearInterval(routeBrowseTimer);
+            routeBrowseTimer = null;
+            openTransitPanel('Route', routeId, '<p class="panel-message">Loading route…</p>');
+            try {
+                const params = new URLSearchParams({ agency });
+                if (directionId !== null && directionId !== undefined && directionId !== '') params.set('direction_id', directionId);
+                if (tripId) params.set('trip_id', tripId);
+                const response = await fetch(`${API_BASE}/api/routes/${encodeURIComponent(routeId)}?${params}`);
+                const result = await response.json();
+                if (!result.success) throw new Error(result.error);
+                const data = result.data;
+                focusJourneyMap();
+                activeRouteLayer.clearLayers();
+                routeDirectionsRenderers.forEach(renderer => renderer.setMap(null));
+                routeDirectionsRenderers = [];
+                const coordinates = data.shape?.length
+                    ? data.shape.map(point => [Number(point.lat), Number(point.lon)])
+                    : data.stops.map(stop => [Number(stop.stop_lat), Number(stop.stop_lon)]);
+                const brandColor = safeRouteColor(data.route.route_color, agency);
+                if (coordinates.length) {
+                    const line = drawOutlinedRoute(coordinates, brandColor);
+                    map.fitBounds(line.getBounds(), { padding:[45,45] });
+                }
+                data.stops.forEach(stop => {
+                    const displayStop = data.geometry_source === 'verified-override'
+                        ? projectStopOntoRoute(stop, coordinates) : stop;
+                    createStopMarker(displayStop, brandColor).addTo(activeRouteLayer);
+                });
+                const routeLabel = compactRouteLabel(data.route.route_id, publicCode || data.route.route_short_name || data.route.route_long_name);
+                const title = `${routeLabel} ${data.trip.trip_headsign || ''}`.trim();
+                const geometryLabel = data.geometry_source === 'verified-override' ? 'verified route' : 'official stops';
+                openTransitPanel(title, `${data.stops.length} stops • ${geometryLabel}`, `<div id="route-live-list" class="route-live-list"><p class="panel-message">Checking live bus locations…</p></div>` + data.stops.map((stop, index) => `
+                    <div class="stop-row"><strong>${index + 1}</strong><span class="stop-name">${escapeHtml(stop.stop_name)}</span></div>
+                `).join(''));
+                await updateBrowsedRouteVehicles(routeId, publicCode || routeLabel, agency, data.trip.direction_id, data.stops);
+                if (routeBrowseTimer) clearInterval(routeBrowseTimer);
+                routeBrowseTimer = setInterval(() => updateBrowsedRouteVehicles(routeId, publicCode || routeLabel, agency, data.trip.direction_id, data.stops), 30000);
+            } catch (error) {
+                openTransitPanel('Route unavailable', routeId, '<p class="panel-message">Route geometry is not available yet. Rebuild the GTFS database and try again.</p>');
+            }
+        }
+
+        function toggleJourneyPlanner(forceOpen) {
+            if (forceOpen !== false) document.getElementById('journey-to').focus();
+        }
+
+        async function searchRouteCode(code) {
+            if (routeBrowseTimer) clearInterval(routeBrowseTimer);
+            routeBrowseTimer = null;
+            const selectedAgency = document.getElementById('agency-select').value;
+            const agencies = selectedAgency === 'rapid-bus-kl'
+                ? ['rapid-bus-kl', 'rapid-bus-mrtfeeder']
+                : [selectedAgency];
+            openTransitPanel('Finding route', code, '<p class="panel-message">Checking route directions…</p>');
+            try {
+                const resultSets = await Promise.all(agencies.map(async agency => {
+                    const response = await fetch(`${API_BASE}/api/routes/search?agency=${encodeURIComponent(agency)}&q=${encodeURIComponent(code)}`);
+                    const result = await response.json();
+                    return result.success ? result.data.map(item => ({ ...item, agency })) : [];
+                }));
+                let matches = resultSets.flat();
+                if (!matches.length) {
+                    // Compatibility with an already-running older Flask process:
+                    // exact route IDs can still be opened through the route-detail
+                    // endpoint even when /api/routes/search has not loaded yet.
+                    const probes = [];
+                    for (const agency of agencies) {
+                        for (const directionId of [0, 1]) {
+                            probes.push((async () => {
+                                try {
+                                    const response = await fetch(`${API_BASE}/api/routes/${encodeURIComponent(code)}?agency=${encodeURIComponent(agency)}&direction_id=${directionId}`);
+                                    const result = await response.json();
+                                    if (!result.success || !result.data?.stops?.length) return null;
+                                    const data = result.data;
+                                    return {
+                                        ...data.route, ...data.trip, agency,
+                                        origin_name:data.stops[0].stop_name,
+                                        destination_name:data.stops[data.stops.length - 1].stop_name,
+                                    };
+                                } catch (error) {
+                                    return null;
+                                }
+                            })());
+                        }
+                    }
+                    const fallbackMatches = (await Promise.all(probes)).filter(Boolean);
+                    const uniqueTrips = new Map(fallbackMatches.map(route => [route.trip_id, route]));
+                    matches = [...uniqueTrips.values()];
+                }
+                if (!matches.length) {
+                    openTransitPanel('Route not found', code, '<p class="panel-message">No route with this number exists for the selected operator.</p>');
+                    return;
+                }
+                const html = matches.map((route, index) => {
+                    const endpoints = [route.origin_name, route.destination_name].filter(Boolean).join(' → ');
+                    const direction = route.trip_headsign?.trim() || endpoints || `Direction ${route.direction_id ?? index + 1}`;
+                    return `<button class="route-action" data-route-choice="${index}" style="background:${safeRouteColor(route.route_color, route.agency)}">
+                        <strong>${escapeHtml(compactRouteLabel(route.route_id, code))}</strong> &nbsp; ${escapeHtml(direction)}
+                    </button>`;
+                }).join('');
+                openTransitPanel(`Route ${code}`, matches.length > 1 ? 'Choose a direction' : '1 direction', html);
+                document.querySelectorAll('[data-route-choice]').forEach(button => button.addEventListener('click', () => {
+                    const route = matches[Number(button.dataset.routeChoice)];
+                    showRoute(route.route_id, route.agency, route.direction_id, route.trip_id, code);
+                }));
+                if (matches.length === 1) {
+                    const route = matches[0];
+                    showRoute(route.route_id, route.agency, route.direction_id, route.trip_id, code);
+                }
+            } catch (error) {
+                openTransitPanel('Route search unavailable', code, '<p class="panel-message">Please try again shortly.</p>');
+            }
+        }
+
+        function showMapSearch() {
+            document.getElementById('journey-to').focus();
+        }
+
+        function setJourneyTimeToNow() {
+            const now = new Date();
+            document.getElementById('journey-date').value = [now.getFullYear(), String(now.getMonth() + 1).padStart(2, '0'), String(now.getDate()).padStart(2, '0')].join('-');
+            document.getElementById('journey-time').value = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+        }
+
+        function initializeJourneyPlanner() {
+            setJourneyTimeToNow();
+            ['from', 'to'].forEach(kind => {
+                const input = document.getElementById(`journey-${kind}`);
+                input.addEventListener('keydown', event => {
+                    if (event.key !== 'Enter') return;
+                    const routeCode = input.value.trim().toUpperCase();
+                    if (!/^[A-Z]{1,3}\d{1,4}(?:[A-Z]|\([A-Z]\))?$/.test(routeCode)) return;
+                    event.preventDefault();
+                    event.stopImmediatePropagation();
+                    if (routeCodeSearchTimer) clearTimeout(routeCodeSearchTimer);
+                    document.body.classList.remove('route-code-entry');
+                    input.value = routeCode;
+                    input.blur();
+                    document.getElementById('header-journey-search').classList.remove('expanded');
+                    searchRouteCode(routeCode);
+                });
+                input.addEventListener('input', () => {
+                    const routeCode = input.value.trim().toUpperCase();
+                    const isRouteCode = /^[A-Z]{1,3}\d{1,4}(?:[A-Z]|\([A-Z]\))?$/.test(routeCode);
+                    document.body.classList.toggle('route-code-entry', isRouteCode);
+                    if (routeCodeSearchTimer) clearTimeout(routeCodeSearchTimer);
+                    if (isRouteCode) {
+                        routeCodeSearchTimer = setTimeout(() => {
+                            document.body.classList.remove('route-code-entry');
+                            input.value = routeCode;
+                            input.blur();
+                            document.getElementById('header-journey-search').classList.remove('expanded');
+                            searchRouteCode(routeCode);
+                        }, 550);
+                    }
+                    journeySelection[kind] = null;
+                    document.getElementById(`journey-${kind}-match`).textContent = '';
+                    if (kind === 'to') {
+                        journeySelection.from = null;
+                        document.getElementById('journey-from').value = '';
+                        document.getElementById('header-journey-search').classList.remove('expanded');
+                        document.getElementById('destination-prefix').innerHTML = iconSvg('search');
+                    }
+                });
+                const autocomplete = new google.maps.places.Autocomplete(input, {
+                    componentRestrictions: { country: 'my' },
+                    fields: ['geometry', 'name', 'formatted_address', 'place_id'],
+                });
+                autocomplete.bindTo('bounds', map.native);
+                autocomplete.addListener('place_changed', () => {
+                    document.body.classList.remove('route-code-entry');
+                    const place = autocomplete.getPlace();
+                    if (!place.geometry?.location) return;
+                    matchPlaceToStop(kind, {
+                        lat: place.geometry.location.lat(), lng: place.geometry.location.lng(),
+                        name: place.name || place.formatted_address || input.value,
+                    });
+                });
+            });
+        }
+
+        async function matchPlaceToStop(kind, place) {
+            if (kind === 'to') selectAgencyForPlace(place);
+            const agency = document.getElementById('agency-select').value;
+            const matchLabel = document.getElementById(`journey-${kind}-match`);
+            matchLabel.textContent = 'Finding the best nearby stop…';
+            try {
+                const response = await fetch(`${API_BASE}/api/stops?agency=${encodeURIComponent(agency)}&lat=${place.lat}&lng=${place.lng}&radius_km=5&limit=6`);
+                const result = await response.json();
+                if (!result.success || !result.data.length) {
+                    journeySelection[kind] = { stop_id:null, stop_name:place.name, place };
+                    document.getElementById(`journey-${kind}`).value = place.name;
+                    matchLabel.textContent = 'Door-to-door routing will choose the best stop';
+                    updateJourneyPlaceMarkers();
+                    continueJourneyAfterPlaceMatch(kind);
+                    return;
+                }
+                const stop = result.data[0];
+                stop.place = place;
+                journeySelection[kind] = stop;
+                document.getElementById(`journey-${kind}`).value = place.name;
+                matchLabel.textContent = `Via ${stop.stop_name} · ${stop.distance_m} m away`;
+                updateJourneyPlaceMarkers();
+                continueJourneyAfterPlaceMatch(kind);
+            } catch (error) {
+                journeySelection[kind] = null;
+                matchLabel.textContent = 'Nearby-stop matching is unavailable';
+            }
+        }
+
+        async function showJourneySegment(journey, preservePanel = false) {
+            focusJourneyMap();
+            const agency = document.getElementById('agency-select').value;
+            const params = new URLSearchParams({
+                agency,
+                trip_id:journey.trip_id,
+                direction_id:journey.direction_id ?? '',
+            });
+            if (!preservePanel) openTransitPanel('Journey route', `${journey.from_stop.stop_name} → ${journey.to_stop.stop_name}`, '<p class="panel-message">Drawing your section of the route…</p>');
+            try {
+                const response = await fetch(`${API_BASE}/api/routes/${encodeURIComponent(journey.route_id)}?${params}`);
+                const result = await response.json();
+                if (!result.success) throw new Error(result.error);
+                activeRouteLayer.clearLayers();
+                routeDirectionsRenderers.forEach(renderer => renderer.setMap(null));
+                routeDirectionsRenderers = [];
+                const fullStops = result.data.stops;
+                const stops = sliceStopsBetween(fullStops, journey.from_stop, journey.to_stop);
+                const brandColor = safeRouteColor(journey.route_color, agency);
+                const transitRouteDrawn = await drawGoogleTransitRoute(journey, stops, brandColor);
+                if (!transitRouteDrawn && stops.length) {
+                    const line = drawOutlinedRoute(stops.map(stop => [Number(stop.stop_lat), Number(stop.stop_lon)]), brandColor);
+                    map.fitBounds(line.getBounds(), { padding:[45,45] });
+                }
+                stops.forEach(stop => createStopMarker(stop, brandColor).addTo(activeRouteLayer));
+                updateJourneyPlaceMarkers();
+                if (!preservePanel) {
+                    openTransitPanel(compactRouteLabel(journey.route_id, journey.route_short_name), `${stops.length} stops from A to B`, renderJourneyStopList(fullStops, journey.from_stop, journey.to_stop));
+                    if (currentJourneyOptions.length) updateLiveJourneyTracking(currentJourneyOptions);
+                }
+            } catch (error) {
+                if (!preservePanel) openTransitPanel('Route unavailable', '', '<p class="panel-message">This journey segment could not be drawn.</p>');
+            }
+        }
+
+        function stopBoundaryIndex(stops, target, afterIndex = -1) {
+            const targetId = typeof target === 'object' ? target?.stop_id : target;
+            const targetName = typeof target === 'object' ? target?.stop_name : '';
+            let index = stops.findIndex((stop, position) => position > afterIndex && stop.stop_id === targetId);
+            if (index >= 0) return index;
+            if (targetName) {
+                const normalizedName = String(targetName).trim().toUpperCase();
+                index = stops.findIndex((stop, position) => position > afterIndex && String(stop.stop_name).trim().toUpperCase() === normalizedName);
+                if (index >= 0) return index;
+                const existsInWrongOrder = stops.some(stop => String(stop.stop_name).trim().toUpperCase() === normalizedName);
+                if (existsInWrongOrder) return -1;
+            }
+            if (typeof target !== 'object') return -1;
+            const targetLat = Number(target.stop_lat);
+            const targetLon = Number(target.stop_lon);
+            if (!Number.isFinite(targetLat) || !Number.isFinite(targetLon)) return -1;
+            let nearestIndex = -1;
+            let nearestDistance = Infinity;
+            stops.forEach((stop, position) => {
+                if (position <= afterIndex) return;
+                const distance = Math.hypot(Number(stop.stop_lat) - targetLat, Number(stop.stop_lon) - targetLon);
+                if (distance < nearestDistance) {
+                    nearestDistance = distance;
+                    nearestIndex = position;
+                }
+            });
+            return nearestIndex;
+        }
+
+        function sliceStopsBetween(stops, fromTarget, toTarget) {
+            const originIndex = stopBoundaryIndex(stops, fromTarget);
+            const destinationIndex = stopBoundaryIndex(stops, toTarget, originIndex);
+            if (originIndex >= 0 && destinationIndex > originIndex) {
+                return stops.slice(originIndex, destinationIndex + 1);
+            }
+            return [fromTarget, toTarget].filter(target => typeof target === 'object' && Number.isFinite(Number(target.stop_lat)) && Number.isFinite(Number(target.stop_lon)));
+        }
+
+        function sliceShapeThroughStops(shape, stops) {
+            const points = (shape || []).map(point => ({
+                lat:Number(point.lat), lng:Number(point.lon),
+            })).filter(point => Number.isFinite(point.lat) && Number.isFinite(point.lng));
+            if (points.length < 2 || stops.length < 2) return [];
+
+            // Match every stop to a progressively later shape point. Using the
+            // complete ordered stop sequence avoids selecting the wrong branch
+            // where a route crosses or revisits the same road.
+            const matchedIndexes = [];
+            let previousIndex = -1;
+            for (const stop of stops) {
+                let nearestIndex = -1;
+                let nearestDistance = Infinity;
+                let firstNearbyIndex = -1;
+                for (let index = previousIndex + 1; index < points.length; index++) {
+                    const distance = distanceMetres(stop, points[index]);
+                    if (firstNearbyIndex < 0 && distance <= 120) firstNearbyIndex = index;
+                    if (distance < nearestDistance) {
+                        nearestDistance = distance;
+                        nearestIndex = index;
+                    }
+                }
+                const matchedIndex = firstNearbyIndex >= 0 ? firstNearbyIndex : nearestIndex;
+                if (matchedIndex < 0 || nearestDistance > 500) return [];
+                matchedIndexes.push(matchedIndex);
+                previousIndex = matchedIndex;
+            }
+            const clipped = points.slice(matchedIndexes[0], matchedIndexes[matchedIndexes.length - 1] + 1);
+            const missesStation = stops.some(stop => !clipped.some(point => distanceMetres(stop, point) <= 250));
+            return missesStation ? [] : clipped.map(point => [point.lat, point.lng]);
+        }
+
+        function projectStopOntoRoute(stop, coordinates) {
+            const latitude = Number(stop.stop_lat);
+            const longitude = Number(stop.stop_lon);
+            if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || coordinates.length < 2) return stop;
+            const longitudeScale = Math.cos(latitude * Math.PI / 180);
+            let bestLatitude = latitude;
+            let bestLongitude = longitude;
+            let bestDistance = Infinity;
+            for (let index = 0; index < coordinates.length - 1; index++) {
+                const start = coordinates[index];
+                const end = coordinates[index + 1];
+                const ax = Number(start[1]) * longitudeScale;
+                const ay = Number(start[0]);
+                const bx = Number(end[1]) * longitudeScale;
+                const by = Number(end[0]);
+                const px = longitude * longitudeScale;
+                const py = latitude;
+                const dx = bx - ax;
+                const dy = by - ay;
+                const lengthSquared = dx * dx + dy * dy;
+                const ratio = lengthSquared ? Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / lengthSquared)) : 0;
+                const projectedX = ax + ratio * dx;
+                const projectedY = ay + ratio * dy;
+                const distance = (px - projectedX) ** 2 + (py - projectedY) ** 2;
+                if (distance < bestDistance) {
+                    bestDistance = distance;
+                    bestLatitude = projectedY;
+                    bestLongitude = projectedX / longitudeScale;
+                }
+            }
+            return { ...stop, stop_lat:bestLatitude, stop_lon:bestLongitude };
+        }
+
+        function renderJourneyStopList(stops, fromTarget, toTarget) {
+            const originIndex = stopBoundaryIndex(stops, fromTarget);
+            const destinationIndex = stopBoundaryIndex(stops, toTarget, originIndex);
+            if (originIndex < 0 || destinationIndex <= originIndex) {
+                const fromName = typeof fromTarget === 'object' ? fromTarget.stop_name : 'Boarding stop';
+                const toName = typeof toTarget === 'object' ? toTarget.stop_name : 'Exit stop';
+                return `<details class="extra-stops"><summary>Show stops before A (0)</summary></details>
+                    <div class="stop-row"><strong class="journey-stop-label">A</strong><span class="stop-name">${escapeHtml(fromName)}</span></div>
+                    <div class="stop-row"><strong class="journey-stop-label">B</strong><span class="stop-name">${escapeHtml(toName)}</span></div>
+                    <details class="extra-stops"><summary>Show stops after B (${stops.length})</summary>${stops.map(stop => `<div class="stop-row"><span></span><span class="stop-name">${escapeHtml(stop.stop_name)}</span></div>`).join('')}</details>`;
+            }
+            const before = stops.slice(0, originIndex);
+            const journeyStops = stops.slice(originIndex, destinationIndex + 1);
+            const after = stops.slice(destinationIndex + 1);
+            const hiddenSection = (items, label) => `<details class="extra-stops"><summary>${label} (${items.length})</summary>${items.map(stop => `<div class="stop-row" data-stop-id="${escapeHtml(stop.stop_id)}"><span></span><span class="stop-name">${escapeHtml(stop.stop_name)}</span></div>`).join('')}</details>`;
+            return `${hiddenSection(before, 'Show stops before A')}${journeyStops.map((stop, index) => {
+                const label = index === 0 ? 'A' : index === journeyStops.length - 1 ? 'B' : index + 1;
+                return `<div class="stop-row" data-stop-id="${escapeHtml(stop.stop_id)}"><strong class="journey-stop-label">${label}</strong><span class="stop-name">${escapeHtml(stop.stop_name)}</span></div>`;
+            }).join('')}${hiddenSection(after, 'Show stops after B')}`;
+        }
+
+        async function drawGoogleTransitRoute(journey, stops, color) {
+            if (stops.length < 2 || !google.maps.DirectionsService) return false;
+            const departure = new Date();
+            const [hours, minutes] = String(journey.departure_time || '').split(':').map(Number);
+            if (Number.isFinite(hours) && Number.isFinite(minutes)) {
+                departure.setHours(hours, minutes, 0, 0);
+                if (departure.getTime() < Date.now() - 5 * 60 * 1000) departure.setDate(departure.getDate() + 1);
+            }
+            const service = new google.maps.DirectionsService();
+            try {
+                const directions = await new Promise((resolve, reject) => service.route({
+                    origin:{ lat:Number(stops[0].stop_lat), lng:Number(stops[0].stop_lon) },
+                    destination:{ lat:Number(stops[stops.length - 1].stop_lat), lng:Number(stops[stops.length - 1].stop_lon) },
+                    travelMode:google.maps.TravelMode.TRANSIT,
+                    transitOptions:{ departureTime:departure, modes:[google.maps.TransitMode.BUS] },
+                    provideRouteAlternatives:true,
+                }, (response, status) => status === google.maps.DirectionsStatus.OK ? resolve(response) : reject(new Error(status))));
+                const expectedRoute = compactRouteLabel(journey.route_id, journey.route_short_name).toUpperCase();
+                const matchingRoute = directions.routes.find(route => route.legs.some(leg => leg.steps.some(step => {
+                    const line = step.transit?.line;
+                    return String(line?.short_name || line?.name || '').toUpperCase().includes(expectedRoute);
+                })));
+                if (!matchingRoute) return false;
+                const path = matchingRoute.overview_path;
+                const outline = new google.maps.Polyline({ map:map.native, path, strokeColor:'#7a163f', strokeWeight:12, strokeOpacity:.95, zIndex:4 });
+                const routeLine = new google.maps.Polyline({ map:map.native, path, strokeColor:color, strokeWeight:8, strokeOpacity:1, zIndex:5 });
+                routeDirectionsRenderers.push(outline, routeLine);
+                const bounds = new google.maps.LatLngBounds();
+                path.forEach(point => bounds.extend(point));
+                if (!bounds.isEmpty()) map.native.fitBounds(bounds, 45);
+                return true;
+            } catch (error) {
+                console.warn('Matching Google transit geometry unavailable; using GTFS geometry', error);
+                return false;
+            }
+        }
+
+        async function drawRouteOnRoads(stops, color = '#2563eb', fitViewport = true) {
+            const points = stops.map(stop => ({
+                lat:Number(stop.stop_lat), lng:Number(stop.stop_lon),
+            })).filter(point => Number.isFinite(point.lat) && Number.isFinite(point.lng));
+            if (points.length < 2 || !google.maps.DirectionsService) return false;
+
+            // Use sparse anchors instead of forcing every roadside stop as a waypoint.
+            // Stops on opposite carriageways can otherwise create artificial U-turn loops.
+            const anchorStep = Math.max(8, Math.ceil(points.length / 4));
+            const anchors = points.filter((point, index) => index === 0 || index === 1
+                || index === points.length - 2 || index === points.length - 1 || index % anchorStep === 0);
+            const chunks = [];
+            for (let start = 0; start < anchors.length - 1; start++) {
+                chunks.push([anchors[start], anchors[start + 1]]);
+            }
+            const service = new google.maps.DirectionsService();
+            const bounds = new google.maps.LatLngBounds();
+            try {
+                for (const chunk of chunks) {
+                    const directions = await new Promise((resolve, reject) => service.route({
+                        origin:chunk[0],
+                        destination:chunk[chunk.length - 1],
+                        travelMode:google.maps.TravelMode.DRIVING,
+                    }, (response, status) => status === google.maps.DirectionsStatus.OK ? resolve(response) : reject(new Error(status))));
+                    const directDistance = distanceMetres(chunk[0], chunk[1]);
+                    const routedDistance = Number(directions.routes[0].legs?.[0]?.distance?.value || 0);
+                    const excessiveDetour = directDistance > 0 && routedDistance > directDistance * 1.65;
+                    let roadPath = directions.routes[0].overview_path;
+                    if (excessiveDetour) {
+                        try {
+                            const fallbackDirections = await new Promise((resolve, reject) => service.route({
+                                origin:chunk[0], destination:chunk[1],
+                                travelMode:google.maps.TravelMode.WALKING,
+                            }, (response, status) => status === google.maps.DirectionsStatus.OK ? resolve(response) : reject(new Error(status))));
+                            roadPath = fallbackDirections.routes[0].overview_path;
+                        } catch (fallbackError) {
+                            roadPath = chunk.map(point => new google.maps.LatLng(point.lat, point.lng));
+                        }
+                    }
+                    const outlineLine = new google.maps.Polyline({
+                        map:map.native, path:roadPath, strokeColor:'#7a163f',
+                        strokeWeight:12, strokeOpacity:.95, zIndex:4,
+                    });
+                    const colorLine = new google.maps.Polyline({
+                        map:map.native, path:roadPath, strokeColor:color,
+                        strokeWeight:8, strokeOpacity:1, zIndex:5,
+                    });
+                    routeDirectionsRenderers.push(outlineLine, colorLine);
+                    roadPath.forEach(point => bounds.extend(point));
+                }
+                if (fitViewport && !bounds.isEmpty()) map.native.fitBounds(bounds, 45);
+                return routeDirectionsRenderers.length > 0;
+            } catch (error) {
+                routeDirectionsRenderers.forEach(renderer => renderer.setMap(null));
+                routeDirectionsRenderers = [];
+                console.warn('Road-snapped route unavailable; using GTFS geometry', error);
+                return false;
+            }
+        }
+
+        function selectAgencyForPlace(place) {
+            let nearestAgency = null;
+            let nearestDistance = Infinity;
+            for (const [agency, coordinates] of Object.entries(agencyLocations)) {
+                if (agency === 'ktmb') continue;
+                const distance = Math.hypot(place.lat - coordinates.lat, place.lng - coordinates.lng);
+                if (distance < nearestDistance) {
+                    nearestDistance = distance;
+                    nearestAgency = agency;
+                }
+            }
+            if (!nearestAgency || nearestDistance > 1.5 || nearestAgency === document.getElementById('agency-select').value) return;
+            const option = document.querySelector(`.select-option[data-value="${nearestAgency}"]`);
+            if (!option) return;
+            const label = option.querySelector('.text').innerText;
+            const dotClass = Array.from(option.querySelector('.agency-dot').classList).find(name => name.startsWith('dot-'));
+            selectAgencyOption(nearestAgency, label, dotClass, true, true);
+        }
+
+        function continueJourneyAfterPlaceMatch(kind) {
+            if (kind === 'to') {
+                document.getElementById('header-journey-search').classList.add('expanded');
+                document.getElementById('destination-prefix').textContent = 'B';
+                setTimeout(() => document.getElementById('journey-from').focus(), 0);
+            } else if (kind === 'from' && journeySelection.to?.place) {
+                autoPlanAfterLocation = false;
+                setTimeout(planJourney, 0);
+            }
+        }
+
+        function swapJourneyPoints() {
+            if (!journeySelection.from || !journeySelection.to) return;
+            [journeySelection.from, journeySelection.to] = [journeySelection.to, journeySelection.from];
+            const fromInput = document.getElementById('journey-from');
+            const toInput = document.getElementById('journey-to');
+            [fromInput.value, toInput.value] = [toInput.value, fromInput.value];
+            updateJourneyPlaceMarkers();
+            planJourney();
+        }
+
+        function updateJourneyPlaceMarkers() {
+            journeyPlaceLayer.clearLayers();
+            const selected = [
+                { item:journeySelection.from, label:'A', title:'Starting point' },
+                { item:journeySelection.to, label:'B', title:'Destination' },
+            ].filter(entry => entry.item?.place);
+            const markers = selected.map(entry => {
+                const place = entry.item.place;
+                const icon = L.divIcon({ html:`<div class="route-pill">${entry.label}</div>`, className:'' });
+                return L.marker([place.lat, place.lng], { icon, title:`${entry.title}: ${place.name}` })
+                    .bindPopup(`<div class="custom-popup"><strong>${entry.title}</strong><div>${escapeHtml(place.name)}</div></div>`)
+                    .addTo(journeyPlaceLayer);
+            });
+            if (markers.length === 1) {
+                map.flyTo([selected[0].item.place.lat, selected[0].item.place.lng], 15);
+            } else if (markers.length > 1) {
+                map.fitBounds(L.featureGroup(markers).getBounds(), { padding:[60,60], maxZoom:15 });
+            }
+        }
+
+        function useCurrentLocationForJourney(planWhenReady = false) {
+            autoPlanAfterLocation = planWhenReady;
+            if (!navigator.geolocation) {
+                document.getElementById('journey-from-match').textContent = 'Location is unavailable on this device';
+                return;
+            }
+            document.getElementById('journey-from-match').textContent = 'Getting your location…';
+            navigator.geolocation.getCurrentPosition(position => {
+                document.getElementById('journey-from').value = 'Current location';
+                matchPlaceToStop('from', { lat:position.coords.latitude, lng:position.coords.longitude, name:'Current location' });
+            }, () => {
+                document.getElementById('journey-from-match').textContent = 'Location permission was not granted';
+            }, { enableHighAccuracy:true, timeout:10000 });
+        }
+
+        async function loadJourneyStopSuggestions(kind, query) {
+            const container = document.getElementById(`journey-${kind}-suggestions`);
+            if (query.trim().length < 2) {
+                container.classList.remove('open');
+                return;
+            }
+            const agency = document.getElementById('agency-select').value;
+            try {
+                const response = await fetch(`${API_BASE}/api/stops?agency=${encodeURIComponent(agency)}&q=${encodeURIComponent(query)}&limit=8`);
+                const result = await response.json();
+                if (!result.success || !result.data.length) {
+                    container.innerHTML = '<div class="panel-message">No matching stops</div>';
+                    container.classList.add('open');
+                    return;
+                }
+                container.innerHTML = result.data.map((stop, index) => `<button class="suggestion-button" data-index="${index}">${escapeHtml(stop.stop_name)}${stop.stop_code ? ` · ${escapeHtml(stop.stop_code)}` : ''}</button>`).join('');
+                container.classList.add('open');
+                container.querySelectorAll('[data-index]').forEach(button => button.addEventListener('click', () => {
+                    const stop = result.data[Number(button.dataset.index)];
+                    journeySelection[kind] = stop;
+                    document.getElementById(`journey-${kind}`).value = stop.stop_name;
+                    container.classList.remove('open');
+                }));
+            } catch (error) {
+                container.innerHTML = `<div class="panel-message">Cannot reach the stop service at ${escapeHtml(API_BASE)}. Start the MariBus backend or deploy the latest backend changes.</div>`;
+                container.classList.add('open');
+            }
+        }
+
+        function safeRouteColor(value, agencyOverride = null) {
+            const agency = agencyOverride || document.getElementById('agency-select')?.value || '';
+            if (agency.includes('mybas')) return '#f93999';
+            if (agency === 'rapid-bus-mrtfeeder') return '#f60404';
+            if (agency === 'rapid-bus-kl') return '#f60404';
+            return /^[0-9a-f]{6}$/i.test(value || '') ? `#${value}` : '#2563eb';
+        }
+
+        function compactRouteLabel(routeId, routeName) {
+            const name = String(routeName || '').trim();
+            const displayAliases = {
+                'ipoh line':'KTM',
+                'seremban line':'KTM',
+            };
+            if (displayAliases[name.toLowerCase()]) return displayAliases[name.toLowerCase()];
+            const genericNames = new Set(['route', 'bus', 'unknown', 'service']);
+            if (name && name.length <= 12 && !genericNames.has(name.toLowerCase())) return name;
+            const id = String(routeId || '').split('_').pop().trim();
+            return id || (!genericNames.has(name.toLowerCase()) ? name : '') || 'Bus';
+        }
+
+        function formatJourneyDuration(minutes) {
+            const total = Math.max(0, Math.round(Number(minutes) || 0));
+            const hours = Math.floor(total / 60);
+            const remainder = total % 60;
+            if (!hours) return `${remainder} min`;
+            return remainder ? `${hours} hr ${remainder} min` : `${hours} hr`;
+        }
+
+        function drawOutlinedRoute(coordinates, color) {
+            L.polyline(coordinates, { color:'#7a163f', weight:12, opacity:.95 }).addTo(activeRouteLayer);
+            return L.polyline(coordinates, { color, weight:8, opacity:1 }).addTo(activeRouteLayer);
+        }
+
+        function showWalkingFallback(fromPlace, toPlace, transitNotice = '') {
+            const service = new google.maps.DirectionsService();
+            service.route({
+                origin: { lat:Number(fromPlace.lat), lng:Number(fromPlace.lng) },
+                destination: { lat:Number(toPlace.lat), lng:Number(toPlace.lng) },
+                travelMode: google.maps.TravelMode.WALKING,
+            }, (response, status) => {
+                if (status !== google.maps.DirectionsStatus.OK || !response?.routes?.[0]?.legs?.[0]) {
+                    const toRadians = value => value * Math.PI / 180;
+                    const dLat = toRadians(toPlace.lat - fromPlace.lat);
+                    const dLng = toRadians(toPlace.lng - fromPlace.lng);
+                    const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRadians(fromPlace.lat)) * Math.cos(toRadians(toPlace.lat)) * Math.sin(dLng / 2) ** 2;
+                    const estimatedKm = 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)) * 1.2;
+                    const estimatedMinutes = Math.max(1, Math.round(estimatedKm / 5 * 60));
+                    activeRouteLayer.clearLayers();
+                    L.polyline([[fromPlace.lat, fromPlace.lng], [toPlace.lat, toPlace.lng]], { color:'#2563eb', weight:5, opacity:.85, dashArray:'8 8' }).addTo(activeRouteLayer);
+                    openTransitPanel('Walking is the best option', transitNotice, `
+                        <article class="journey-card">
+                            <div class="journey-summary"><span class="journey-route" style="background:#2563eb">WALK</span><span class="journey-time">About ${estimatedMinutes} min</span></div>
+                            <div class="journey-meta"><strong>About ${estimatedKm.toFixed(1)} km</strong><br>No scheduled bus travels in this direction. The line shown is an estimate because Google walking directions are unavailable.</div>
+                        </article>`);
+                    return;
+                }
+                const leg = response.routes[0].legs[0];
+                if (walkingDirectionsRenderer) walkingDirectionsRenderer.setMap(null);
+                activeRouteLayer.clearLayers();
+                walkingDirectionsRenderer = new google.maps.DirectionsRenderer({
+                    map: map.native,
+                    directions: response,
+                    suppressMarkers: true,
+                    polylineOptions: { strokeColor:'#2563eb', strokeWeight:6, strokeOpacity:.9 },
+                });
+                openTransitPanel('Walking is the best option', transitNotice, `
+                    <article class="journey-card">
+                        <div class="journey-summary"><span class="journey-route" style="background:#2563eb">WALK</span><span class="journey-time">${escapeHtml(leg.duration?.text || '')}</span></div>
+                        <div class="journey-meta"><strong>${escapeHtml(leg.distance?.text || '')}</strong><br>No scheduled bus travels from the selected origin to this destination in that direction.</div>
+                    </article>`);
+            });
+        }
+
+        async function planJourney() {
+            setJourneyTimeToNow();
+            if (!journeySelection.from || !journeySelection.to) {
+                openTransitPanel('Choose your stops', '', '<p class="panel-message">Select both stops from the search suggestions.</p>');
+                return;
+            }
+            if (journeySelection.from.place && journeySelection.to.place) {
+                if (window.MARIBUS_CONFIG?.multimodal_routing_enabled) {
+                    const multimodalHandled = await tryMultimodalJourney();
+                    if (multimodalHandled) return;
+                }
+                const nearbyHandled = await tryNearbyStopJourneys();
+                if (nearbyHandled) return;
+            }
+            if (!journeySelection.from.stop_id || !journeySelection.to.stop_id) {
+                openTransitPanel('No scheduled journey found', '', '<p class="panel-message">No direct or one-transfer service was found for the selected date and time. Try a later time, another operator, or a nearby starting point.</p>');
+                return;
+            }
+            const agency = document.getElementById('agency-select').value;
+            const params = new URLSearchParams({
+                agency,
+                from_stop: journeySelection.from.stop_id,
+                to_stop: journeySelection.to.stop_id,
+                date: document.getElementById('journey-date').value,
+                departure_time: document.getElementById('journey-time').value
+            });
+            toggleJourneyPlanner(false);
+            openTransitPanel('Planning journey', `${journeySelection.from.stop_name} → ${journeySelection.to.stop_name}`, '<p class="panel-message">Finding scheduled services…</p>');
+            try {
+                const response = await fetch(`${API_BASE}/api/journeys?${params}`);
+                const result = await response.json();
+                if (!result.success) throw new Error(result.error);
+                if (!result.data.length) {
+                    openTransitPanel('No direct journey', result.notice || '', '<p class="panel-message">Try another departure time or nearby stops. Transfer journeys will be added in the next routing phase.</p>');
+                    return;
+                }
+                const html = result.data.map((journey, index) => `
+                    <article class="journey-card">
+                        <div class="journey-summary">
+                            <span class="journey-route" title="${escapeHtml(journey.route_short_name)}" style="background:${safeRouteColor(journey.route_color)}">${escapeHtml(compactRouteLabel(journey.route_id, journey.route_short_name))}</span>
+                            <span class="journey-time">${escapeHtml(journey.departure_time)} → ${escapeHtml(journey.arrival_time)}</span>
+                        </div>
+                        <div class="journey-meta">${journey.duration_minutes} min · ${journey.stop_count} stops · departs in ${journey.wait_minutes} min<br>${escapeHtml(journey.headsign)}</div>
+                        <button class="route-action" data-journey-index="${index}">Show route</button>
+                    </article>`).join('');
+                openTransitPanel('Journey options', result.notice, html);
+                document.querySelectorAll('[data-journey-index]').forEach(button => button.addEventListener('click', () => {
+                    const journey = result.data[Number(button.dataset.journeyIndex)];
+                    showJourneySegment(journey);
+                }));
+            } catch (error) {
+                openTransitPanel('Journey unavailable', '', `<p class="panel-message">${escapeHtml(error.message || 'Please try again.')}</p>`);
+            }
+        }
+
+        async function tryNearbyStopJourneys() {
+            const fromPlace = journeySelection.from.place;
+            const toPlace = journeySelection.to.place;
+            const agency = document.getElementById('agency-select').value;
+            const params = new URLSearchParams({
+                agency, from_lat:fromPlace.lat, from_lng:fromPlace.lng,
+                to_lat:toPlace.lat, to_lng:toPlace.lng,
+                date:document.getElementById('journey-date').value,
+                departure_time:document.getElementById('journey-time').value,
+            });
+            openTransitPanel('Finding the best route', `${fromPlace.name} → ${toPlace.name}`, '<p class="panel-message">Comparing nearby stops and services…</p>');
+            setRouteLoading(true);
+            try {
+                const response = await fetch(`${API_BASE}/api/journeys/nearby?${params}`);
+                const result = await response.json();
+                if (!result.success) throw new Error(result.error);
+                if (!result.data.length) {
+                    showWalkingFallback(fromPlace, toPlace, result.notice || 'No scheduled bus journey found');
+                    return true;
+                }
+                const routeBadges = journey => journey.legs
+                    ? journey.legs.map(leg => `<span class="journey-route" style="background:${safeRouteColor(leg.route_color)}">${escapeHtml(compactRouteLabel(leg.route_id, leg.route_short_name))}</span>`).join(' &rsaquo; ')
+                    : `<span class="journey-route" style="background:${safeRouteColor(journey.route_color)}">${escapeHtml(compactRouteLabel(journey.route_id, journey.route_short_name))}</span>`;
+                const html = result.data.map((journey, index) => {
+                    const signature = journey.legs ? journey.legs.map(leg => leg.route_id).join('|') : journey.route_id;
+                    const alternatives = [...new Set(result.data
+                        .filter((other, otherIndex) => otherIndex !== index
+                            && (other.legs ? other.legs.map(leg => leg.route_id).join('|') : other.route_id) === signature
+                            && other.departure_time !== journey.departure_time)
+                        .map(other => other.departure_time))].slice(0, 2);
+                    return `<article class="journey-card modern ${index === 0 ? 'selected' : ''}" data-nearby-index="${index}">
+                        <div class="journey-option-top">
+                            <div class="journey-option-head"><div class="journey-total">${escapeHtml(formatJourneyDuration(journey.total_minutes))}</div><div class="journey-main-time">${escapeHtml(journey.departure_time)} &ndash; ${escapeHtml(journey.arrival_time)}</div></div>
+                            <div class="journey-steps"><span>${iconSvg('walk', 'inline-icon')} ${journey.walk_minutes} min</span><span>&rsaquo;</span>${routeBadges(journey)}<span>&rsaquo;</span><span>${journey.transfers ? `${journey.transfers} change` : 'Direct'}</span></div>
+                            <div class="journey-board">Board at <strong>${escapeHtml(journey.from_stop.stop_name)}</strong><br>Exit at ${escapeHtml(journey.to_stop.stop_name)}</div>
+                            <div class="journey-live-progress" id="journey-progress-${index}">
+                                <div class="journey-progress-labels"><span>A</span><span>B</span></div>
+                                <div class="journey-progress-track"><div class="journey-progress-fill"></div><span class="journey-progress-node a"></span><span class="journey-progress-node b"></span><span class="journey-progress-bus" title="Live bus">${iconSvg('bus')}</span></div>
+                                <div class="journey-progress-message">Checking live bus…</div>
+                            </div>
+                            ${alternatives.length ? `<div class="journey-alternatives">Also departs at ${alternatives.map(escapeHtml).join(', ')}</div>` : ''}
+                        </div>
+                        <button class="route-action" data-show-route="${index}" style="background:${safeRouteColor(journey.route_color)}">Show route</button>
+                    </article>`;
+                }).join('');
+                currentJourneyOptions = result.data;
+                openTransitPanel('', '', html);
+                document.querySelectorAll('[data-nearby-index]').forEach(card => card.addEventListener('click', () => {
+                    document.querySelectorAll('.journey-card.modern').forEach(item => item.classList.remove('selected'));
+                    card.classList.add('selected');
+                    activeTrackedJourneyIndex = Number(card.dataset.nearbyIndex);
+                    const journey = result.data[Number(card.dataset.nearbyIndex)];
+                    if (journey.legs) showJourneyRoutes(journey);
+                    else showJourneySegment(journey, true);
+                    updateLiveJourneyTracking(result.data);
+                }));
+                document.querySelectorAll('[data-show-route]').forEach(button => button.addEventListener('click', event => {
+                    event.stopPropagation();
+                    const journey = result.data[Number(button.dataset.showRoute)];
+                    if (journey.legs) showJourneyRouteList(journey);
+                    else showJourneySegment(journey, false);
+                }));
+                const firstJourney = result.data[0];
+                activeTrackedJourneyIndex = 0;
+                if (firstJourney.legs) showJourneyRoutes(firstJourney);
+                else showJourneySegment(firstJourney, true);
+                startLiveJourneyTracking(result.data);
+                return true;
+            } catch (error) {
+                console.error('Nearby-stop journey search failed', error);
+                return false;
+            } finally {
+                setRouteLoading(false);
+            }
+        }
+
+        function distanceMetres(a, b) {
+            const radians = value => value * Math.PI / 180;
+            const lat1 = radians(Number(a.lat ?? a.stop_lat));
+            const lat2 = radians(Number(b.lat ?? b.stop_lat));
+            const dLat = lat2 - lat1;
+            const dLon = radians(Number(b.lng ?? b.stop_lon) - Number(a.lng ?? a.stop_lon));
+            const value = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
+            return 6371000 * 2 * Math.atan2(Math.sqrt(value), Math.sqrt(1 - value));
+        }
+
+        function updateRouteListLivePosition(stops, nearestIndex, nextIndex, boardIndex, etaMinutes, boardingStopName = 'boarding stop') {
+            document.querySelectorAll('#panel-content .bus-next-stop').forEach(row => row.classList.remove('bus-next-stop'));
+            document.querySelectorAll('#panel-content .bus-stop-badge').forEach(badge => badge.remove());
+            document.querySelectorAll('#panel-content .extra-stops.bus-before').forEach(section => {
+                section.classList.remove('bus-before');
+                const summary = section.querySelector('summary');
+                if (summary?.dataset.originalText) summary.textContent = summary.dataset.originalText;
+            });
+            const nextRow = [...document.querySelectorAll('#panel-content [data-stop-id]')]
+                .find(row => row.dataset.stopId === String(stops[nextIndex].stop_id));
+            if (!nextRow) return;
+            const collapsedSection = nextRow.closest('details:not([open])');
+            if (collapsedSection) {
+                collapsedSection.classList.add('bus-before');
+                const stopsAway = Math.max(0, boardIndex - nearestIndex);
+                const summary = collapsedSection.querySelector('summary');
+                if (!summary.dataset.originalText) summary.dataset.originalText = summary.textContent;
+                summary.textContent = `Live bus • ${etaMinutes} min to ${boardingStopName} • ${stopsAway} stops away`;
+            } else {
+                nextRow.classList.add('bus-next-stop');
+                const badge = document.createElement('span');
+                badge.className = 'bus-stop-badge';
+                badge.textContent = nearestIndex > boardIndex ? 'Bus approaching' : `${etaMinutes} min to ${boardingStopName}`;
+                nextRow.appendChild(badge);
+            }
+        }
+
+        function setJourneyProgress(index, percent, message, isLive = false) {
+            const progress = document.getElementById(`journey-progress-${index}`);
+            if (!progress) return;
+            const safePercent = Math.max(0, Math.min(100, Number(percent) || 0));
+            progress.classList.toggle('live', isLive);
+            progress.querySelector('.journey-progress-fill').style.width = `${safePercent}%`;
+            progress.querySelector('.journey-progress-bus').style.left = `${safePercent}%`;
+            progress.querySelector('.journey-progress-message').textContent = message;
+        }
+
+        function routeDistanceBetween(stops, fromIndex, toIndex, initialPoint = null) {
+            if (fromIndex < 0 || toIndex < fromIndex || !stops.length) return 0;
+            let total = initialPoint ? distanceMetres(initialPoint, stops[fromIndex]) : 0;
+            for (let index = fromIndex; index < toIndex; index++) total += distanceMetres(stops[index], stops[index + 1]);
+            return total;
+        }
+
+        async function updateLiveJourneyTracking(journeys) {
+            const agency = document.getElementById('agency-select').value;
+            journeyLiveVehicleLayer.clearLayers();
+            try {
+                const response = await fetch(`${API_BASE}/api/live-buses?agency=${encodeURIComponent(agency)}`);
+                const liveResult = await response.json();
+                const vehicles = liveResult.success ? liveResult.data : [];
+                await Promise.all(journeys.map(async (journey, index) => {
+                    const firstLeg = journey.legs?.[0] || journey;
+                    const vehicle = vehicles.find(item => item.trip?.tripId === firstLeg.trip_id);
+                    if (!vehicle?.position) {
+                        setJourneyProgress(index, 0, `Scheduled • departs ${journey.departure_time}`);
+                        return;
+                    }
+                    const params = new URLSearchParams({ agency, trip_id:firstLeg.trip_id, direction_id:firstLeg.direction_id ?? journey.direction_id ?? '' });
+                    const routeResponse = await fetch(`${API_BASE}/api/routes/${encodeURIComponent(firstLeg.route_id)}?${params}`);
+                    const routeResult = await routeResponse.json();
+                    if (!routeResult.success || !routeResult.data.stops.length) return;
+                    const stops = routeResult.data.stops;
+                    const vehiclePoint = { lat:vehicle.position.latitude, lng:vehicle.position.longitude };
+                    let nearestIndex = 0;
+                    stops.forEach((stop, stopIndex) => {
+                        if (distanceMetres(vehiclePoint, stop) < distanceMetres(vehiclePoint, stops[nearestIndex])) nearestIndex = stopIndex;
+                    });
+                    const boardIndex = stopBoundaryIndex(stops, journey.from_stop);
+                    const destinationTarget = journey.legs ? (journey.transfer_stop || firstLeg.to_stop || journey.to_stop) : journey.to_stop;
+                    let destinationIndex = stopBoundaryIndex(stops, destinationTarget, boardIndex);
+                    if (destinationIndex < 0) destinationIndex = stops.length - 1;
+                    const nextIndex = Math.min(nearestIndex + 1, stops.length - 1);
+                    const liveSpeed = Number(vehicle.position.speed);
+                    const estimatedSpeed = liveSpeed >= 2 ? liveSpeed : 7;
+                    const beforeA = boardIndex >= 0 && nearestIndex <= boardIndex;
+                    const targetIndex = beforeA ? boardIndex : destinationIndex;
+                    const remainingDistance = routeDistanceBetween(stops, nextIndex, targetIndex, vehiclePoint);
+                    const etaMinutes = Math.max(1, Math.ceil((remainingDistance * 1.18) / estimatedSpeed / 60));
+                    const stopsAway = Math.max(0, targetIndex - nearestIndex);
+                    const beforeSpan = Math.max(1, boardIndex);
+                    const journeySpan = Math.max(1, destinationIndex - boardIndex);
+                    const progressPercent = beforeA
+                        ? Math.min(50, (Math.max(0, nearestIndex) / beforeSpan) * 50)
+                        : Math.min(100, 50 + ((Math.max(boardIndex, nearestIndex) - boardIndex) / journeySpan) * 50);
+                    const targetLabel = beforeA
+                        ? (journey.from_stop?.stop_name || 'boarding stop')
+                        : ((journey.legs ? destinationTarget?.stop_name : journey.to_stop?.stop_name) || 'destination');
+                    const message = nearestIndex >= destinationIndex
+                        ? `Bus has reached or passed ${targetLabel}`
+                        : `Live • ${etaMinutes} min to ${targetLabel} • ${stopsAway} stop${stopsAway === 1 ? '' : 's'} • next ${stops[nextIndex].stop_name}`;
+                    setJourneyProgress(index, nearestIndex >= destinationIndex ? 100 : progressPercent, message, true);
+                    if (index === activeTrackedJourneyIndex && beforeA) updateRouteListLivePosition(stops, nearestIndex, nextIndex, boardIndex, etaMinutes, journey.from_stop?.stop_name);
+                    if (index === activeTrackedJourneyIndex) {
+                        const routeLabel = compactRouteLabel(firstLeg.route_id, firstLeg.route_short_name);
+                        const markerColor = safeRouteColor(firstLeg.route_color, agency);
+                        const icon = L.divIcon({
+                            html:`<div class="marker-wrapper"><div class="route-pill" style="background-color:${markerColor}">${escapeHtml(routeLabel)}</div></div>`,
+                            className:'', iconSize:null,
+                        });
+                        const liveMarker = L.marker([Number(vehicle.position.latitude), Number(vehicle.position.longitude)], {
+                            icon, title:`Live ${routeLabel}`,
+                        }).bindPopup(`<div class="custom-popup"><strong>${escapeHtml(routeLabel)} live bus</strong><div>${etaMinutes} min to ${targetLabel}</div><div>Next: ${escapeHtml(stops[nextIndex].stop_name)}</div></div>`);
+                        liveMarker.addTo(journeyLiveVehicleLayer);
+                    }
+                }));
+            } catch (error) {
+                console.warn('Live journey tracking unavailable', error);
+            }
+        }
+
+        function startLiveJourneyTracking(journeys) {
+            if (liveJourneyTrackingTimer) clearInterval(liveJourneyTrackingTimer);
+            updateLiveJourneyTracking(journeys);
+            liveJourneyTrackingTimer = setInterval(() => updateLiveJourneyTracking(journeys), 30000);
+        }
+
+        async function showJourneyRoutes(journey) {
+            focusJourneyMap();
+            const agency = document.getElementById('agency-select').value;
+            activeRouteLayer.clearLayers();
+            routeDirectionsRenderers.forEach(renderer => renderer.setMap(null));
+            routeDirectionsRenderers = [];
+            const allCoordinates = [];
+            try {
+                for (let index = 0; index < journey.legs.length; index++) {
+                    const leg = journey.legs[index];
+                    const fromStop = index === 0 ? journey.from_stop.stop_id : journey.transfer_stop.board_stop_id;
+                    const toStop = index === 0 ? journey.transfer_stop.stop_id : journey.to_stop.stop_id;
+                    const params = new URLSearchParams({ agency, trip_id:leg.trip_id, direction_id:leg.direction_id ?? '' });
+                    const response = await fetch(`${API_BASE}/api/routes/${encodeURIComponent(leg.route_id)}?${params}`);
+                    const result = await response.json();
+                    if (!result.success) continue;
+                    const data = result.data;
+                    const segmentStops = sliceStopsBetween(data.stops, fromStop, toStop);
+                    const stopCoordinates = segmentStops.map(stop => [Number(stop.stop_lat), Number(stop.stop_lon)]);
+                    const shapeCoordinates = sliceShapeThroughStops(data.shape, segmentStops);
+                    const coordinates = shapeCoordinates.length ? shapeCoordinates : stopCoordinates;
+                    if (coordinates.length) drawOutlinedRoute(coordinates, safeRouteColor(leg.route_color));
+                    segmentStops.forEach(stop => createStopMarker(stop, safeRouteColor(leg.route_color)).addTo(activeRouteLayer));
+                    allCoordinates.push(...coordinates);
+                }
+                if (allCoordinates.length) map.fitBounds(L.latLngBounds(allCoordinates), { padding:[50,50], maxZoom:15 });
+                updateJourneyPlaceMarkers();
+            } catch (error) {
+                console.error('Could not draw transfer journey', error);
+            }
+        }
+
+        async function showJourneyRouteList(journey) {
+            const agency = document.getElementById('agency-select').value;
+            openTransitPanel('Route details', `${journey.from_stop.stop_name} → ${journey.to_stop.stop_name}`, '<p class="panel-message">Loading your stops…</p>');
+            await showJourneyRoutes(journey);
+            try {
+                const sections = [];
+                for (let index = 0; index < journey.legs.length; index++) {
+                    const leg = journey.legs[index];
+                    const fromStop = index === 0 ? journey.from_stop.stop_id : journey.transfer_stop.board_stop_id;
+                    const toStop = index === 0 ? journey.transfer_stop.stop_id : journey.to_stop.stop_id;
+                    const params = new URLSearchParams({ agency, trip_id:leg.trip_id, direction_id:leg.direction_id ?? '' });
+                    const response = await fetch(`${API_BASE}/api/routes/${encodeURIComponent(leg.route_id)}?${params}`);
+                    const result = await response.json();
+                    if (!result.success) continue;
+                    sections.push(`<h4>${escapeHtml(compactRouteLabel(leg.route_id, leg.route_short_name))}</h4>${renderJourneyStopList(result.data.stops, fromStop, toStop)}`);
+                }
+                openTransitPanel('Route details', `${journey.from_stop.stop_name} → ${journey.to_stop.stop_name}`, sections.join(''));
+                if (currentJourneyOptions.length) updateLiveJourneyTracking(currentJourneyOptions);
+            } catch (error) {
+                openTransitPanel('Route unavailable', '', '<p class="panel-message">The stop list could not be loaded.</p>');
+            }
+        }
+
+        function malaysiaTime(timestamp) {
+            return new Intl.DateTimeFormat('en-MY', { hour:'2-digit', minute:'2-digit', hour12:false, timeZone:'Asia/Kuala_Lumpur' }).format(new Date(timestamp));
+        }
+
+        function legDescription(leg) {
+            if (leg.transitLeg) {
+                const route = leg.route?.shortName || leg.route?.longName || leg.mode;
+                return `<strong>${escapeHtml(route)}</strong> from ${escapeHtml(leg.from?.name)} to ${escapeHtml(leg.to?.name)}`;
+            }
+            return `<strong>Walk</strong> ${Math.round(leg.distance || 0)} m to ${escapeHtml(leg.to?.name)}`;
+        }
+
+        function drawMultimodalItinerary(itinerary) {
+            activeRouteLayer.clearLayers();
+            const bounds = new google.maps.LatLngBounds();
+            itinerary.legs.forEach(leg => {
+                if (!leg.legGeometry?.points) return;
+                const decoded = google.maps.geometry.encoding.decodePath(leg.legGeometry.points);
+                const coordinates = decoded.map(point => [point.lat(), point.lng()]);
+                const color = leg.transitLeg ? safeRouteColor(leg.route?.color) : '#64748b';
+                L.polyline(coordinates, { color, weight:leg.transitLeg ? 6 : 4, opacity:.9 }).addTo(activeRouteLayer);
+                decoded.forEach(point => bounds.extend(point));
+            });
+            if (!bounds.isEmpty()) map.native.fitBounds(bounds, 50);
+        }
+
+        async function tryMultimodalJourney() {
+            const fromPlace = journeySelection.from.place;
+            const toPlace = journeySelection.to.place;
+            const params = new URLSearchParams({
+                from_lat:fromPlace.lat, from_lng:fromPlace.lng, from_name:fromPlace.name,
+                to_lat:toPlace.lat, to_lng:toPlace.lng, to_name:toPlace.name,
+                date:document.getElementById('journey-date').value,
+                departure_time:document.getElementById('journey-time').value,
+            });
+            toggleJourneyPlanner(false);
+            openTransitPanel('Planning door-to-door journey', `${fromPlace.name} → ${toPlace.name}`, '<p class="panel-message">Searching walking and transfer options…</p>');
+            try {
+                const response = await fetch(`${API_BASE}/api/journeys/multimodal?${params}`);
+                const result = await response.json();
+                if (!result.success) {
+                    if (result.fallback_available) return false;
+                    throw new Error(result.error);
+                }
+                if (!result.data.length) {
+                    openTransitPanel('No journey found', result.notice || '', '<p class="panel-message">Try another time or a nearby destination.</p>');
+                    return true;
+                }
+                const html = result.data.map((itinerary, index) => `
+                    <article class="journey-card">
+                        <div class="journey-summary"><span class="journey-time">${malaysiaTime(itinerary.startTime)} → ${malaysiaTime(itinerary.endTime)}</span><strong>${Math.ceil(itinerary.duration / 60)} min</strong></div>
+                        <div class="journey-meta">${itinerary.numberOfTransfers} transfer${itinerary.numberOfTransfers === 1 ? '' : 's'} · walk ${Math.round(itinerary.walkDistance)} m</div>
+                        ${itinerary.legs.map(leg => `<div class="stop-row"><span class="stop-name">${legDescription(leg)}</span><span>${Math.ceil(leg.duration / 60)} min</span></div>`).join('')}
+                        <button class="route-action" data-multimodal-index="${index}">Show full journey</button>
+                    </article>`).join('');
+                openTransitPanel('Door-to-door options', 'Walking and public transport', html);
+                document.querySelectorAll('[data-multimodal-index]').forEach(button => button.addEventListener('click', () => drawMultimodalItinerary(result.data[Number(button.dataset.multimodalIndex)])));
+                drawMultimodalItinerary(result.data[0]);
+                return true;
+            } catch (error) {
+                console.error('Multimodal routing failed; using scheduled fallback', error);
+                return false;
+            }
         }
 
         let userLocationMarker;
@@ -948,6 +2422,8 @@
             userLocationMarker = L.circleMarker(e.latlng, {
                 radius: 8, color: 'white', weight: 3, fillColor: '#6366f1', fillOpacity: 1
             }).addTo(map).bindPopup("<b style='color:#111827;'>You are here</b>").openPopup();
+
+            loadNearbyStops(e.latlng.lat, e.latlng.lng);
 
             // 2. AUTO-SWITCH AGENCY LOGIC
             let closestAgency = null;
@@ -992,7 +2468,13 @@
             alert("Could not find your location. Please check your browser permissions.");
         });
 
+        Object.assign(window, {
+            toggleTheme, locateMe, searchBus, selectAgencyOption, toggleAgencyDropdown,
+            closeTransitPanel, showRoute, toggleJourneyPlanner, showMapSearch, planJourney, useCurrentLocationForJourney
+        });
+        initializeJourneyPlanner();
         fetchBuses();
+        });
     </script>
     
 </body>

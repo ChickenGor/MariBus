@@ -1,0 +1,8 @@
+{
+  "routingDefaults": {
+    "walkSpeed": 1.3,
+    "walkReluctance": 2.5,
+    "walkBoardCost": 600,
+    "minTransferTime": 120
+  }
+}

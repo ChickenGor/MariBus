@@ -1,73 +1,130 @@
-import pandas as pd
-import sqlite3
-import zipfile
+import csv
 import io
+import os
+import sqlite3
+import tempfile
+import zipfile
+
 import requests
 
+from app import API_URLS
+
+
 STATIC_URLS = {
-    "rapid-bus-kl": "https://api.data.gov.my/gtfs-static/prasarana?category=rapid-bus-kl",
-    "rapid-bus-mrtfeeder": "https://api.data.gov.my/gtfs-static/prasarana?category=rapid-bus-mrtfeeder",
+    agency: url.replace("gtfs-realtime/vehicle-position", "gtfs-static").split("?")[0]
+    + ("?" + url.split("?", 1)[1] if "?" in url else "")
+    for agency, url in API_URLS.items()
+}
+# Providers whose static endpoint does not use the realtime provider path.
+STATIC_URLS.update({
     "ktmb": "https://api.data.gov.my/gtfs-static/ktmb",
-    "mybas-kangar": "https://api.data.gov.my/gtfs-static/mybas-kangar",
-    "mybas-alor-setar": "https://api.data.gov.my/gtfs-static/mybas-alor-setar",
-    "mybas-kota-bharu": "https://api.data.gov.my/gtfs-static/mybas-kota-bharu",
-    "mybas-kuala-terengganu": "https://api.data.gov.my/gtfs-static/mybas-kuala-terengganu",
-    "mybas-ipoh": "https://api.data.gov.my/gtfs-static/mybas-ipoh",
-    "mybas-seremban-A": "https://api.data.gov.my/gtfs-static/mybas-seremban-a",
-    "mybas-seremban-B": "https://api.data.gov.my/gtfs-static/mybas-seremban-b",
-    "mybas-melaka": "https://api.data.gov.my/gtfs-static/mybas-melaka",
-    "mybas-johor-bahru": "https://api.data.gov.my/gtfs-static/mybas-johor",
-    "mybas-kuching": "https://api.data.gov.my/gtfs-static/mybas-kuching"
+})
+
+SCHEMAS = {
+    "routes": ["route_id", "route_short_name", "route_long_name", "route_type", "route_color", "route_text_color"],
+    "trips": ["route_id", "service_id", "trip_id", "trip_headsign", "direction_id", "shape_id"],
+    "stops": ["stop_id", "stop_code", "stop_name", "stop_lat", "stop_lon", "location_type", "parent_station", "wheelchair_boarding"],
+    "stop_times": ["trip_id", "arrival_time", "departure_time", "stop_id", "stop_sequence"],
+    "shapes": ["shape_id", "shape_pt_lat", "shape_pt_lon", "shape_pt_sequence"],
+    "calendar": ["service_id", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday", "start_date", "end_date"],
+    "calendar_dates": ["service_id", "date", "exception_type"],
 }
 
-conn = sqlite3.connect('gtfs_static.db')
-cursor = conn.cursor()
+REAL_COLUMNS = {"stop_lat", "stop_lon", "shape_pt_lat", "shape_pt_lon", "shape_dist_traveled"}
+INTEGER_COLUMNS = {
+    "route_type", "direction_id", "stop_sequence", "pickup_type", "drop_off_type",
+    "shape_pt_sequence", "location_type", "wheelchair_boarding", "monday", "tuesday",
+    "wednesday", "thursday", "friday", "saturday", "sunday", "exception_type",
+}
 
-# 1. Drop old table and create a fresh one explicitly
-cursor.execute("DROP TABLE IF EXISTS trip_routes")
-cursor.execute("""
-    CREATE TABLE trip_routes (
-        trip_id TEXT,
-        route_id TEXT,
-        route_short_name TEXT,
-        route_long_name TEXT
-    )
-""")
-conn.commit()
 
-print("Starting National Transit Database Build...\n")
+def create_tables(connection):
+    for table, columns in SCHEMAS.items():
+        connection.execute(f"DROP TABLE IF EXISTS {table}")
+        definitions = ["agency_id TEXT"]
+        for column in columns:
+            column_type = "REAL" if column in REAL_COLUMNS else "INTEGER" if column in INTEGER_COLUMNS else "TEXT"
+            definitions.append(f"{column} {column_type}")
+        definitions = ", ".join(definitions)
+        connection.execute(f"CREATE TABLE {table} ({definitions})")
+    connection.execute("DROP TABLE IF EXISTS trip_routes")
+    connection.execute("""CREATE TABLE trip_routes (
+        agency_id TEXT, trip_id TEXT, route_id TEXT,
+        route_short_name TEXT, route_long_name TEXT
+    )""")
 
-for agency, url in STATIC_URLS.items():
-    print(f"Downloading {agency}...")
+
+def import_csv(connection, archive, agency, table):
+    filename = f"{table}.txt"
+    if filename not in archive.namelist():
+        return 0
+    with archive.open(filename) as raw:
+        reader = csv.DictReader(io.TextIOWrapper(raw, encoding="utf-8-sig", newline=""))
+        columns = SCHEMAS[table]
+        placeholders = ",".join("?" for _ in range(len(columns) + 1))
+        query = f"INSERT INTO {table} (agency_id,{','.join(columns)}) VALUES ({placeholders})"
+        batch = []
+        count = 0
+        for row in reader:
+            batch.append([agency] + [row.get(column, "") for column in columns])
+            if len(batch) == 5000:
+                connection.executemany(query, batch)
+                count += len(batch)
+                batch.clear()
+        if batch:
+            connection.executemany(query, batch)
+            count += len(batch)
+        return count
+
+
+def main():
+    database_path = os.path.join(os.path.dirname(__file__), "gtfs_static.db")
+    fd, temporary_path = tempfile.mkstemp(prefix="maribus-", suffix=".db", dir=os.path.dirname(database_path))
+    os.close(fd)
     try:
-        # Increased timeout to 30 seconds to prevent network drops
-        response = requests.get(url, timeout=30)
-        if response.status_code != 200:
-            print(f"  -> Skipped: Server responded with status {response.status_code}")
-            continue
-            
-        with zipfile.ZipFile(io.BytesIO(response.content)) as z:
-            with z.open('routes.txt') as f:
-                routes_df = pd.read_csv(f, dtype=str)
-                if 'route_short_name' not in routes_df.columns:
-                    routes_df['route_short_name'] = ""
-                routes_df = routes_df[['route_id', 'route_short_name', 'route_long_name']]
-                
-            with z.open('trips.txt') as f:
-                trips_df = pd.read_csv(f, dtype=str)[['route_id', 'trip_id']]
-                
-        merged_df = pd.merge(trips_df, routes_df, on='route_id', how='left')
-        
-        # Save data into our structured table
-        merged_df.to_sql('trip_routes', conn, if_exists='append', index=False)
-        print(f"  -> Success! Added {len(merged_df)} trips.")
-        
-    except Exception as e:
-        print(f"  -> Error processing {agency}: {e}")
+        connection = sqlite3.connect(temporary_path)
+        create_tables(connection)
+        imported_totals = {table: 0 for table in SCHEMAS}
+        for agency, url in STATIC_URLS.items():
+            print(f"Downloading {agency}...")
+            try:
+                response = requests.get(url, timeout=60)
+                response.raise_for_status()
+                with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
+                    counts = {table: import_csv(connection, archive, agency, table) for table in SCHEMAS}
+                for table, count in counts.items():
+                    imported_totals[table] += count
+                connection.commit()
+                print("  " + ", ".join(f"{name}={count}" for name, count in counts.items() if count))
+            except Exception as error:
+                connection.rollback()
+                print(f"  skipped: {error}")
 
-print("\nOptimizing search speeds...")
-cursor.execute("CREATE INDEX IF NOT EXISTS idx_trip_id ON trip_routes(trip_id)")
-conn.commit()
+        if not imported_totals["routes"] or not imported_totals["trips"] or not imported_totals["stops"]:
+            raise RuntimeError("No usable GTFS feeds were downloaded; the existing database was preserved")
 
-conn.close()
-print("\nDatabase built successfully!")
+        connection.execute("""INSERT INTO trip_routes
+            SELECT t.agency_id, t.trip_id, t.route_id, r.route_short_name, r.route_long_name
+            FROM trips t JOIN routes r ON r.agency_id=t.agency_id AND r.route_id=t.route_id""")
+        indexes = [
+            "CREATE INDEX idx_trip_routes_trip ON trip_routes(agency_id, trip_id)",
+            "CREATE INDEX idx_trip_routes_route ON trip_routes(agency_id, route_id)",
+            "CREATE INDEX idx_stops_location ON stops(agency_id, stop_lat, stop_lon)",
+            "CREATE INDEX idx_stop_times_stop ON stop_times(agency_id, stop_id)",
+            "CREATE INDEX idx_stop_times_trip ON stop_times(agency_id, trip_id, stop_sequence)",
+            "CREATE INDEX idx_trips_route ON trips(agency_id, route_id, direction_id)",
+            "CREATE INDEX idx_shapes ON shapes(agency_id, shape_id, shape_pt_sequence)",
+        ]
+        for statement in indexes:
+            connection.execute(statement)
+        connection.commit()
+        connection.close()
+        os.replace(temporary_path, database_path)
+        print(f"Database built successfully: {database_path}")
+    finally:
+        if os.path.exists(temporary_path):
+            os.remove(temporary_path)
+
+
+if __name__ == "__main__":
+    main()

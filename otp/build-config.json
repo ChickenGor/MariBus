@@ -1,0 +1,13 @@
+{
+  "transitServiceStart": "-P1M",
+  "transitServiceEnd": "P1Y",
+  "osmDefaults": {
+    "timeZone": "Asia/Kuala_Lumpur",
+    "osmTagMapping": "default"
+  },
+  "gtfsDefaults": {
+    "stationTransferPreference": "recommended",
+    "discardMinTransferTimes": false,
+    "blockBasedInterlining": true
+  }
+}
