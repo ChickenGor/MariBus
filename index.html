@@ -713,6 +713,13 @@
             #top-bar { gap:8px; padding:0 10px; }
             .logo-text { font-size:15px; }
             #header-journey-search { height:42px; padding:0 12px; font-size:14px; }
+            #top-bar.search-focused .brand,
+            #top-bar.search-focused #theme-toggle-header { display:none; }
+            #top-bar.search-focused #header-journey-search {
+                width:100%;
+                max-width:none;
+                margin:0;
+            }
             #header-journey-search.expanded { top:78px; }
             #bottom-sheet.detail-mode {
                 height:max(190px, 32dvh);
@@ -1600,6 +1607,21 @@
 
         function initializeJourneyPlanner() {
             setJourneyTimeToNow();
+            const topBar = document.getElementById('top-bar');
+            const headerSearch = document.getElementById('header-journey-search');
+            let searchFocusTimer = null;
+            headerSearch.addEventListener('focusin', () => {
+                if (searchFocusTimer) clearTimeout(searchFocusTimer);
+                topBar.classList.add('search-focused');
+            });
+            headerSearch.addEventListener('focusout', () => {
+                if (searchFocusTimer) clearTimeout(searchFocusTimer);
+                searchFocusTimer = setTimeout(() => {
+                    if (!headerSearch.contains(document.activeElement)) {
+                        topBar.classList.remove('search-focused');
+                    }
+                }, 180);
+            });
             ['from', 'to'].forEach(kind => {
                 const input = document.getElementById(`journey-${kind}`);
                 input.addEventListener('keydown', event => {
