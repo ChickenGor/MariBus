@@ -25,9 +25,11 @@ try{
     document.querySelector('#sidebar-profile-email').textContent=user.email||'';
     const end=timestampDate(profile.subscriptionEnd);const remaining=end?Math.max(0,Math.ceil((end-Date.now())/86400000)):0;
     const active=profile.subscriptionPlan&&!['free','basic'].includes(profile.subscriptionPlan)&&remaining>0;
-    document.querySelector('#subscription-days').textContent=active?String(remaining):'0';
-    document.querySelector('#subscription-label').textContent=active?`${profile.subscriptionPlan} plan`:'Basic account';
+    document.querySelector('#subscription-label').textContent=active?'Plus':'Basic';
+    document.querySelector('#subscription-expiry').textContent=active&&end
+      ? `Active until ${end.toLocaleDateString('en-MY',{day:'numeric',month:'short',year:'numeric'})}`
+      :'Save up to 3 routes';
   });
-  document.querySelector('#sidebar-profile-button').addEventListener('click',()=>{details.hidden=!details.hidden;});
+  document.querySelector('#sidebar-profile-button').addEventListener('click',event=>{details.hidden=!details.hidden;event.currentTarget.setAttribute('aria-expanded',String(!details.hidden));});
   document.querySelector('#profile-logout').addEventListener('click',async()=>{await signOut(auth);details.hidden=true;});
 }catch(error){root.dataset.authUnavailable='true';signedOut.hidden=false;signedIn.hidden=true;}
