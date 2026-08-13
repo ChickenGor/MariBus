@@ -119,6 +119,9 @@
         .sidebar-signin .sidebar-item { background:#2563eb; color:#fff; justify-content:center; }
         .sidebar-signin .drawer-icon { color:#fff; }
         .sidebar-profile-row{width:100%;display:flex;align-items:center;gap:11px;padding:6px 0;color:var(--text-main)}.sidebar-profile-avatar{width:42px;height:42px;display:grid;place-items:center;flex:0 0 auto;border-radius:50%;background:linear-gradient(145deg,#2563eb,#7c3aed) center/cover;color:#fff;font-weight:900}.sidebar-profile-copy{min-width:0;flex:1;text-align:left}.sidebar-profile-copy strong,.sidebar-profile-copy small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.sidebar-profile-copy strong{font-size:13px}.sidebar-profile-copy small{margin-top:2px;color:var(--text-muted);font-size:9px}.sidebar-profile-more{width:32px;height:32px;border:0;border-radius:50%;background:transparent;color:var(--text-muted);font-size:18px;cursor:pointer}.sidebar-profile-more:hover{background:var(--input-bg)}.sidebar-profile-details{padding:7px 0 0}.sidebar-subscription{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:10px;background:var(--input-bg)}.subscription-plan-badge{padding:4px 8px;border-radius:999px;background:rgba(37,99,235,.12);color:#2563eb;font-size:9px;font-weight:850;text-transform:uppercase}.subscription-expiry{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-muted);font-size:9px}.sidebar-account-actions{display:flex;align-items:center;gap:5px;margin-top:6px}.sidebar-account-actions a,.sidebar-account-actions button{min-height:34px;border:0;border-radius:9px;background:transparent;color:var(--text-muted);font:inherit;font-size:9px;font-weight:800;text-decoration:none;display:grid;place-items:center;padding:0 10px}.sidebar-account-actions a:hover,.sidebar-account-actions button:hover{background:var(--input-bg)}.sidebar-account-actions button{margin-left:auto;color:#dc2626;cursor:pointer}
+        .maribus-ad-slot { display:none; min-height:50px; overflow:hidden; border-radius:12px; background:var(--input-bg); text-align:center; }
+        .maribus-ad-slot.visible { display:block; }
+        #bottom-sheet.detail-mode .maribus-ad-slot { display:none; }
         #menu-toast { position:fixed; z-index:4100; left:50%; bottom:24px; max-width:calc(100vw - 32px); padding:10px 14px; border-radius:999px; background:#111827; color:#fff; font-size:12px; font-weight:700; opacity:0; pointer-events:none; transform:translate(-50%, 15px); transition:opacity .2s, transform .2s; }
         #menu-toast.visible { opacity:1; transform:translate(-50%, 0); }
         [hidden] { display:none !important; }
@@ -820,6 +823,21 @@
                 z-index:6;
                 padding:2px 6px;
             }
+            #bottom-sheet.detail-mode:not(.sheet-half):not(.sheet-expanded) .panel-heading:has(#panel-title:not(:empty)) {
+                position:sticky;
+                top:0;
+                height:auto;
+                min-height:46px;
+                padding:2px 38px 7px 0;
+                border-bottom:1px solid rgba(148,163,184,.22);
+            }
+            #bottom-sheet.detail-mode:not(.sheet-half):not(.sheet-expanded) .panel-heading:has(#panel-title:not(:empty)) .panel-subtitle {
+                margin:2px 0 0;
+                line-height:1.25;
+            }
+            #bottom-sheet.detail-mode:not(.sheet-half):not(.sheet-expanded) .panel-heading:has(#panel-title:not(:empty)) + #panel-content {
+                padding-top:2px;
+            }
             #bottom-sheet.detail-mode:not(.sheet-half):not(.sheet-expanded) .journey-card.modern:not(.selected) { display:none; }
             #bottom-sheet.detail-mode:not(.sheet-half):not(.sheet-expanded) .journey-card.modern.selected {
                 border-color:rgba(37,99,235,.45);
@@ -959,6 +977,8 @@
     </footer>
         </div>
         
+        <aside id="maribus-active-service-ad" class="maribus-ad-slot" aria-label="Advertisement"><ins class="adsbygoogle" style="display:block" data-ad-client="ca-pub-4382546512370754" data-ad-slot="3932173975" data-ad-format="auto" data-full-width-responsive="true"></ins></aside>
+
         <!-- Hidden input preserves compatibility with your existing JS -->
         <input type="hidden" id="agency-select" value="rapid-bus-kl">
         <section id="transit-panel" aria-live="polite">
