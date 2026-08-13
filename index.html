@@ -87,6 +87,7 @@
             transition: color 0.3s; 
         }
         body.dark-mode .logo-text { color: #ffffff; }
+        .desktop-brand { display:none; color:var(--text-main); }
         
         /* 2. Pushes the theme toggle to the far right since the bar no longer uses space-between */
         #theme-toggle-header {
@@ -119,8 +120,8 @@
         .sidebar-signin .sidebar-item { background:#2563eb; color:#fff; justify-content:center; }
         .sidebar-signin .drawer-icon { color:#fff; }
         .sidebar-profile-row{width:100%;display:flex;align-items:center;gap:11px;padding:6px 0;color:var(--text-main)}.sidebar-profile-avatar{width:42px;height:42px;display:grid;place-items:center;flex:0 0 auto;border-radius:50%;background:linear-gradient(145deg,#2563eb,#7c3aed) center/cover;color:#fff;font-weight:900}.sidebar-profile-copy{min-width:0;flex:1;text-align:left}.sidebar-profile-copy strong,.sidebar-profile-copy small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.sidebar-profile-copy strong{font-size:13px}.sidebar-profile-copy small{margin-top:2px;color:var(--text-muted);font-size:9px}.sidebar-profile-more{width:32px;height:32px;border:0;border-radius:50%;background:transparent;color:var(--text-muted);font-size:18px;cursor:pointer}.sidebar-profile-more:hover{background:var(--input-bg)}.sidebar-profile-details{padding:7px 0 0}.sidebar-subscription{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:10px;background:var(--input-bg)}.subscription-plan-badge{padding:4px 8px;border-radius:999px;background:rgba(37,99,235,.12);color:#2563eb;font-size:9px;font-weight:850;text-transform:uppercase}.subscription-expiry{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-muted);font-size:9px}.sidebar-account-actions{display:flex;align-items:center;gap:5px;margin-top:6px}.sidebar-account-actions a,.sidebar-account-actions button{min-height:34px;border:0;border-radius:9px;background:transparent;color:var(--text-muted);font:inherit;font-size:9px;font-weight:800;text-decoration:none;display:grid;place-items:center;padding:0 10px}.sidebar-account-actions a:hover,.sidebar-account-actions button:hover{background:var(--input-bg)}.sidebar-account-actions button{margin-left:auto;color:#dc2626;cursor:pointer}
-        .maribus-ad-slot { display:none; min-height:50px; overflow:hidden; border-radius:12px; background:var(--input-bg); text-align:center; }
-        .maribus-ad-slot.visible { display:block; }
+        .maribus-ad-slot { display:none; overflow:hidden; border-radius:12px; text-align:center; }
+        .maribus-ad-slot.visible:has(.adsbygoogle[data-ad-status="filled"]) { display:block; }
         #bottom-sheet.detail-mode .maribus-ad-slot { display:none; }
         #menu-toast { position:fixed; z-index:4100; left:50%; bottom:24px; max-width:calc(100vw - 32px); padding:10px 14px; border-radius:999px; background:#111827; color:#fff; font-size:12px; font-weight:700; opacity:0; pointer-events:none; transform:translate(-50%, 15px); transition:opacity .2s, transform .2s; }
         #menu-toast.visible { opacity:1; transform:translate(-50%, 0); }
@@ -448,6 +449,10 @@
         }
 
         @media (min-width: 768px) {
+            #top-bar { height:72px; padding:0 24px; gap:16px; }
+            #menu-button { order:0; }
+            .desktop-brand { display:block; order:1; font-size:18px; font-weight:900; letter-spacing:-.5px; }
+            #header-journey-search { order:2; max-width:720px; margin-left:auto; margin-right:auto; }
             #top-search-container { left: 20px; top: 80px; transform: none; width: 300px; }
             #planner-toggle { left:20px; top:137px; transform:none; }
             #journey-planner { left:20px; top:80px; transform:none; width:410px; }
@@ -477,6 +482,28 @@
                 transform: none;
                 width: 300px;
             }
+        }
+
+        @media (min-width:768px) and (max-width:899px) {
+            #top-bar { padding:0 18px; }
+            #header-journey-search { max-width:560px; }
+        }
+
+        @media (min-width:900px) and (orientation:landscape) {
+            :root { --desktop-side-column:clamp(360px,32vw,440px); }
+            #map { position:absolute; top:72px; left:0; width:calc(100vw - var(--desktop-side-column)); height:calc(100dvh - 72px); }
+            #bottom-sheet,#bottom-sheet.detail-mode,#bottom-sheet.detail-mode.sheet-half,#bottom-sheet.detail-mode.sheet-expanded {
+                position:absolute; top:72px; right:0; bottom:0; left:auto; width:var(--desktop-side-column); height:auto; max-height:none; overflow-y:auto;
+                padding:22px 22px 26px; gap:12px; border-left:1px solid var(--border-color); border-radius:0; box-shadow:-8px 0 28px rgba(15,23,42,.1);
+            }
+            #bottom-sheet:not(.detail-mode) #app-footer { display:none; }
+            #bottom-sheet.detail-mode #transit-panel.open { min-height:0; overflow-y:visible; }
+            #fab-locate { right:calc(var(--desktop-side-column) + 22px); }
+            #top-bar { padding-right:calc(var(--desktop-side-column) + 24px); }
+            #header-journey-search { max-width:680px; }
+            .journey-card { padding:14px; }
+            .journey-total { font-size:21px; }
+            .journey-main-time { font-size:16px; }
         }
 
         /* --- LEAFLET POPUP OVERRIDES & REDESIGN --- */
@@ -755,6 +782,8 @@
         .extra-stops.bus-before summary { color:#15803d; background:rgba(22,163,74,.1); }
 
         @media (max-width: 767px) {
+            .desktop-brand { display:none; }
+            .maribus-ad-slot { display:none !important; }
             #top-bar { gap:8px; padding:0 10px; }
             .logo-text { font-size:15px; }
             #header-journey-search { height:42px; padding:0 12px; font-size:14px; }
@@ -866,6 +895,7 @@
         <button id="menu-button" type="button" onclick="toggleSidebar(true)" aria-label="Open menu" aria-expanded="false">
             <svg class="ui-icon" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"></path></svg>
         </button>
+        <span class="desktop-brand">MARIBUS</span>
         <div id="header-journey-search">
             <div id="journey-origin-row" class="journey-input-row">
                 <span class="point-label">A</span>

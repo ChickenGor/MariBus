@@ -7,7 +7,7 @@ const signedOut=document.querySelector('#sidebar-signed-out');
 const signedIn=document.querySelector('#sidebar-signed-in');
 const details=document.querySelector('#sidebar-profile-details');
 const timestampDate=value=>value?.toDate?value.toDate():value?new Date(value):null;
-const updateAdVisibility=isPlus=>{const slot=document.querySelector('#maribus-active-service-ad');if(!slot)return;slot.classList.toggle('visible',!isPlus);if(!isPlus&&!slot.dataset.loaded){slot.dataset.loaded='true';try{(window.adsbygoogle=window.adsbygoogle||[]).push({});}catch(error){console.warn('MariBus ad could not be loaded',error);}}};
+const updateAdVisibility=isPlus=>{const slot=document.querySelector('#maribus-active-service-ad');if(!slot)return;const canShow=!isPlus&&window.matchMedia('(min-width:768px)').matches;slot.classList.toggle('visible',canShow);if(canShow&&!slot.dataset.loaded){slot.dataset.loaded='true';try{(window.adsbygoogle=window.adsbygoogle||[]).push({});}catch(error){console.warn('MariBus ad could not be loaded',error);}}};
 
 try{
   const response=await fetch('/api/config');const config=await response.json();
