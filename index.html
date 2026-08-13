@@ -633,10 +633,12 @@
         #bottom-sheet.detail-mode { max-height: min(68vh, 620px); overflow-y: auto; }
         #bottom-sheet.detail-mode > .sheet-header,
         #bottom-sheet.detail-mode > .custom-select { display:none; }
-        .panel-heading { display:flex; justify-content:space-between; gap:12px; align-items:flex-start; }
+        .panel-heading { display:flex; position:sticky; top:0; z-index:4; min-height:28px; justify-content:space-between; gap:12px; align-items:flex-start; background:var(--sheet-bg); }
+        .panel-heading:has(#panel-title:empty) > div { display:none; }
         .panel-heading h3 { margin:0; font-size:17px; }
         .panel-subtitle { margin:4px 0 12px; color:var(--text-muted); font-size:12px; }
-        .panel-close { border:0; background:transparent; color:inherit; font-size:22px; cursor:pointer; }
+        .panel-subtitle:empty { display:none; }
+        .panel-close { margin-left:auto; border:0; background:transparent; color:inherit; font-size:22px; line-height:24px; cursor:pointer; }
         .arrival-row, .stop-row { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:11px 0; border-top:1px solid rgba(148,163,184,.22); }
         .arrival-route { font-weight:800; min-width:48px; }
         .arrival-destination, .stop-name { flex:1; font-size:13px; }
@@ -736,9 +738,11 @@
                 height:max(190px, 32dvh);
                 max-height:none;
                 padding-top:10px;
-                overflow-y:auto;
+                gap:4px;
+                overflow:hidden;
                 transition:height .28s cubic-bezier(.2,.8,.2,1), background-color .3s, box-shadow .3s;
             }
+            #bottom-sheet.detail-mode #transit-panel.open { flex:1 1 auto; min-height:0; overflow-y:auto; overscroll-behavior:contain; }
             #bottom-sheet.detail-mode.sheet-half { height:52dvh; }
             #bottom-sheet.detail-mode.sheet-expanded { height:80dvh; }
             #bottom-sheet.detail-mode.sheet-dragging { transition:none; user-select:none; }
