@@ -735,9 +735,9 @@
             }
             #header-journey-search.expanded { top:78px; }
             #bottom-sheet.detail-mode {
-                height:max(190px, 32dvh);
+                height:150px;
                 max-height:none;
-                padding-top:10px;
+                padding:8px 16px 8px;
                 gap:4px;
                 overflow:hidden;
                 transition:height .28s cubic-bezier(.2,.8,.2,1), background-color .3s, box-shadow .3s;
@@ -756,11 +756,13 @@
             }
             #bottom-sheet.detail-mode.sheet-dragging > .drag-handle { cursor:grabbing; }
             #bottom-sheet.detail-mode:not(.sheet-half):not(.sheet-expanded) .journey-card.modern {
-                padding:10px 12px;
-                margin:4px 0 8px;
+                padding:9px 11px;
+                margin:2px 0 4px;
                 border-width:1px;
                 border-radius:14px;
             }
+            #bottom-sheet.detail-mode:not(.sheet-half):not(.sheet-expanded) .panel-heading { min-height:22px; }
+            #bottom-sheet.detail-mode:not(.sheet-half):not(.sheet-expanded) .journey-card.modern:not(.selected) { display:none; }
             #bottom-sheet.detail-mode:not(.sheet-half):not(.sheet-expanded) .journey-card.modern.selected {
                 border-color:rgba(37,99,235,.45);
             }
@@ -1273,7 +1275,7 @@
 
             const snapSheet = height => {
                 const viewportHeight = window.innerHeight;
-                const compactHeight = Math.max(190, viewportHeight * .32);
+                const compactHeight = 150;
                 const halfHeight = viewportHeight * .52;
                 const expandedHeight = viewportHeight * .80;
                 const nearest = [
