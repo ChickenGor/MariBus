@@ -781,7 +781,7 @@
             <div class="journey-input-row">
                 <span id="destination-prefix" class="point-label"><svg class="ui-icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>
                 <input id="journey-to" autocomplete="off" placeholder="Where do you want to go?" aria-label="Destination">
-                <button id="journey-swap-button" onclick="swapJourneyPoints()" title="Swap locations" aria-label="Swap locations">&#8645;</button>
+                <button id="journey-swap-button" type="button" onclick="swapJourneyPoints()" title="Swap locations" aria-label="Swap locations">&#8645;</button>
             </div>
         </div>
         <button id="theme-toggle-header" onclick="toggleTheme()" title="Toggle Dark Mode" aria-label="Toggle dark mode"><svg class="ui-icon" viewBox="0 0 24 24"><path d="M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5 8.5 8.5 0 1 0 20.5 14.2Z"></path></svg></button>
@@ -2082,6 +2082,9 @@
             const fromInput = document.getElementById('journey-from');
             const toInput = document.getElementById('journey-to');
             [fromInput.value, toInput.value] = [toInput.value, fromInput.value];
+            const fromMatch = document.getElementById('journey-from-match');
+            const toMatch = document.getElementById('journey-to-match');
+            [fromMatch.textContent, toMatch.textContent] = [toMatch.textContent, fromMatch.textContent];
             updateJourneyPlaceMarkers();
             planJourney();
         }
@@ -2661,7 +2664,8 @@
 
         Object.assign(window, {
             toggleTheme, locateMe, searchBus, selectAgencyOption, toggleAgencyDropdown,
-            closeTransitPanel, resumeTransitPanel, showRoute, toggleJourneyPlanner, showMapSearch, planJourney, useCurrentLocationForJourney
+            closeTransitPanel, resumeTransitPanel, showRoute, toggleJourneyPlanner, showMapSearch, planJourney,
+            swapJourneyPoints, useCurrentLocationForJourney
         });
         initializeJourneyPlanner();
         initializeBottomSheetDrag();
