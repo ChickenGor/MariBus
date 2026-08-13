@@ -33,6 +33,11 @@
       <div id="account-avatar" class="account-avatar">M</div><p class="eyebrow">Signed in</p><h2 id="account-name">MariBus rider</h2><p id="account-email"></p><span class="pill">Free account</span>
       <div class="stack account-actions"><a class="button" href="/">Continue to MariBus</a><button id="sign-out" class="button secondary" type="button">Sign out</button></div>
     </section>
+    <section id="google-username-card" class="card auth-card" hidden>
+      <p class="eyebrow">One last step</p><h2>Choose your MariBus username</h2><p>This can be different from your Google name.</p>
+      <form id="google-username-form" class="stack"><label>Username<input id="google-username" class="field" type="text" autocomplete="username" minlength="3" maxlength="24" pattern="[A-Za-z0-9_]+" placeholder="e.g. maribus_rider" required></label><button class="button" type="submit">Continue</button></form>
+      <p id="google-username-message" class="auth-message" role="status"></p>
+    </section>
   </main>
   <footer class="footer">&copy; 2026 Chicken Rice Developer Studio</footer>
 </div>
