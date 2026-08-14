@@ -147,7 +147,14 @@
         addLayers(items) { items.forEach(item => this.addLayer(item)); }
         clearLayers() { this.items.forEach(item => item.remove()); this.items=[]; }
         remove() { this.clearLayers(); }
-        zoomToShowLayer(marker, callback) { if (this.map) { this.map.native.setCenter(marker.native.getPosition()); this.map.native.setZoom(16); } if (callback) callback(); }
+        zoomToShowLayer(marker, callback) {
+            if (!this.map) { if (callback) callback(); return; }
+            const position = marker.native?.getPosition?.() || marker.point;
+            marker.attach(this.map.native);
+            if (position) this.map.native.setCenter(position);
+            this.map.native.setZoom(16);
+            if (callback) google.maps.event.addListenerOnce(this.map.native, 'idle', callback);
+        }
     }
 
     class MarkerClusterLayer extends LayerGroup {

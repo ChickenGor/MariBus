@@ -1326,6 +1326,8 @@
 
         let busMarkersDict = {};
         let busLiveDataDict = {};
+        let allLiveBusMarkers = [];
+        let visibleBusRefreshTimer = null;
         let trackedBusId = null;
         let routeMarkersDict = {};
         let stopMarkersLayer = L.layerGroup().addTo(map);
@@ -1346,6 +1348,34 @@
         const journeySearchTimers = {};
         let routeCodeSearchTimer = null;
         let autoPlanAfterLocation = false;
+
+        function paddedVisibleBusBounds() {
+            const bounds = map.native?.getBounds?.();
+            if (!bounds) return null;
+            const northEast = bounds.getNorthEast();
+            const southWest = bounds.getSouthWest();
+            const latitudePadding = Math.max(.01, Math.abs(northEast.lat() - southWest.lat()) * .2);
+            const longitudePadding = Math.max(.01, Math.abs(northEast.lng() - southWest.lng()) * .2);
+            return new google.maps.LatLngBounds(
+                { lat:southWest.lat() - latitudePadding, lng:southWest.lng() - longitudePadding },
+                { lat:northEast.lat() + latitudePadding, lng:northEast.lng() + longitudePadding },
+            );
+        }
+
+        function refreshVisibleBusMarkers() {
+            if (journeyMapFocused || !allLiveBusMarkers.length) return;
+            const bounds = paddedVisibleBusBounds();
+            const visibleMarkers = bounds
+                ? allLiveBusMarkers.filter(marker => bounds.contains(marker.point || marker.getLatLng()?.native))
+                : allLiveBusMarkers;
+            markersGroup.clearLayers();
+            markersGroup.addLayers(visibleMarkers);
+        }
+
+        map.native?.addListener?.('idle', () => {
+            if (visibleBusRefreshTimer) clearTimeout(visibleBusRefreshTimer);
+            visibleBusRefreshTimer = setTimeout(refreshVisibleBusMarkers, 100);
+        });
 
         const agencyLocations = {
             "rapid-bus-kl": { lat: 3.1390, lng: 101.6869, zoom: 12 },
@@ -1413,6 +1443,7 @@
                 busMarkersDict = {};
                 busLiveDataDict = {};
                 routeMarkersDict = {};
+                allLiveBusMarkers = [];
 
                 let newMarkers = [];
 
@@ -1533,7 +1564,8 @@
                         newMarkers.push(marker);
                     }
                 });
-                markersGroup.addLayers(newMarkers);
+                allLiveBusMarkers = newMarkers;
+                refreshVisibleBusMarkers();
                 refreshTrackedBus();
             } catch (error) {
                 console.error("Error fetching buses:", error);
