@@ -1,8 +1,11 @@
 import json
 import base64
+import gzip
 import math
 import os
+import shutil
 import sqlite3
+import tempfile
 import time
 from datetime import datetime
 from threading import Lock
@@ -18,6 +21,7 @@ app = Flask(__name__)
 CORS(app)
 
 DATABASE_PATH = os.getenv("MARIBUS_DB", os.path.join(os.path.dirname(__file__), "gtfs_static.db"))
+PACKAGED_DATABASE_PATH = os.path.join(os.path.dirname(__file__), "gtfs_static.db.gz")
 ROUTE_OVERRIDES_PATH = os.getenv("ROUTE_OVERRIDES_PATH", os.path.join(os.path.dirname(__file__), "route_overrides"))
 LIVE_CACHE_SECONDS = int(os.getenv("LIVE_CACHE_SECONDS", "20"))
 ROUTING_VERSION = "nearby-transfer-v3"
@@ -25,6 +29,7 @@ ROUTING_VERSION = "nearby-transfer-v3"
 API_URLS = {
     "rapid-bus-kl": "https://api.data.gov.my/gtfs-realtime/vehicle-position/prasarana?category=rapid-bus-kl",
     "rapid-bus-mrtfeeder": "https://api.data.gov.my/gtfs-realtime/vehicle-position/prasarana?category=rapid-bus-mrtfeeder",
+    "rapid-bus-penang": "https://api.data.gov.my/gtfs-realtime/vehicle-position/prasarana?category=rapid-bus-penang",
     "ktmb": "https://api.data.gov.my/gtfs-realtime/vehicle-position/ktmb",
     "mybas-kangar": "https://api.data.gov.my/gtfs-realtime/vehicle-position/mybas-kangar",
     "mybas-alor-setar": "https://api.data.gov.my/gtfs-realtime/vehicle-position/mybas-alor-setar",
@@ -38,9 +43,20 @@ API_URLS = {
     "mybas-kuching": "https://api.data.gov.my/gtfs-realtime/vehicle-position/mybas-kuching",
 }
 
+RAPID_PENANG_FARES = (
+    (7, 1.40, 0.70),
+    (14, 2.00, 1.00),
+    (21, 2.70, 1.40),
+    (28, 3.40, 1.70),
+    (35, 4.00, 2.00),
+    (42, 4.70, 2.40),
+    (49, 5.00, 2.50),
+)
+
 _live_cache = {}
 _road_geometry_cache = {}
 _cache_lock = Lock()
+_database_lock = Lock()
 
 
 def point_distance_m(first, second):
@@ -51,6 +67,99 @@ def point_distance_m(first, second):
         + math.cos(lat1) * math.cos(lat2) * math.sin((lon2 - lon1) / 2) ** 2
     )
     return 6371000 * 2 * math.atan2(math.sqrt(value), math.sqrt(1 - value))
+
+
+def trip_segment_distance_km(connection, agency, trip_id, from_stop_id, to_stop_id):
+    """Approximate travelled distance by following the ordered stops in a GTFS trip."""
+    trip = connection.execute(
+        "SELECT shape_id FROM trips WHERE agency_id = ? AND trip_id = ?",
+        (agency, trip_id),
+    ).fetchone()
+    endpoint_rows = connection.execute(
+        """SELECT stop_id, stop_lat, stop_lon FROM stops
+           WHERE agency_id = ? AND stop_id IN (?, ?)""",
+        (agency, from_stop_id, to_stop_id),
+    ).fetchall()
+    endpoints = {row["stop_id"]: (float(row["stop_lat"]), float(row["stop_lon"])) for row in endpoint_rows}
+    if trip and trip["shape_id"] and len(endpoints) == 2:
+        shape_rows = connection.execute(
+            """SELECT shape_pt_lat, shape_pt_lon FROM shapes
+               WHERE agency_id = ? AND shape_id = ? ORDER BY CAST(shape_pt_sequence AS INTEGER)""",
+            (agency, trip["shape_id"]),
+        ).fetchall()
+        shape = [(float(row["shape_pt_lat"]), float(row["shape_pt_lon"])) for row in shape_rows]
+        if len(shape) >= 2:
+            from_index = min(range(len(shape)), key=lambda index: point_distance_m(shape[index], endpoints[from_stop_id]))
+            to_index = min(range(from_index, len(shape)), key=lambda index: point_distance_m(shape[index], endpoints[to_stop_id]))
+            if to_index > from_index:
+                return sum(point_distance_m(first, second) for first, second in zip(shape[from_index:to_index], shape[from_index + 1:to_index + 1])) / 1000
+    bounds = connection.execute(
+        """SELECT
+               MIN(CASE WHEN stop_id = ? THEN CAST(stop_sequence AS INTEGER) END) AS from_sequence,
+               MAX(CASE WHEN stop_id = ? THEN CAST(stop_sequence AS INTEGER) END) AS to_sequence
+           FROM stop_times WHERE agency_id = ? AND trip_id = ?""",
+        (from_stop_id, to_stop_id, agency, trip_id),
+    ).fetchone()
+    if not bounds or bounds["from_sequence"] is None or bounds["to_sequence"] is None:
+        return None
+    if bounds["to_sequence"] <= bounds["from_sequence"]:
+        return None
+    rows = connection.execute(
+        """SELECT s.stop_lat, s.stop_lon
+           FROM stop_times st JOIN stops s
+             ON s.agency_id = st.agency_id AND s.stop_id = st.stop_id
+           WHERE st.agency_id = ? AND st.trip_id = ?
+             AND CAST(st.stop_sequence AS INTEGER) BETWEEN ? AND ?
+           ORDER BY CAST(st.stop_sequence AS INTEGER)""",
+        (agency, trip_id, bounds["from_sequence"], bounds["to_sequence"]),
+    ).fetchall()
+    points = [(float(row["stop_lat"]), float(row["stop_lon"])) for row in rows]
+    if len(points) < 2:
+        return None
+    return sum(point_distance_m(first, second) for first, second in zip(points, points[1:])) / 1000
+
+
+def estimated_fare_for_distance(agency, distance_km):
+    if distance_km is None or distance_km <= 0:
+        return None
+    if agency == "rapid-bus-penang":
+        adult, concession = RAPID_PENANG_FARES[-1][1:]
+        for maximum_km, band_adult, band_concession in RAPID_PENANG_FARES:
+            if distance_km <= maximum_km:
+                adult, concession = band_adult, band_concession
+                break
+        return {"adult_rm": adult, "concession_rm": concession, "distance_km": round(distance_km, 1), "type": "distance_band", "estimated": True}
+    if agency.startswith("mybas-") and agency != "mybas-kuching":
+        additional_km = max(0, math.ceil(distance_km - 2))
+        adult = 0.94 + additional_km * 0.094
+        return {"adult_rm": round(adult, 2), "concession_rm": round(adult / 2, 2), "distance_km": round(distance_km, 1), "type": "stage_bus", "estimated": True}
+    return None
+
+
+def attach_estimated_fares(connection, agency, journeys):
+    for journey in journeys:
+        segments = []
+        if journey.get("legs") and journey.get("transfer_stop"):
+            segments = [
+                (journey["legs"][0]["trip_id"], journey["from_stop"]["stop_id"], journey["transfer_stop"]["stop_id"]),
+                (journey["legs"][1]["trip_id"], journey["transfer_stop"]["board_stop_id"], journey["to_stop"]["stop_id"]),
+            ]
+        elif journey.get("trip_id"):
+            segments = [(journey["trip_id"], journey["from_stop"]["stop_id"], journey["to_stop"]["stop_id"])]
+        leg_fares = []
+        for trip_id, from_stop_id, to_stop_id in segments:
+            distance = trip_segment_distance_km(connection, agency, trip_id, from_stop_id, to_stop_id)
+            fare = estimated_fare_for_distance(agency, distance)
+            if fare:
+                leg_fares.append(fare)
+        if leg_fares and len(leg_fares) == len(segments):
+            journey["fare"] = {
+                "adult_rm": round(sum(item["adult_rm"] for item in leg_fares), 2),
+                "concession_rm": round(sum(item["concession_rm"] for item in leg_fares), 2),
+                "distance_km": round(sum(item["distance_km"] for item in leg_fares), 1),
+                "estimated": True,
+                "legs": leg_fares,
+            }
 
 
 def densify_path(points, maximum_gap_m=250):
@@ -121,9 +230,30 @@ def load_route_override(agency, route_id, direction_id):
 
 
 def db_connection():
-    connection = sqlite3.connect(DATABASE_PATH)
+    connection = sqlite3.connect(ensure_database_path())
     connection.row_factory = sqlite3.Row
     return connection
+
+
+def ensure_database_path():
+    """Use the local DB in development or unpack the deployment copy once per cold start."""
+    global DATABASE_PATH
+    if os.path.exists(DATABASE_PATH):
+        return DATABASE_PATH
+    if not os.path.exists(PACKAGED_DATABASE_PATH):
+        return DATABASE_PATH
+    with _database_lock:
+        if os.path.exists(DATABASE_PATH):
+            return DATABASE_PATH
+        runtime_path = os.path.join(tempfile.gettempdir(), "maribus-gtfs-static.db")
+        packaged_mtime = os.path.getmtime(PACKAGED_DATABASE_PATH)
+        if not os.path.exists(runtime_path) or os.path.getmtime(runtime_path) < packaged_mtime:
+            temporary_path = runtime_path + ".tmp"
+            with gzip.open(PACKAGED_DATABASE_PATH, "rb") as source, open(temporary_path, "wb") as destination:
+                shutil.copyfileobj(source, destination)
+            os.replace(temporary_path, runtime_path)
+        DATABASE_PATH = runtime_path
+    return DATABASE_PATH
 
 
 def table_exists(connection, table_name):
@@ -160,6 +290,27 @@ def get_route_map(trip_route_pairs, agency):
                         WHERE t.agency_id = ? AND t.trip_id IN ({placeholders})"""
             for row in connection.execute(query, [agency, *trip_ids]):
                 result[("trip", row["trip_id"])] = dict(row)
+
+            # Rapid Penang's realtime feed omits the weekday/weekend prefix
+            # present in its static trip IDs. Resolve those documented suffix
+            # matches without changing the upstream identifiers.
+            if agency == "rapid-bus-penang":
+                unresolved = [trip_id for trip_id in trip_ids if ("trip", trip_id) not in result]
+                if unresolved:
+                    static_rows = connection.execute(
+                        """SELECT t.trip_id, t.route_id, r.route_short_name, r.route_long_name,
+                                  t.trip_headsign
+                           FROM trips t JOIN routes r ON r.agency_id=t.agency_id AND r.route_id=t.route_id
+                           WHERE t.agency_id=?""",
+                        (agency,),
+                    ).fetchall()
+                    for row in static_rows:
+                        static_trip_id = row["trip_id"]
+                        realtime_trip_id = next(
+                            (candidate for candidate in unresolved if static_trip_id.endswith(candidate)), None
+                        )
+                        if realtime_trip_id and ("trip", realtime_trip_id) not in result:
+                            result[("trip", realtime_trip_id)] = dict(row)
 
         if trip_ids:
             placeholders = ",".join("?" for _ in trip_ids)
@@ -207,7 +358,7 @@ def route_info(route_map, trip_id, route_id):
 
 @app.get("/api/health")
 def health():
-    return jsonify({"success": True, "database": os.path.exists(DATABASE_PATH), "routing_version": ROUTING_VERSION})
+    return jsonify({"success": True, "database": os.path.exists(ensure_database_path()), "routing_version": ROUTING_VERSION})
 
 
 @app.get("/api/config")
@@ -455,6 +606,9 @@ def nearby_stops(connection, agency, latitude, longitude, limit=6, radius_km=5):
 
 def one_transfer_journeys(connection, agency, origin_map, destination_map, active_services, requested_seconds):
     """Find practical same-stop transfers without requiring a separate routing server."""
+    window_start = f"{requested_seconds // 3600:02d}:{(requested_seconds % 3600) // 60:02d}:00"
+    window_end_seconds = requested_seconds + 5 * 3600
+    window_end = f"{window_end_seconds // 3600:02d}:{(window_end_seconds % 3600) // 60:02d}:59"
     origin_marks = ",".join("?" for _ in origin_map)
     service_marks = ",".join("?" for _ in active_services)
     first_rows = connection.execute(
@@ -467,8 +621,9 @@ def one_transfer_journeys(connection, agency, origin_map, destination_map, activ
             JOIN trips t ON t.agency_id=board.agency_id AND t.trip_id=board.trip_id
             JOIN routes r ON r.agency_id=t.agency_id AND r.route_id=t.route_id
             WHERE board.agency_id=? AND board.stop_id IN ({origin_marks})
-              AND t.service_id IN ({service_marks})""",
-        [agency, *origin_map, *active_services],
+              AND t.service_id IN ({service_marks})
+              AND board.departure_time BETWEEN ? AND ?""",
+        [agency, *origin_map, *active_services, window_start, window_end],
     ).fetchall()
     first_candidates = []
     for row in first_rows:
@@ -482,6 +637,11 @@ def one_transfer_journeys(connection, agency, origin_map, destination_map, activ
         item = dict(row)
         item.update({"departure_seconds": departure, "arrival_seconds": arrival})
         first_candidates.append(item)
+    # Dense networks can produce every downstream stop for many near-identical
+    # trips. Earliest candidates provide useful transfers without an
+    # unbounded all-stops comparison.
+    first_candidates.sort(key=lambda item: (item["arrival_seconds"], item["departure_seconds"]))
+    first_candidates = first_candidates[:300]
     transfer_ids = sorted({item["transfer_stop_id"] for item in first_candidates})
     if not transfer_ids:
         return []
@@ -528,8 +688,9 @@ def one_transfer_journeys(connection, agency, origin_map, destination_map, activ
                 JOIN routes r ON r.agency_id=t.agency_id AND r.route_id=t.route_id
                 JOIN stops ts ON ts.agency_id=board.agency_id AND ts.stop_id=board.stop_id
                 WHERE board.agency_id=? AND board.stop_id IN ({transfer_marks})
-                  AND alight.stop_id IN ({destination_marks}) AND t.service_id IN ({service_marks})""",
-            [agency, *transfer_chunk, *destination_map, *active_services],
+                  AND alight.stop_id IN ({destination_marks}) AND t.service_id IN ({service_marks})
+                  AND board.departure_time BETWEEN ? AND ?""",
+            [agency, *transfer_chunk, *destination_map, *active_services, window_start, window_end],
         ).fetchall())
 
     seconds_by_transfer = {}
@@ -723,15 +884,7 @@ def search_routes():
     with db_connection() as connection:
         rows = connection.execute(
             """SELECT r.route_id, r.route_short_name, r.route_long_name, r.route_color,
-                      t.trip_id, t.trip_headsign, t.direction_id,
-                      (SELECT s.stop_name FROM stop_times st JOIN stops s
-                       ON s.agency_id = st.agency_id AND s.stop_id = st.stop_id
-                       WHERE st.agency_id = t.agency_id AND st.trip_id = t.trip_id
-                       ORDER BY CAST(st.stop_sequence AS INTEGER) LIMIT 1) AS origin_name,
-                      (SELECT s.stop_name FROM stop_times st JOIN stops s
-                       ON s.agency_id = st.agency_id AND s.stop_id = st.stop_id
-                       WHERE st.agency_id = t.agency_id AND st.trip_id = t.trip_id
-                       ORDER BY CAST(st.stop_sequence AS INTEGER) DESC LIMIT 1) AS destination_name
+                      t.trip_id, t.trip_headsign, t.direction_id
                FROM routes r JOIN trips t
                ON t.agency_id = r.agency_id AND t.route_id = r.route_id
                WHERE r.agency_id = ? AND (
@@ -750,7 +903,19 @@ def search_routes():
         item = dict(row)
         key = (item["route_id"], str(item.get("direction_id") or ""), item.get("trip_headsign") or "")
         choices.setdefault(key, item)
-    return jsonify({"success": True, "data": list(choices.values())[:12]})
+    results = list(choices.values())[:12]
+    with db_connection() as connection:
+        for item in results:
+            endpoints = connection.execute(
+                """SELECT s.stop_name FROM stop_times st JOIN stops s
+                   ON s.agency_id=st.agency_id AND s.stop_id=st.stop_id
+                   WHERE st.agency_id=? AND st.trip_id=?
+                   ORDER BY CAST(st.stop_sequence AS INTEGER)""",
+                (agency, item["trip_id"]),
+            ).fetchall()
+            item["origin_name"] = endpoints[0]["stop_name"] if endpoints else ""
+            item["destination_name"] = endpoints[-1]["stop_name"] if endpoints else ""
+    return jsonify({"success": True, "data": results})
 
 
 @app.get("/api/routes/<route_id>/road-geometry")
@@ -865,6 +1030,9 @@ def plan_journey():
             requested_seconds = now.hour * 3600 + now.minute * 60 + now.second
     except ValueError:
         return jsonify({"success": False, "error": "Use YYYY-MM-DD and HH:MM formats"}), 400
+    window_start = f"{requested_seconds // 3600:02d}:{(requested_seconds % 3600) // 60:02d}:00"
+    window_end_seconds = requested_seconds + 5 * 3600
+    window_end = f"{window_end_seconds // 3600:02d}:{(window_end_seconds % 3600) // 60:02d}:59"
 
     with db_connection() as connection:
         if not table_exists(connection, "stop_times"):
@@ -894,8 +1062,9 @@ def plan_journey():
                 JOIN trips t ON t.agency_id = origin.agency_id AND t.trip_id = origin.trip_id
                 JOIN routes r ON r.agency_id = t.agency_id AND r.route_id = t.route_id
                 WHERE origin.agency_id = ? AND origin.stop_id = ? AND destination.stop_id = ?
-                    AND t.service_id IN ({placeholders})""",
-            [agency, from_stop, to_stop, *active_services],
+                    AND t.service_id IN ({placeholders})
+                    AND origin.departure_time BETWEEN ? AND ?""",
+            [agency, from_stop, to_stop, *active_services, window_start, window_end],
         ).fetchall()
 
     journeys = []
@@ -954,6 +1123,9 @@ def plan_nearby_journey():
         requested_seconds = clock.hour * 3600 + clock.minute * 60
     except ValueError:
         return jsonify({"success": False, "error": "Use YYYY-MM-DD and HH:MM formats"}), 400
+    window_start = f"{requested_seconds // 3600:02d}:{(requested_seconds % 3600) // 60:02d}:00"
+    window_end_seconds = requested_seconds + 5 * 3600
+    window_end = f"{window_end_seconds // 3600:02d}:{(window_end_seconds % 3600) // 60:02d}:59"
 
     with db_connection() as connection:
         # Direct journeys need a wider candidate set than transfers. Dense
@@ -987,12 +1159,18 @@ def plan_nearby_journey():
                 JOIN trips t ON t.agency_id=origin.agency_id AND t.trip_id=origin.trip_id
                 JOIN routes r ON r.agency_id=t.agency_id AND r.route_id=t.route_id
                 WHERE origin.agency_id=? AND origin.stop_id IN ({origin_marks})
-                  AND destination.stop_id IN ({destination_marks}) AND t.service_id IN ({service_marks})""",
-            [agency, *origin_map, *destination_map, *active_services],
+                  AND destination.stop_id IN ({destination_marks}) AND t.service_id IN ({service_marks})
+                  AND origin.departure_time BETWEEN ? AND ?""",
+            [agency, *origin_map, *destination_map, *active_services, window_start, window_end],
         ).fetchall()
         transfer_origin_map = {item["stop_id"]: item for item in origins[:6]}
         transfer_destination_map = {item["stop_id"]: item for item in destinations[:6]}
-        transfer_results = one_transfer_journeys(
+        has_viable_direct = any(
+            (gtfs_seconds(row["departure_time"]) or -1) >= requested_seconds
+            and (gtfs_seconds(row["arrival_time"]) or -1) >= (gtfs_seconds(row["departure_time"]) or 0)
+            for row in rows
+        )
+        transfer_results = [] if has_viable_direct else one_transfer_journeys(
             connection, agency, transfer_origin_map, transfer_destination_map, active_services, requested_seconds
         )
 
@@ -1031,8 +1209,12 @@ def plan_nearby_journey():
         item["total_minutes"] + item["walk_minutes"] * 1.5 + item["transfers"] * 8,
         item["walk_minutes"], item["transfers"], item["arrival_time"],
     ))
+    journeys = journeys[:8]
+    if agency == "rapid-bus-penang" or (agency.startswith("mybas-") and agency != "mybas-kuching"):
+        with db_connection() as connection:
+            attach_estimated_fares(connection, agency, journeys)
     return jsonify({
-        "success": True, "data": journeys[:8],
+        "success": True, "data": journeys,
         "notice": f"Compared {len(origins)} nearby origin stops with {len(destinations)} destination stops, including one transfer",
     })
 

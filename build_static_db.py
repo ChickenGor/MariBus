@@ -1,8 +1,10 @@
 import csv
+import gzip
 import io
 import os
 import sqlite3
 import tempfile
+import shutil
 import zipfile
 
 import requests
@@ -120,7 +122,13 @@ def main():
         connection.commit()
         connection.close()
         os.replace(temporary_path, database_path)
+        packaged_path = database_path + ".gz"
+        packaged_temporary_path = packaged_path + ".tmp"
+        with open(database_path, "rb") as source, gzip.open(packaged_temporary_path, "wb", compresslevel=9) as destination:
+            shutil.copyfileobj(source, destination)
+        os.replace(packaged_temporary_path, packaged_path)
         print(f"Database built successfully: {database_path}")
+        print(f"Deployment package built successfully: {packaged_path}")
     finally:
         if os.path.exists(temporary_path):
             os.remove(temporary_path)

@@ -6,3 +6,4 @@ otp/*.pbf
 otp/*.obj
 otp/cache/
 node_modules/
+gtfs_static.db

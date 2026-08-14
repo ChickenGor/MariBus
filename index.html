@@ -786,6 +786,9 @@
         .journey-main-time { font-size:15px; font-weight:900; white-space:nowrap; }
         .journey-steps { display:flex; align-items:center; flex-wrap:wrap; gap:6px; margin-top:8px; color:var(--text-muted); font-size:12px; }
         .journey-board { margin-top:7px; color:var(--text-muted); font-size:11px; line-height:1.4; }
+        .journey-fare { margin-top:7px; display:flex; align-items:baseline; gap:6px; color:var(--text-main); font-size:11px; }
+        .journey-fare strong { font-size:13px; }
+        .journey-fare-note { color:var(--text-muted); }
         .journey-alternatives { margin-top:5px; color:var(--text-muted); font-size:10px; }
         .journey-card.modern .route-action { margin-top:8px; padding:8px 12px; }
         .journey-actions { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:8px; }
@@ -924,6 +927,7 @@
                 border-color:rgba(37,99,235,.45);
             }
             #bottom-sheet.detail-mode:not(.sheet-half):not(.sheet-expanded) .journey-card.modern .journey-board,
+            #bottom-sheet.detail-mode:not(.sheet-half):not(.sheet-expanded) .journey-card.modern .journey-fare,
             #bottom-sheet.detail-mode:not(.sheet-half):not(.sheet-expanded) .journey-card.modern .journey-live-progress,
             #bottom-sheet.detail-mode:not(.sheet-half):not(.sheet-expanded) .journey-card.modern .journey-alternatives,
             #bottom-sheet.detail-mode:not(.sheet-half):not(.sheet-expanded) .journey-card.modern .route-action {
@@ -1056,6 +1060,9 @@
                 <!-- RapidKL & Trains -->
                 <div class="select-option active" data-value="rapid-bus-kl" onclick="selectAgencyOption('rapid-bus-kl', 'Rapid KL + MRT Feeder', 'dot-rapid')">
                     <div class="agency-dot dot-rapid"></div><span class="text">Rapid KL + MRT Feeder</span>
+                </div>
+                <div class="select-option" data-value="rapid-bus-penang" onclick="selectAgencyOption('rapid-bus-penang', 'Rapid Penang', 'dot-rapid')">
+                    <div class="agency-dot dot-rapid"></div><span class="text">Rapid Penang</span>
                 </div>
                 <div class="select-option" data-value="ktmb" onclick="selectAgencyOption('ktmb', 'KTMB Trains', 'dot-ktmb')">
                     <div class="agency-dot dot-ktmb"></div><span class="text">KTMB Trains</span>
@@ -1343,6 +1350,7 @@
         const agencyLocations = {
             "rapid-bus-kl": { lat: 3.1390, lng: 101.6869, zoom: 12 },
             "rapid-bus-mrtfeeder": { lat: 3.1390, lng: 101.6869, zoom: 12 },
+            "rapid-bus-penang": { lat: 5.4141, lng: 100.3288, zoom: 11 },
             "ktmb": { lat: 3.1390, lng: 101.6869, zoom: 7 },
             "mybas-kangar": { lat: 6.4414, lng: 100.1986, zoom: 13 },
             "mybas-alor-setar": { lat: 6.1248, lng: 100.3678, zoom: 13 },
@@ -1508,7 +1516,7 @@
                             destinationName,
                             sourceAgency,
                             routeId:vehicle.route_info?.route_id || vehicle.trip?.routeId || '',
-                            tripId:vehicle.route_info?.trip_id ? (vehicle.trip?.tripId || '') : '',
+                            tripId:vehicle.route_info?.trip_id || vehicle.trip?.tripId || '',
                             latitude:Number(vehicle.position.latitude),
                             longitude:Number(vehicle.position.longitude),
                             speedKmh:vehicle.position.speed > 0 ? Math.round(vehicle.position.speed * 3.6) : null
@@ -2658,6 +2666,7 @@
             if (agency.includes('mybas')) return '#f93999';
             if (agency === 'rapid-bus-mrtfeeder') return '#f60404';
             if (agency === 'rapid-bus-kl') return '#f60404';
+            if (agency === 'rapid-bus-penang') return '#e11d48';
             return /^[0-9a-f]{6}$/i.test(value || '') ? `#${value}` : '#2563eb';
         }
 
@@ -2817,6 +2826,7 @@
                             <div class="journey-option-head"><div class="journey-total">${escapeHtml(formatJourneyDuration(journey.total_minutes))}</div><div class="journey-main-time">${escapeHtml(journey.departure_time)} &ndash; ${escapeHtml(journey.arrival_time)}</div></div>
                             <div class="journey-steps"><span>${iconSvg('walk', 'inline-icon')} ${journey.walk_minutes} min</span><span>&rsaquo;</span>${routeBadges(journey)}<span>&rsaquo;</span><span>${journey.transfers ? `${journey.transfers} change` : 'Direct'}</span></div>
                             <div class="journey-board">Board at <strong>${escapeHtml(journey.from_stop.stop_name)}</strong><br>Exit at ${escapeHtml(journey.to_stop.stop_name)}</div>
+                            ${journey.fare ? `<div class="journey-fare"><strong>Estimated fare RM${Number(journey.fare.adult_rm).toFixed(2)}</strong><span class="journey-fare-note">Adult · ${Number(journey.fare.distance_km).toFixed(1)} km</span></div>` : ''}
                             <div class="journey-live-progress" id="journey-progress-${index}">
                                 <div class="journey-progress-labels"><span>A</span><span>B</span></div>
                                 <div class="journey-progress-track"><div class="journey-progress-fill"></div><span class="journey-progress-node a"></span><span class="journey-progress-node b"></span><span class="journey-progress-bus" title="Live bus">${iconSvg('bus')}</span></div>
