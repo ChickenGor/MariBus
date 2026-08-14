@@ -23,7 +23,7 @@ async function saveUser(user,provider,username=''){const reference=doc(db,'users
 
 const isNativeApp=()=>Boolean(window.Capacitor?.isNativePlatform?.());
 async function signInWithNativeGoogle(){
-  const nativeAuth=window.Capacitor?.registerPlugin?.('FirebaseAuthentication');
+  const nativeAuth=window.Capacitor?.Plugins?.FirebaseAuthentication||window.Capacitor?.registerPlugin?.('FirebaseAuthentication');
   if(!nativeAuth)throw new Error('Native Google sign-in is unavailable.');
   const result=await nativeAuth.signInWithGoogle({useCredentialManager:true});
   const idToken=result?.credential?.idToken;

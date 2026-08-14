@@ -1096,7 +1096,8 @@
             const capacitor = window.Capacitor;
             if (!capacitor?.isNativePlatform?.()) return;
             try {
-                const systemBars = capacitor.registerPlugin('MariBusSystemBars');
+                const systemBars = capacitor.Plugins?.MariBusSystemBars||capacitor.registerPlugin?.('MariBusSystemBars');
+                if (!systemBars) throw new Error('MariBus system bars plugin is unavailable');
                 await systemBars.setTheme({ dark:Boolean(dark) });
             } catch (error) {
                 console.warn('MariBus system bars could not be updated', error);

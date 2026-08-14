@@ -23,7 +23,7 @@ public class MariBusSystemBarsPlugin extends Plugin {
     }
 
     public static void applyTheme(Activity activity, boolean dark) {
-        int color = Color.parseColor(dark ? "#111827" : "#FFFFFF");
+        int color = Color.parseColor(dark ? "#000000" : "#FFFFFF");
         Window window = activity.getWindow();
         window.setStatusBarColor(color);
         window.setNavigationBarColor(color);
