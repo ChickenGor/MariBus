@@ -7,3 +7,5 @@ otp/*.obj
 otp/cache/
 node_modules/
 gtfs_static.db
+gtfs_static.db.gz
+gtfs_agencies/*.db

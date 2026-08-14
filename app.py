@@ -11,7 +11,7 @@ from datetime import datetime
 from threading import Lock
 
 import requests
-from flask import Flask, jsonify, request, send_file
+from flask import Flask, has_request_context, jsonify, request, send_file
 from flask_cors import CORS
 from google.protobuf.json_format import MessageToDict
 from google.transit import gtfs_realtime_pb2
@@ -20,8 +20,10 @@ from google.transit import gtfs_realtime_pb2
 app = Flask(__name__)
 CORS(app)
 
-DATABASE_PATH = os.getenv("MARIBUS_DB", os.path.join(os.path.dirname(__file__), "gtfs_static.db"))
+LOCAL_DATABASE_PATH = os.path.join(os.path.dirname(__file__), "gtfs_static.db")
+DATABASE_PATH = os.getenv("MARIBUS_DB", LOCAL_DATABASE_PATH)
 PACKAGED_DATABASE_PATH = os.path.join(os.path.dirname(__file__), "gtfs_static.db.gz")
+PACKAGED_DATABASE_DIRECTORY = os.path.join(os.path.dirname(__file__), "gtfs_agencies")
 ROUTE_OVERRIDES_PATH = os.getenv("ROUTE_OVERRIDES_PATH", os.path.join(os.path.dirname(__file__), "route_overrides"))
 LIVE_CACHE_SECONDS = int(os.getenv("LIVE_CACHE_SECONDS", "20"))
 ROUTING_VERSION = "nearby-transfer-v3"
@@ -55,8 +57,10 @@ RAPID_PENANG_FARES = (
 
 _live_cache = {}
 _road_geometry_cache = {}
+_segment_distance_cache = {}
 _cache_lock = Lock()
 _database_lock = Lock()
+_agency_database_paths = {}
 
 
 def point_distance_m(first, second):
@@ -75,6 +79,28 @@ def trip_segment_distance_km(connection, agency, trip_id, from_stop_id, to_stop_
         "SELECT shape_id FROM trips WHERE agency_id = ? AND trip_id = ?",
         (agency, trip_id),
     ).fetchone()
+    cache_key = (agency, trip["shape_id"] if trip and trip["shape_id"] else trip_id, from_stop_id, to_stop_id)
+    with _cache_lock:
+        cached_distance = _segment_distance_cache.get(cache_key)
+    if cached_distance is not None:
+        return cached_distance
+    try:
+        official = connection.execute(
+            """SELECT
+                   MIN(CASE WHEN stop_id=? THEN shape_dist_traveled END) AS from_distance,
+                   MAX(CASE WHEN stop_id=? THEN shape_dist_traveled END) AS to_distance
+               FROM stop_times WHERE agency_id=? AND trip_id=?""",
+            (from_stop_id, to_stop_id, agency, trip_id),
+        ).fetchone()
+        if official and official["from_distance"] is not None and official["to_distance"] is not None:
+            official_distance = float(official["to_distance"]) - float(official["from_distance"])
+            if official_distance > 0:
+                cache_segment_distance(cache_key, official_distance)
+                return official_distance
+    except sqlite3.OperationalError:
+        # Databases built before shape_dist_traveled was retained continue to
+        # use the geometry fallback until their next scheduled rebuild.
+        pass
     endpoint_rows = connection.execute(
         """SELECT stop_id, stop_lat, stop_lon FROM stops
            WHERE agency_id = ? AND stop_id IN (?, ?)""",
@@ -92,7 +118,9 @@ def trip_segment_distance_km(connection, agency, trip_id, from_stop_id, to_stop_
             from_index = min(range(len(shape)), key=lambda index: point_distance_m(shape[index], endpoints[from_stop_id]))
             to_index = min(range(from_index, len(shape)), key=lambda index: point_distance_m(shape[index], endpoints[to_stop_id]))
             if to_index > from_index:
-                return sum(point_distance_m(first, second) for first, second in zip(shape[from_index:to_index], shape[from_index + 1:to_index + 1])) / 1000
+                distance = sum(point_distance_m(first, second) for first, second in zip(shape[from_index:to_index], shape[from_index + 1:to_index + 1])) / 1000
+                cache_segment_distance(cache_key, distance)
+                return distance
     bounds = connection.execute(
         """SELECT
                MIN(CASE WHEN stop_id = ? THEN CAST(stop_sequence AS INTEGER) END) AS from_sequence,
@@ -116,7 +144,16 @@ def trip_segment_distance_km(connection, agency, trip_id, from_stop_id, to_stop_
     points = [(float(row["stop_lat"]), float(row["stop_lon"])) for row in rows]
     if len(points) < 2:
         return None
-    return sum(point_distance_m(first, second) for first, second in zip(points, points[1:])) / 1000
+    distance = sum(point_distance_m(first, second) for first, second in zip(points, points[1:])) / 1000
+    cache_segment_distance(cache_key, distance)
+    return distance
+
+
+def cache_segment_distance(cache_key, distance):
+    with _cache_lock:
+        _segment_distance_cache[cache_key] = distance
+        while len(_segment_distance_cache) > 4096:
+            _segment_distance_cache.pop(next(iter(_segment_distance_cache)))
 
 
 def estimated_fare_for_distance(agency, distance_km):
@@ -229,17 +266,34 @@ def load_route_override(agency, route_id, direction_id):
         return []
 
 
-def db_connection():
-    connection = sqlite3.connect(ensure_database_path())
+def db_connection(agency=None):
+    connection = sqlite3.connect(ensure_database_path(agency))
     connection.row_factory = sqlite3.Row
     return connection
 
 
-def ensure_database_path():
-    """Use the local DB in development or unpack the deployment copy once per cold start."""
-    global DATABASE_PATH
+def ensure_database_path(agency=None):
+    """Use the local DB or lazily unpack only the requested deployment agency."""
     if os.path.exists(DATABASE_PATH):
         return DATABASE_PATH
+    if agency is None and has_request_context():
+        agency = request.args.get("agency", "").strip()
+    if agency in API_URLS:
+        packaged_agency_path = os.path.join(PACKAGED_DATABASE_DIRECTORY, f"{agency}.db.gz")
+        if os.path.exists(packaged_agency_path):
+            with _database_lock:
+                cached_path = _agency_database_paths.get(agency)
+                packaged_mtime = os.path.getmtime(packaged_agency_path)
+                if cached_path and os.path.exists(cached_path) and os.path.getmtime(cached_path) >= packaged_mtime:
+                    return cached_path
+                runtime_path = os.path.join(tempfile.gettempdir(), f"maribus-{agency}.db")
+                if not os.path.exists(runtime_path) or os.path.getmtime(runtime_path) < packaged_mtime:
+                    temporary_path = runtime_path + ".tmp"
+                    with gzip.open(packaged_agency_path, "rb") as source, open(temporary_path, "wb") as destination:
+                        shutil.copyfileobj(source, destination)
+                    os.replace(temporary_path, runtime_path)
+                _agency_database_paths[agency] = runtime_path
+                return runtime_path
     if not os.path.exists(PACKAGED_DATABASE_PATH):
         return DATABASE_PATH
     with _database_lock:
@@ -252,8 +306,7 @@ def ensure_database_path():
             with gzip.open(PACKAGED_DATABASE_PATH, "rb") as source, open(temporary_path, "wb") as destination:
                 shutil.copyfileobj(source, destination)
             os.replace(temporary_path, runtime_path)
-        DATABASE_PATH = runtime_path
-    return DATABASE_PATH
+    return runtime_path
 
 
 def table_exists(connection, table_name):
@@ -272,7 +325,7 @@ def get_route_map(trip_route_pairs, agency):
     route_ids = sorted({route_id for _, route_id in trip_route_pairs if route_id})
     result = {}
 
-    with db_connection() as connection:
+    with db_connection(agency) as connection:
         columns = {row[1] for row in connection.execute("PRAGMA table_info(trip_routes)")}
         scoped = "agency_id" in columns
 
@@ -358,7 +411,12 @@ def route_info(route_map, trip_id, route_id):
 
 @app.get("/api/health")
 def health():
-    return jsonify({"success": True, "database": os.path.exists(ensure_database_path()), "routing_version": ROUTING_VERSION})
+    packaged_agencies = [
+        agency for agency in API_URLS
+        if os.path.exists(os.path.join(PACKAGED_DATABASE_DIRECTORY, f"{agency}.db.gz"))
+    ]
+    database_available = os.path.exists(DATABASE_PATH) or os.path.exists(PACKAGED_DATABASE_PATH) or bool(packaged_agencies)
+    return jsonify({"success": True, "database": database_available, "packaged_agencies": packaged_agencies, "routing_version": ROUTING_VERSION})
 
 
 @app.get("/api/config")

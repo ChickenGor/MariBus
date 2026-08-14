@@ -21,13 +21,17 @@ STATIC_URLS = {
 STATIC_URLS.update({
     "ktmb": "https://api.data.gov.my/gtfs-static/ktmb",
 })
+# Kota Bharu's published endpoint currently returns calendar metadata without
+# route records. Every other configured feed must contain routes before a new
+# database is allowed to replace the healthy deployment copy.
+REQUIRED_ROUTE_AGENCIES = set(STATIC_URLS) - {"mybas-kota-bharu"}
 
 SCHEMAS = {
     "routes": ["route_id", "route_short_name", "route_long_name", "route_type", "route_color", "route_text_color"],
     "trips": ["route_id", "service_id", "trip_id", "trip_headsign", "direction_id", "shape_id"],
     "stops": ["stop_id", "stop_code", "stop_name", "stop_lat", "stop_lon", "location_type", "parent_station", "wheelchair_boarding"],
-    "stop_times": ["trip_id", "arrival_time", "departure_time", "stop_id", "stop_sequence"],
-    "shapes": ["shape_id", "shape_pt_lat", "shape_pt_lon", "shape_pt_sequence"],
+    "stop_times": ["trip_id", "arrival_time", "departure_time", "stop_id", "stop_sequence", "shape_dist_traveled"],
+    "shapes": ["shape_id", "shape_pt_lat", "shape_pt_lon", "shape_pt_sequence", "shape_dist_traveled"],
     "calendar": ["service_id", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday", "start_date", "end_date"],
     "calendar_dates": ["service_id", "date", "exception_type"],
 }
@@ -38,6 +42,19 @@ INTEGER_COLUMNS = {
     "shape_pt_sequence", "location_type", "wheelchair_boarding", "monday", "tuesday",
     "wednesday", "thursday", "friday", "saturday", "sunday", "exception_type",
 }
+
+INDEXES = [
+    "CREATE INDEX idx_trip_routes_trip ON trip_routes(agency_id, trip_id)",
+    "CREATE INDEX idx_trip_routes_route ON trip_routes(agency_id, route_id)",
+    "CREATE INDEX idx_stops_location ON stops(agency_id, stop_lat, stop_lon)",
+    "CREATE INDEX idx_stop_times_stop ON stop_times(agency_id, stop_id)",
+    "CREATE INDEX idx_stop_times_stop_trip ON stop_times(agency_id, stop_id, trip_id, stop_sequence)",
+    "CREATE INDEX idx_stop_times_trip ON stop_times(agency_id, trip_id, stop_sequence)",
+    "CREATE INDEX idx_trips_route ON trips(agency_id, route_id, direction_id)",
+    "CREATE INDEX idx_trips_trip ON trips(agency_id, trip_id)",
+    "CREATE INDEX idx_routes_route ON routes(agency_id, route_id)",
+    "CREATE INDEX idx_shapes ON shapes(agency_id, shape_id, shape_pt_sequence)",
+]
 
 
 def create_tables(connection):
@@ -79,6 +96,53 @@ def import_csv(connection, archive, agency, table):
         return count
 
 
+def create_indexes(connection):
+    for statement in INDEXES:
+        connection.execute(statement)
+
+
+def copy_agency_table(source, destination, table, agency):
+    columns = [row[1] for row in source.execute(f"PRAGMA table_info({table})")]
+    placeholders = ",".join("?" for _ in columns)
+    insert = f"INSERT INTO {table} ({','.join(columns)}) VALUES ({placeholders})"
+    cursor = source.execute(f"SELECT {','.join(columns)} FROM {table} WHERE agency_id=?", (agency,))
+    while True:
+        rows = cursor.fetchmany(5000)
+        if not rows:
+            break
+        destination.executemany(insert, rows)
+
+
+def package_agency_databases(database_path):
+    package_directory = os.path.join(os.path.dirname(database_path), "gtfs_agencies")
+    os.makedirs(package_directory, exist_ok=True)
+    source = sqlite3.connect(database_path)
+    try:
+        for agency in STATIC_URLS:
+            fd, agency_database_path = tempfile.mkstemp(prefix=f"{agency}-", suffix=".db", dir=os.path.dirname(database_path))
+            os.close(fd)
+            try:
+                destination = sqlite3.connect(agency_database_path)
+                create_tables(destination)
+                for table in (*SCHEMAS, "trip_routes"):
+                    copy_agency_table(source, destination, table, agency)
+                create_indexes(destination)
+                destination.commit()
+                destination.close()
+
+                packaged_path = os.path.join(package_directory, f"{agency}.db.gz")
+                packaged_temporary_path = packaged_path + ".tmp"
+                with open(agency_database_path, "rb") as raw, gzip.open(packaged_temporary_path, "wb", compresslevel=9) as compressed:
+                    shutil.copyfileobj(raw, compressed)
+                os.replace(packaged_temporary_path, packaged_path)
+                print(f"Packaged {agency}: {os.path.getsize(packaged_path)} bytes")
+            finally:
+                if os.path.exists(agency_database_path):
+                    os.remove(agency_database_path)
+    finally:
+        source.close()
+
+
 def main():
     database_path = os.path.join(os.path.dirname(__file__), "gtfs_static.db")
     fd, temporary_path = tempfile.mkstemp(prefix="maribus-", suffix=".db", dir=os.path.dirname(database_path))
@@ -87,6 +151,7 @@ def main():
         connection = sqlite3.connect(temporary_path)
         create_tables(connection)
         imported_totals = {table: 0 for table in SCHEMAS}
+        imported_routes_by_agency = {}
         for agency, url in STATIC_URLS.items():
             print(f"Downloading {agency}...")
             try:
@@ -96,39 +161,36 @@ def main():
                     counts = {table: import_csv(connection, archive, agency, table) for table in SCHEMAS}
                 for table, count in counts.items():
                     imported_totals[table] += count
+                imported_routes_by_agency[agency] = counts.get("routes", 0)
                 connection.commit()
                 print("  " + ", ".join(f"{name}={count}" for name, count in counts.items() if count))
             except Exception as error:
                 connection.rollback()
+                imported_routes_by_agency[agency] = 0
                 print(f"  skipped: {error}")
 
         if not imported_totals["routes"] or not imported_totals["trips"] or not imported_totals["stops"]:
             raise RuntimeError("No usable GTFS feeds were downloaded; the existing database was preserved")
+        missing_agencies = sorted(
+            agency for agency in REQUIRED_ROUTE_AGENCIES
+            if not imported_routes_by_agency.get(agency)
+        )
+        if missing_agencies:
+            raise RuntimeError(
+                "Incomplete GTFS download for " + ", ".join(missing_agencies)
+                + "; the existing database was preserved"
+            )
 
         connection.execute("""INSERT INTO trip_routes
             SELECT t.agency_id, t.trip_id, t.route_id, r.route_short_name, r.route_long_name
             FROM trips t JOIN routes r ON r.agency_id=t.agency_id AND r.route_id=t.route_id""")
-        indexes = [
-            "CREATE INDEX idx_trip_routes_trip ON trip_routes(agency_id, trip_id)",
-            "CREATE INDEX idx_trip_routes_route ON trip_routes(agency_id, route_id)",
-            "CREATE INDEX idx_stops_location ON stops(agency_id, stop_lat, stop_lon)",
-            "CREATE INDEX idx_stop_times_stop ON stop_times(agency_id, stop_id)",
-            "CREATE INDEX idx_stop_times_trip ON stop_times(agency_id, trip_id, stop_sequence)",
-            "CREATE INDEX idx_trips_route ON trips(agency_id, route_id, direction_id)",
-            "CREATE INDEX idx_shapes ON shapes(agency_id, shape_id, shape_pt_sequence)",
-        ]
-        for statement in indexes:
-            connection.execute(statement)
+        create_indexes(connection)
         connection.commit()
         connection.close()
         os.replace(temporary_path, database_path)
-        packaged_path = database_path + ".gz"
-        packaged_temporary_path = packaged_path + ".tmp"
-        with open(database_path, "rb") as source, gzip.open(packaged_temporary_path, "wb", compresslevel=9) as destination:
-            shutil.copyfileobj(source, destination)
-        os.replace(packaged_temporary_path, packaged_path)
+        package_agency_databases(database_path)
         print(f"Database built successfully: {database_path}")
-        print(f"Deployment package built successfully: {packaged_path}")
+        print(f"Agency deployment packages built successfully: {os.path.join(os.path.dirname(database_path), 'gtfs_agencies')}")
     finally:
         if os.path.exists(temporary_path):
             os.remove(temporary_path)
