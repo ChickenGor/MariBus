@@ -73,8 +73,7 @@
                 mapTypeControl: false, streetViewControl: false, fullscreenControl: false,
                 zoomControl: options?.zoomControl !== false,
                 gestureHandling: 'greedy',
-                mapId,
-                renderingType: mapId ? google.maps.RenderingType?.VECTOR : undefined,
+                ...(mapId ? { mapId, renderingType:google.maps.RenderingType?.VECTOR } : {}),
                 tilt: 0,
                 heading: 0,
             });

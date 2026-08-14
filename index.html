@@ -738,6 +738,16 @@
         .arrival-destination, .stop-name { flex:1; font-size:13px; }
         .arrival-minutes { font-weight:800; color:#2563eb; white-space:nowrap; }
         .route-action { width:100%; border:0; border-radius:10px; padding:9px 12px; margin-top:10px; background:#2563eb; color:white; font-weight:700; cursor:pointer; }
+        .track-bus-action { background:#f93999; }
+        #bus-tracking-banner { position:absolute; z-index:1200; top:92px; left:50%; display:flex; align-items:center; gap:10px; width:min(390px,calc(100vw - 32px)); padding:10px 10px 10px 14px; border:1px solid color-mix(in srgb,#f93999 34%,var(--border-color)); border-radius:16px; background:color-mix(in srgb,var(--sheet-bg) 94%,transparent); box-shadow:0 8px 28px var(--shadow-color); box-sizing:border-box; transform:translateX(-50%); backdrop-filter:blur(14px); }
+        #bus-tracking-banner[hidden] { display:none; }
+        .tracking-bus-icon { width:32px; height:32px; display:grid; place-items:center; flex:0 0 auto; border-radius:11px; background:#f93999; color:#fff; }
+        .tracking-bus-icon svg { width:17px; height:17px; fill:none; stroke:currentColor; stroke-width:2; }
+        .tracking-bus-copy { min-width:0; flex:1; }
+        .tracking-bus-copy strong,.tracking-bus-copy small { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .tracking-bus-copy strong { font-size:13px; }
+        .tracking-bus-copy small { margin-top:2px; color:var(--text-muted); font-size:10px; }
+        #stop-bus-tracking { flex:0 0 auto; border:0; border-radius:11px; padding:8px 10px; background:var(--input-bg); color:var(--text-main); font:800 10px/1 Manrope,sans-serif; cursor:pointer; }
         .stop-marker { width:14px; height:14px; border-radius:50%; background:#fff; border:4px solid #2563eb; box-shadow:0 2px 7px rgba(15,23,42,.35); }
         .panel-message { color:var(--text-muted); font-size:13px; padding:8px 0; }
         .route-loader-panel { min-height:170px; display:flex; align-items:center; justify-content:center; padding:12px 0 30px; }
@@ -1005,6 +1015,12 @@
     <input id="journey-time" type="hidden">
 
     <div id="map"></div>
+
+    <div id="bus-tracking-banner" role="status" aria-live="polite" hidden>
+        <span class="tracking-bus-icon"><svg viewBox="0 0 24 24"><path d="M5 16V6c0-2 2-3 7-3s7 1 7 3v10M5 11h14M8 19h8M7 16h.01M17 16h.01M7 19v2M17 19v2"></path></svg></span>
+        <span class="tracking-bus-copy"><strong id="tracked-bus-title">Tracking bus</strong><small id="tracked-bus-status">Waiting for its next live position…</small></span>
+        <button id="stop-bus-tracking" type="button" onclick="stopBusTracking()">Stop</button>
+    </div>
 
     <div id="map-view-toggle" role="group" aria-label="Map view">
         <button class="map-view-button active" type="button" data-map-view="2d" aria-pressed="true">2D</button>
@@ -1302,6 +1318,8 @@
         map.addLayer(markersGroup);
 
         let busMarkersDict = {};
+        let busLiveDataDict = {};
+        let trackedBusId = null;
         let routeMarkersDict = {};
         let stopMarkersLayer = L.layerGroup().addTo(map);
         let activeRouteLayer = L.layerGroup().addTo(map);
@@ -1381,6 +1399,7 @@
 
                 markersGroup.clearLayers();
                 busMarkersDict = {};
+                busLiveDataDict = {};
                 routeMarkersDict = {};
 
                 let newMarkers = [];
@@ -1468,6 +1487,7 @@
                                     ${destinationName ? `<div class="info-row"><span>Destination</span><strong>${escapeHtml(destinationName)}</strong></div>` : ''}
                                     <div class="info-row"><span>Trip ID</span><strong>${escapeHtml(vehicle.trip?.tripId || 'N/A')}</strong></div>
                                     ${speedHtml}
+                                    <button class="route-action track-bus-action" onclick="startBusTracking(decodeURIComponent('${encodeURIComponent(vehicleId).replace(/'/g, '%27')}'))">Track this bus</button>
                                     ${vehicle.trip?.routeId ? `<button class="route-action" onclick="showRoute(decodeURIComponent('${encodeURIComponent(vehicle.trip.routeId).replace(/'/g, '%27')}'), '${escapeHtml(sourceAgency)}')">View route and stops</button>` : ''}
                                 </div>
                             </div>
@@ -1478,6 +1498,14 @@
                             .bindPopup(popupHtml);
 
                         busMarkersDict[vehicleId] = marker;
+                        busLiveDataDict[vehicleId] = {
+                            vehicleId,
+                            routeShortName,
+                            destinationName,
+                            latitude:Number(vehicle.position.latitude),
+                            longitude:Number(vehicle.position.longitude),
+                            speedKmh:vehicle.position.speed > 0 ? Math.round(vehicle.position.speed * 3.6) : null
+                        };
 
                         if (routeShortName && routeShortName !== "Bus" && routeShortName !== "KTM") {
                             const cleanRouteName = routeShortName.toString().toUpperCase();
@@ -1491,6 +1519,7 @@
                     }
                 });
                 markersGroup.addLayers(newMarkers);
+                refreshTrackedBus();
             } catch (error) {
                 console.error("Error fetching buses:", error);
             } finally {
@@ -1498,6 +1527,38 @@
                 syncDot.classList.remove('is-syncing');
                 updateCountdownDisplay();
             }
+        }
+
+        function refreshTrackedBus({ moveMap = true } = {}) {
+            if (!trackedBusId) return;
+            const details = busLiveDataDict[trackedBusId];
+            const banner = document.getElementById('bus-tracking-banner');
+            banner.hidden = false;
+            document.getElementById('tracked-bus-title').textContent = details
+                ? `${details.routeShortName} · ${details.vehicleId}`
+                : `Tracking ${trackedBusId}`;
+            document.getElementById('tracked-bus-status').textContent = details
+                ? [details.destinationName ? `Towards ${details.destinationName}` : 'Live vehicle', details.speedKmh ? `${details.speedKmh} km/h` : 'Position updated'].join(' · ')
+                : 'Waiting for its next live position…';
+            if (details && moveMap) {
+                map.native.panTo({ lat:details.latitude, lng:details.longitude });
+                if ((map.native.getZoom() || 0) < 16) map.native.setZoom(16);
+            }
+        }
+
+        function startBusTracking(vehicleId) {
+            if (!busLiveDataDict[vehicleId]) return showMenuNotice('This bus is no longer in the latest live update');
+            trackedBusId = vehicleId;
+            refreshTrackedBus();
+            window.__mariBusInfoWindow?.close();
+            showMenuNotice(`Tracking ${vehicleId}`);
+        }
+
+        function stopBusTracking(notify = true) {
+            const previousBus = trackedBusId;
+            trackedBusId = null;
+            document.getElementById('bus-tracking-banner').hidden = true;
+            if (notify && previousBus) showMenuNotice(`Stopped tracking ${previousBus}`);
         }
 
         // Toggle Dropdown Menu
@@ -1515,6 +1576,7 @@
 
         // Handle the selection
         function selectAgencyOption(value, text, dotClass, skipFlyTo = false, preserveJourney = false) {
+            stopBusTracking(false);
             // 1. Update the hidden input for the API fetcher
             document.getElementById('agency-select').value = value;
             
