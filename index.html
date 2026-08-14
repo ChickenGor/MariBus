@@ -249,6 +249,33 @@
             color: #6366f1;
         }
 
+        #map-view-toggle {
+            position:absolute;
+            right:15px;
+            bottom:292px;
+            z-index:1000;
+            display:flex;
+            flex-direction:column;
+            padding:4px;
+            border:1px solid var(--border-color);
+            border-radius:16px;
+            background:color-mix(in srgb, var(--sheet-bg) 94%, transparent);
+            box-shadow:0 4px 15px var(--shadow-color);
+            backdrop-filter:blur(12px);
+        }
+        .map-view-button {
+            width:44px;
+            height:38px;
+            border:0;
+            border-radius:12px;
+            color:var(--muted-color);
+            background:transparent;
+            font:800 12px/1 Manrope, sans-serif;
+            cursor:pointer;
+        }
+        .map-view-button.active { color:#2563eb; background:#dbeafe; }
+        body.dark-mode .map-view-button.active { color:#fff; background:#2563eb; }
+
         
 
         /* Positioned right above the GPS button */
@@ -474,6 +501,7 @@
                 bottom: 20px;
                 right: 390px;
             }
+            #map-view-toggle { right:390px; bottom:80px; }
 
         
 
@@ -500,6 +528,7 @@
             #bottom-sheet:not(.detail-mode) #app-footer { display:none; }
             #bottom-sheet.detail-mode #transit-panel.open { min-height:0; overflow-y:visible; }
             #fab-locate { right:calc(var(--desktop-side-column) + 22px); }
+            #map-view-toggle { right:calc(var(--desktop-side-column) + 22px); }
             #top-bar { padding-right:calc(var(--desktop-side-column) + 24px); }
             #header-journey-search { max-width:680px; }
             #header-journey-search.expanded {
@@ -977,6 +1006,11 @@
 
     <div id="map"></div>
 
+    <div id="map-view-toggle" role="group" aria-label="Map view">
+        <button class="map-view-button active" type="button" data-map-view="2d" aria-pressed="true">2D</button>
+        <button class="map-view-button" type="button" data-map-view="3d" aria-pressed="false">3D</button>
+    </div>
+
     <button id="fab-locate" class="fab-btn" onclick="locateMe()" title="Locate Me" aria-label="Locate me"><svg class="ui-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M12 2v3M12 19v3M2 12h3M19 12h3"></path><circle cx="12" cy="12" r="7"></circle></svg></button>
 
     <div id="bottom-sheet">
@@ -1119,35 +1153,67 @@
         const map = L.map('map', { zoomControl: false }).setView([3.1390, 101.6869], 12);
         L.control.zoom({ position: 'bottomleft' }).addTo(map);
 
-        const GOOGLE_DARK_MAP_STYLES = [
-            { elementType:'geometry', stylers:[{ color:'#1d2c4d' }] },
-            { elementType:'labels.text.fill', stylers:[{ color:'#8ec3b9' }] },
-            { elementType:'labels.text.stroke', stylers:[{ color:'#1a3646' }] },
-            { featureType:'administrative.country', elementType:'geometry.stroke', stylers:[{ color:'#4b6878' }] },
-            { featureType:'administrative.land_parcel', elementType:'labels.text.fill', stylers:[{ color:'#64779e' }] },
-            { featureType:'administrative.province', elementType:'geometry.stroke', stylers:[{ color:'#4b6878' }] },
-            { featureType:'landscape.man_made', elementType:'geometry.stroke', stylers:[{ color:'#334e87' }] },
-            { featureType:'landscape.natural', elementType:'geometry', stylers:[{ color:'#023e58' }] },
-            { featureType:'poi', elementType:'geometry', stylers:[{ color:'#283d6a' }] },
-            { featureType:'poi', elementType:'labels.text.fill', stylers:[{ color:'#6f9ba5' }] },
-            { featureType:'poi', elementType:'labels.text.stroke', stylers:[{ color:'#1d2c4d' }] },
-            { featureType:'poi.park', elementType:'geometry.fill', stylers:[{ color:'#023e58' }] },
-            { featureType:'poi.park', elementType:'labels.text.fill', stylers:[{ color:'#3c7680' }] },
-            { featureType:'road', elementType:'geometry', stylers:[{ color:'#304a7d' }] },
-            { featureType:'road', elementType:'labels.text.fill', stylers:[{ color:'#98a5be' }] },
-            { featureType:'road', elementType:'labels.text.stroke', stylers:[{ color:'#1d2c4d' }] },
-            { featureType:'road.highway', elementType:'geometry', stylers:[{ color:'#2c6675' }] },
-            { featureType:'road.highway', elementType:'geometry.stroke', stylers:[{ color:'#255763' }] },
-            { featureType:'road.highway', elementType:'labels.text.fill', stylers:[{ color:'#b0d5ce' }] },
-            { featureType:'transit', elementType:'labels.text.fill', stylers:[{ color:'#98a5be' }] },
-            { featureType:'transit', elementType:'labels.text.stroke', stylers:[{ color:'#1d2c4d' }] },
-            { featureType:'transit.line', elementType:'geometry.fill', stylers:[{ color:'#283d6a' }] },
-            { featureType:'transit.station', elementType:'geometry', stylers:[{ color:'#3a4762' }] },
-            { featureType:'water', elementType:'geometry', stylers:[{ color:'#0e1626' }] },
-            { featureType:'water', elementType:'labels.text.fill', stylers:[{ color:'#4e6d70' }] }
+        const GOOGLE_LIGHT_MAP_STYLES = [
+            { elementType:'geometry', stylers:[{ color:'#f3f4f6' }] },
+            { elementType:'labels.icon', stylers:[{ visibility:'off' }] },
+            { elementType:'labels.text.fill', stylers:[{ color:'#374151' }] },
+            { elementType:'labels.text.stroke', stylers:[{ color:'#ffffff' },{ weight:3 }] },
+            { featureType:'administrative.land_parcel', stylers:[{ visibility:'off' }] },
+            { featureType:'poi', stylers:[{ visibility:'off' }] },
+            { featureType:'poi.park', elementType:'geometry', stylers:[{ visibility:'on' },{ color:'#e5e7eb' }] },
+            { featureType:'poi.park', elementType:'labels', stylers:[{ visibility:'off' }] },
+            { featureType:'road', elementType:'geometry', stylers:[{ color:'#ffffff' }] },
+            { featureType:'road', elementType:'geometry.stroke', stylers:[{ color:'#d1d5db' }] },
+            { featureType:'road.highway', elementType:'geometry', stylers:[{ color:'#e5e7eb' }] },
+            { featureType:'road.highway', elementType:'geometry.stroke', stylers:[{ color:'#cbd5e1' }] },
+            { featureType:'transit', stylers:[{ visibility:'off' }] },
+            { featureType:'water', elementType:'geometry', stylers:[{ color:'#dff4f6' }] },
+            { featureType:'water', elementType:'labels', stylers:[{ visibility:'off' }] }
         ];
-        window.__mariBusSetMapTheme = enabled => map.native.setOptions({ styles:enabled ? GOOGLE_DARK_MAP_STYLES : null });
+        const GOOGLE_DARK_MAP_STYLES = [
+            { elementType:'geometry', stylers:[{ color:'#18181b' }] },
+            { elementType:'labels.icon', stylers:[{ visibility:'off' }] },
+            { elementType:'labels.text.fill', stylers:[{ color:'#a1a1aa' }] },
+            { elementType:'labels.text.stroke', stylers:[{ color:'#18181b' },{ weight:3 }] },
+            { featureType:'administrative.land_parcel', stylers:[{ visibility:'off' }] },
+            { featureType:'poi', stylers:[{ visibility:'off' }] },
+            { featureType:'poi.park', elementType:'geometry', stylers:[{ visibility:'on' },{ color:'#202423' }] },
+            { featureType:'poi.park', elementType:'labels', stylers:[{ visibility:'off' }] },
+            { featureType:'road', elementType:'geometry', stylers:[{ color:'#29292d' }] },
+            { featureType:'road', elementType:'geometry.stroke', stylers:[{ color:'#111113' }] },
+            { featureType:'road.highway', elementType:'geometry', stylers:[{ color:'#34343a' }] },
+            { featureType:'road.highway', elementType:'geometry.stroke', stylers:[{ color:'#18181b' }] },
+            { featureType:'transit', stylers:[{ visibility:'off' }] },
+            { featureType:'water', elementType:'geometry', stylers:[{ color:'#101820' }] },
+            { featureType:'water', elementType:'labels', stylers:[{ visibility:'off' }] }
+        ];
+        const GOOGLE_MAP_ID_ENABLED = Boolean(window.MARIBUS_CONFIG?.google_maps_map_id);
+        window.__mariBusSetMapTheme = enabled => {
+            if (!GOOGLE_MAP_ID_ENABLED) map.native.setOptions({ styles:enabled ? GOOGLE_DARK_MAP_STYLES : GOOGLE_LIGHT_MAP_STYLES });
+        };
         window.__mariBusSetMapTheme(document.body.classList.contains('dark-mode'));
+
+        function setMapViewMode(mode) {
+            const use3d = mode === '3d';
+            if (use3d && !GOOGLE_MAP_ID_ENABLED) {
+                showMenuNotice('Add GOOGLE_MAPS_MAP_ID to enable Google 3D buildings');
+                return;
+            }
+            document.querySelectorAll('.map-view-button').forEach(button => {
+                const selected = button.dataset.mapView === mode;
+                button.classList.toggle('active', selected);
+                button.setAttribute('aria-pressed', String(selected));
+            });
+            map.native.setHeading(0);
+            map.native.setTilt(use3d ? 45 : 0);
+            if (use3d && (map.native.getZoom() || 0) < 17) {
+                map.native.setZoom(17);
+                showMenuNotice('3D view works best when zoomed in');
+            }
+        }
+        document.querySelectorAll('.map-view-button').forEach(button => {
+            button.addEventListener('click', () => setMapViewMode(button.dataset.mapView));
+        });
 
         // 2. Light and Dark Map Layer URLs
         const lightTileUrl = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';

@@ -67,11 +67,16 @@
 
     class MapWrapper {
         constructor(elementId, options) {
+            const mapId = window.MARIBUS_CONFIG?.google_maps_map_id || undefined;
             this.native = new google.maps.Map(document.getElementById(elementId), {
                 center: { lat: 3.139, lng: 101.6869 }, zoom: 12,
                 mapTypeControl: false, streetViewControl: false, fullscreenControl: false,
                 zoomControl: options?.zoomControl !== false,
                 gestureHandling: 'greedy',
+                mapId,
+                renderingType: mapId ? google.maps.RenderingType?.VECTOR : undefined,
+                tilt: 0,
+                heading: 0,
             });
             this.locationHandlers = {};
         }
