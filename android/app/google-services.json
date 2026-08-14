@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "267642655809",
+    "project_id": "maribus-crds",
+    "storage_bucket": "maribus-crds.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:267642655809:android:31eea6a9008b18af1622c0",
+        "android_client_info": {
+          "package_name": "com.chickenrice.maribus"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "267642655809-f2csmkkhpqsd5j19di5ne85qub2b99c4.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCPanPMNXFigxxVG3QzDOZGR8__9U_rGMs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "267642655809-f2csmkkhpqsd5j19di5ne85qub2b99c4.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

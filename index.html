@@ -1092,6 +1092,20 @@
             document.body.classList.toggle('dark-mode', enabled);
             window.__mariBusSetMapTheme?.(enabled);
         };
+        window.__mariBusSyncSystemBars = async function(dark) {
+            const capacitor = window.Capacitor;
+            if (!capacitor?.isNativePlatform?.()) return;
+            try {
+                const systemBars = capacitor.registerPlugin('MariBusSystemBars');
+                await systemBars.setTheme({ dark:Boolean(dark) });
+            } catch (error) {
+                console.warn('MariBus system bars could not be updated', error);
+            }
+        };
+        new MutationObserver(() => {
+            window.__mariBusSyncSystemBars(document.body.classList.contains('dark-mode'));
+        }).observe(document.body, { attributes:true, attributeFilter:['class'] });
+        window.__mariBusSyncSystemBars(document.body.classList.contains('dark-mode'));
     </script>
     <script type="module" src="/static/sidebar-auth.js"></script>
     <script type="module" src="/static/route-saver.js"></script>

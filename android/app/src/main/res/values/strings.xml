@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">MariBus</string>
+    <string name="title_activity_main">MariBus</string>
+    <string name="package_name">com.chickenrice.maribus</string>
+    <string name="custom_url_scheme">com.chickenrice.maribus</string>
+</resources>

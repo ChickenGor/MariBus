@@ -1,0 +1,19 @@
+{
+  "appId": "com.chickenrice.maribus",
+  "appName": "MariBus",
+  "webDir": "www",
+  "server": {
+    "url": "https://mari-bus.vercel.app/",
+    "cleartext": false
+  },
+  "android": {
+    "allowMixedContent": false,
+    "adjustMarginsForEdgeToEdge": "force"
+  },
+  "plugins": {
+    "FirebaseAuthentication": {
+      "skipNativeAuth": false,
+      "providers": ["google.com"]
+    }
+  }
+}
