@@ -191,6 +191,8 @@ def route_info(route_map, trip_id, route_id):
             "long_name": row.get("route_long_name") or "Scheduled service",
             "headsign": row.get("trip_headsign") or row.get("destination_name") or "",
             "destination": row.get("destination_name") or row.get("trip_headsign") or "",
+            "route_id": row.get("route_id") or route_id or "",
+            "trip_id": row.get("trip_id") or "",
         }
     clean_route = route_id.split("_")[-1] if route_id and "_" in route_id else route_id
     return {
@@ -198,6 +200,8 @@ def route_info(route_map, trip_id, route_id):
         "long_name": "Live dispatched route" if route_id else "Active fleet vehicle",
         "headsign": "",
         "destination": "",
+        "route_id": route_id or "",
+        "trip_id": "",
     }
 
 

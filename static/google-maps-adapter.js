@@ -186,8 +186,11 @@
             return this;
         }
         clearLayers() {
-            if (this.clusterer) this.clusterer.clearMarkers();
             this.items.forEach(item => item.remove());
+            if (this.clusterer) {
+                this.clusterer.clearMarkers();
+                this.clusterer.render();
+            }
             this.items = [];
         }
     }

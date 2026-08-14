@@ -1325,6 +1325,7 @@
         let activeRouteLayer = L.layerGroup().addTo(map);
         let journeyPlaceLayer = L.layerGroup().addTo(map);
         let journeyLiveVehicleLayer = L.layerGroup().addTo(map);
+        let trackedBusRouteLayer = L.layerGroup().addTo(map);
         let walkingDirectionsRenderer = null;
         let routeDirectionsRenderers = [];
         let liveJourneyTrackingTimer = null;
@@ -1395,7 +1396,10 @@
                     const result = await response.json();
                     return result.success ? result.data.map(vehicle => ({ ...vehicle, source_agency:agency })) : [];
                 }));
-                const vehicles = feedResults.flat();
+                const vehicles = [...new Map(feedResults.flat().filter(vehicle => vehicle?.vehicle?.id).map(vehicle => [
+                    `${vehicle.source_agency || selectedAgency}:${vehicle.vehicle.id}`,
+                    vehicle
+                ])).values()];
 
                 markersGroup.clearLayers();
                 busMarkersDict = {};
@@ -1502,6 +1506,9 @@
                             vehicleId,
                             routeShortName,
                             destinationName,
+                            sourceAgency,
+                            routeId:vehicle.route_info?.route_id || vehicle.trip?.routeId || '',
+                            tripId:vehicle.route_info?.trip_id ? (vehicle.trip?.tripId || '') : '',
                             latitude:Number(vehicle.position.latitude),
                             longitude:Number(vehicle.position.longitude),
                             speedKmh:vehicle.position.speed > 0 ? Math.round(vehicle.position.speed * 3.6) : null
@@ -1546,10 +1553,33 @@
             }
         }
 
+        async function drawTrackedBusRoute(details) {
+            trackedBusRouteLayer.clearLayers();
+            if (!details?.routeId || !details?.tripId) return;
+            try {
+                const params = new URLSearchParams({ agency:details.sourceAgency, trip_id:details.tripId });
+                const response = await fetch(`${API_BASE}/api/routes/${encodeURIComponent(details.routeId)}?${params}`);
+                const result = await response.json();
+                if (!result.success) throw new Error(result.error || 'Route unavailable');
+                const data = result.data;
+                const coordinates = data.shape?.length
+                    ? data.shape.map(point => [Number(point.lat), Number(point.lon)])
+                    : data.stops.map(stop => [Number(stop.stop_lat), Number(stop.stop_lon)]);
+                if (coordinates.length < 2 || trackedBusId !== details.vehicleId) return;
+                const color = safeRouteColor(data.route?.route_color, details.sourceAgency);
+                L.polyline(coordinates, { color:'#7a163f', weight:12, opacity:.95 }).addTo(trackedBusRouteLayer);
+                L.polyline(coordinates, { color, weight:8, opacity:1 }).addTo(trackedBusRouteLayer);
+            } catch (error) {
+                console.warn('Tracked bus route unavailable', error);
+                showMenuNotice('Tracking the bus, but its route line is unavailable');
+            }
+        }
+
         function startBusTracking(vehicleId) {
             if (!busLiveDataDict[vehicleId]) return showMenuNotice('This bus is no longer in the latest live update');
             trackedBusId = vehicleId;
             refreshTrackedBus();
+            drawTrackedBusRoute(busLiveDataDict[vehicleId]);
             window.__mariBusInfoWindow?.close();
             showMenuNotice(`Tracking ${vehicleId}`);
         }
@@ -1557,6 +1587,7 @@
         function stopBusTracking(notify = true) {
             const previousBus = trackedBusId;
             trackedBusId = null;
+            trackedBusRouteLayer.clearLayers();
             document.getElementById('bus-tracking-banner').hidden = true;
             if (notify && previousBus) showMenuNotice(`Stopped tracking ${previousBus}`);
         }
