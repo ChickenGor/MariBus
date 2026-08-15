@@ -1,0 +1,81 @@
+name: Refresh GTFS data
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "15 1 * * 1"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: refresh-gtfs
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Preserve deployment baseline
+        run: cp -R gtfs_agencies "$RUNNER_TEMP/gtfs-baseline"
+
+      - name: Download and package current feeds
+        run: python build_static_db.py
+
+      - name: Validate feeds against deployment baseline
+        run: |
+          set +e
+          python validate_gtfs_db.py \
+            --database gtfs_static.db \
+            --baseline-dir "$RUNNER_TEMP/gtfs-baseline" \
+            --json "$RUNNER_TEMP/gtfs-validation.json" \
+            --markdown "$RUNNER_TEMP/gtfs-validation.md"
+          status=$?
+          cat "$RUNNER_TEMP/gtfs-validation.md" >> "$GITHUB_STEP_SUMMARY"
+          exit $status
+
+      - name: Upload validation report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gtfs-validation-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/gtfs-validation.json
+            ${{ runner.temp }}/gtfs-validation.md
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Create review pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git add gtfs_agencies
+          if git diff --cached --quiet; then
+            echo "No GTFS package changes detected." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          branch="automation/gtfs-refresh-${GITHUB_RUN_ID}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$branch"
+          git commit -m "Refresh GTFS transit data"
+          git push origin "$branch"
+          gh pr create \
+            --base main \
+            --head "$branch" \
+            --title "Refresh GTFS transit data" \
+            --body "Automated weekly transit-data refresh. The feed passed completeness, coordinate, reference-integrity, and baseline-drop validation. Review the workflow summary and validation artifact before merging."

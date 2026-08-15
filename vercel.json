@@ -4,7 +4,7 @@
   "functions": {
     "app.py": {
       "maxDuration": 60,
-      "excludeFiles": "{otp/**,build_static_db.py,prepare_otp_data.py}"
+      "excludeFiles": "{otp/**,build_static_db.py,prepare_otp_data.py,validate_gtfs_db.py}"
     }
   }
 }

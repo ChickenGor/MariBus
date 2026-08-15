@@ -132,8 +132,11 @@ def package_agency_databases(database_path):
 
                 packaged_path = os.path.join(package_directory, f"{agency}.db.gz")
                 packaged_temporary_path = packaged_path + ".tmp"
-                with open(agency_database_path, "rb") as raw, gzip.open(packaged_temporary_path, "wb", compresslevel=9) as compressed:
-                    shutil.copyfileobj(raw, compressed)
+                # A fixed gzip timestamp keeps identical feeds byte-for-byte
+                # stable, preventing empty weekly update pull requests.
+                with open(agency_database_path, "rb") as raw, open(packaged_temporary_path, "wb") as output:
+                    with gzip.GzipFile(filename="", mode="wb", fileobj=output, compresslevel=9, mtime=0) as compressed:
+                        shutil.copyfileobj(raw, compressed)
                 os.replace(packaged_temporary_path, packaged_path)
                 print(f"Packaged {agency}: {os.path.getsize(packaged_path)} bytes")
             finally:
