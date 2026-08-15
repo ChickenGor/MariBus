@@ -17,6 +17,7 @@ class MariBusApiTests(unittest.TestCase):
             os.remove(cls.missing_database)
         maribus.DATABASE_PATH = cls.missing_database
         maribus._agency_database_paths.clear()
+        maribus._rate_limit_buckets.clear()
         maribus.app.config.update(TESTING=True)
         cls.client = maribus.app.test_client()
 
@@ -25,6 +26,9 @@ class MariBusApiTests(unittest.TestCase):
         maribus.DATABASE_PATH = cls.original_database_path
         if os.path.exists(cls.missing_database):
             os.remove(cls.missing_database)
+
+    def setUp(self):
+        maribus._rate_limit_buckets.clear()
 
     def test_health_reports_packaged_operator_databases(self):
         response = self.client.get("/api/health")
@@ -85,6 +89,30 @@ class MariBusApiTests(unittest.TestCase):
     def test_unknown_page_returns_404(self):
         response = self.client.get("/not-a-maribus-page")
         self.assertEqual(response.status_code, 404)
+
+    def test_api_responses_include_security_headers(self):
+        response = self.client.get("/api/health")
+        self.assertEqual(response.headers["X-Content-Type-Options"], "nosniff")
+        self.assertEqual(response.headers["X-Frame-Options"], "SAMEORIGIN")
+        self.assertIn("geolocation=(self)", response.headers["Permissions-Policy"])
+
+    def test_feedback_rate_limit_returns_retry_after(self):
+        maribus._rate_limit_buckets.clear()
+        with patch.dict(os.environ, {"RESEND_API_KEY": "", "FEEDBACK_TO_EMAIL": ""}):
+            responses = [
+                self.client.post("/api/feedback", data={"message": "A valid feedback message"})
+                for _ in range(6)
+            ]
+        self.assertEqual(responses[-1].status_code, 429)
+        self.assertGreaterEqual(int(responses[-1].headers["Retry-After"]), 1)
+
+    def test_oversized_feedback_is_rejected(self):
+        response = self.client.post(
+            "/api/feedback",
+            data=b"x" * (maribus.app.config["MAX_CONTENT_LENGTH"] + 1),
+            content_type="application/octet-stream",
+        )
+        self.assertEqual(response.status_code, 413)
 
 
 if __name__ == "__main__":

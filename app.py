@@ -7,8 +7,10 @@ import shutil
 import sqlite3
 import tempfile
 import time
+from collections import deque
 from contextlib import contextmanager
 from datetime import datetime
+from functools import wraps
 from threading import Lock
 
 import requests
@@ -19,6 +21,7 @@ from google.transit import gtfs_realtime_pb2
 
 
 app = Flask(__name__)
+app.config["MAX_CONTENT_LENGTH"] = int(os.getenv("MAX_REQUEST_BYTES", str(6 * 1024 * 1024)))
 CORS(app)
 
 LOCAL_DATABASE_PATH = os.path.join(os.path.dirname(__file__), "gtfs_static.db")
@@ -61,7 +64,73 @@ _road_geometry_cache = {}
 _segment_distance_cache = {}
 _cache_lock = Lock()
 _database_lock = Lock()
+_rate_limit_lock = Lock()
 _agency_database_paths = {}
+_rate_limit_buckets = {}
+
+
+def client_identifier():
+    # Vercel supplies the connecting address through Flask's remote_addr. The
+    # limiter is an abuse-control layer, not an authentication mechanism.
+    return request.remote_addr or "unknown"
+
+
+def enforce_rate_limit(scope, limit, window_seconds):
+    now = time.monotonic()
+    key = (client_identifier(), scope)
+    with _rate_limit_lock:
+        bucket = _rate_limit_buckets.setdefault(key, deque())
+        cutoff = now - window_seconds
+        while bucket and bucket[0] <= cutoff:
+            bucket.popleft()
+        if len(bucket) >= limit:
+            retry_after = max(1, math.ceil(bucket[0] + window_seconds - now))
+            response = jsonify({"success": False, "error": "Too many requests. Please try again shortly."})
+            response.status_code = 429
+            response.headers["Retry-After"] = str(retry_after)
+            return response
+        bucket.append(now)
+        # Keep memory bounded on long-running development/Gunicorn instances.
+        if len(_rate_limit_buckets) > 5000:
+            stale_keys = [item_key for item_key, values in _rate_limit_buckets.items() if not values or values[-1] <= cutoff]
+            for item_key in stale_keys[:1000]:
+                _rate_limit_buckets.pop(item_key, None)
+    return None
+
+
+def rate_limited(limit, window_seconds, scope=None):
+    def decorator(handler):
+        @wraps(handler)
+        def wrapped(*args, **kwargs):
+            blocked = enforce_rate_limit(scope or request.endpoint or handler.__name__, limit, window_seconds)
+            return blocked if blocked is not None else handler(*args, **kwargs)
+        return wrapped
+    return decorator
+
+
+@app.before_request
+def limit_api_requests():
+    if request.content_length and request.content_length > app.config["MAX_CONTENT_LENGTH"]:
+        return request_too_large(None)
+    if request.path.startswith("/api/"):
+        return enforce_rate_limit("api", 300, 60)
+    return None
+
+
+@app.after_request
+def add_security_headers(response):
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=(self)")
+    if request.is_secure:
+        response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+    return response
+
+
+@app.errorhandler(413)
+def request_too_large(_error):
+    return jsonify({"success": False, "error": "The request is too large. Photos must be smaller than 5 MB."}), 413
 
 
 class UnsupportedAgency(ValueError):
@@ -462,6 +531,7 @@ def frontend_config():
 
 
 @app.post("/api/feedback")
+@rate_limited(5, 60 * 60, "feedback")
 def send_feedback():
     if request.form.get("website"):
         return jsonify({"success": True})
@@ -519,6 +589,7 @@ def app_page(page_name):
 
 
 @app.get("/api/live-buses")
+@rate_limited(120, 60, "live-buses")
 def get_live_buses():
     agency = request.args.get("agency", "rapid-bus-kl")
     url = API_URLS.get(agency)
@@ -995,6 +1066,7 @@ def search_routes():
 
 
 @app.get("/api/routes/<route_id>/road-geometry")
+@rate_limited(30, 60, "road-geometry")
 def get_route_road_geometry(route_id):
     agency = request.args.get("agency", "rapid-bus-kl")
     requested_trip_id = request.args.get("trip_id", "").strip()
@@ -1086,6 +1158,7 @@ def get_route_road_geometry(route_id):
 
 
 @app.get("/api/journeys")
+@rate_limited(90, 60, "journeys")
 def plan_journey():
     agency = request.args.get("agency", "rapid-bus-kl")
     from_stop = request.args.get("from_stop", "").strip()
@@ -1183,6 +1256,7 @@ def plan_journey():
 
 
 @app.get("/api/journeys/nearby")
+@rate_limited(90, 60, "journeys-nearby")
 def plan_nearby_journey():
     agency = request.args.get("agency", "rapid-bus-kl")
     coordinates = {
@@ -1324,6 +1398,7 @@ def coordinate_argument(name):
 
 
 @app.get("/api/journeys/multimodal")
+@rate_limited(60, 60, "journeys-multimodal")
 def plan_multimodal_journey():
     otp_url = os.getenv("OTP_GRAPHQL_URL", "").strip()
     if not otp_url:
