@@ -90,6 +90,13 @@ class MariBusApiTests(unittest.TestCase):
         response = self.client.get("/not-a-maribus-page")
         self.assertEqual(response.status_code, 404)
 
+    def test_privacy_terms_and_account_pages_are_available(self):
+        for path in ("/privacy-policy", "/terms", "/account"):
+            with self.subTest(path=path):
+                response = self.client.get(path)
+                self.assertEqual(response.status_code, 200)
+                response.close()
+
     def test_api_responses_include_security_headers(self):
         response = self.client.get("/api/health")
         self.assertEqual(response.headers["X-Content-Type-Options"], "nosniff")

@@ -33,7 +33,7 @@ service cloud.firestore {
         && request.auth.uid == userId
         && request.resource.data.subscriptionPlan == resource.data.subscriptionPlan
         && request.resource.data.subscriptionEnd == resource.data.subscriptionEnd;
-      allow delete: if false;
+      allow delete: if signedInAs(userId);
 
       match /savedRoutes/{routeId} {
         allow read, delete: if signedInAs(userId);
