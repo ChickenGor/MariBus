@@ -7,6 +7,7 @@ import shutil
 import sqlite3
 import tempfile
 import time
+from contextlib import contextmanager
 from datetime import datetime
 from threading import Lock
 
@@ -61,6 +62,15 @@ _segment_distance_cache = {}
 _cache_lock = Lock()
 _database_lock = Lock()
 _agency_database_paths = {}
+
+
+class UnsupportedAgency(ValueError):
+    pass
+
+
+@app.errorhandler(UnsupportedAgency)
+def unsupported_agency(error):
+    return jsonify({"success": False, "error": str(error)}), 400
 
 
 def point_distance_m(first, second):
@@ -266,10 +276,18 @@ def load_route_override(agency, route_id, direction_id):
         return []
 
 
+@contextmanager
 def db_connection(agency=None):
+    if agency is None and has_request_context():
+        agency = request.args.get("agency", "rapid-bus-kl").strip() or "rapid-bus-kl"
+    if agency is not None and agency not in API_URLS:
+        raise UnsupportedAgency("Invalid agency selected")
     connection = sqlite3.connect(ensure_database_path(agency))
     connection.row_factory = sqlite3.Row
-    return connection
+    try:
+        yield connection
+    finally:
+        connection.close()
 
 
 def ensure_database_path(agency=None):
@@ -277,7 +295,7 @@ def ensure_database_path(agency=None):
     if os.path.exists(DATABASE_PATH):
         return DATABASE_PATH
     if agency is None and has_request_context():
-        agency = request.args.get("agency", "").strip()
+        agency = request.args.get("agency", "rapid-bus-kl").strip() or "rapid-bus-kl"
     if agency in API_URLS:
         packaged_agency_path = os.path.join(PACKAGED_DATABASE_DIRECTORY, f"{agency}.db.gz")
         if os.path.exists(packaged_agency_path):
