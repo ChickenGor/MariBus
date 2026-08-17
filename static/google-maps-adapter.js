@@ -109,12 +109,15 @@
             if (this.native) { this.native.setMap(nativeMap); return; }
             const text = this.options.icon?.text || '';
             const isStop = this.options.icon?.kind === 'stop';
+            const isEndpoint = this.options.icon?.kind === 'endpoint';
             const markerColor = this.options.icon?.color || '#2563eb';
             const pillWidth = Math.max(46, Math.min(104, text.length * 8 + 22));
             const pillSvg = text ? `<svg xmlns="http://www.w3.org/2000/svg" width="${pillWidth}" height="34" viewBox="0 0 ${pillWidth} 34"><rect x="1" y="1" width="${pillWidth - 2}" height="32" rx="16" fill="${markerColor}" stroke="white" stroke-width="2"/><text x="50%" y="22" text-anchor="middle" font-family="Manrope,Arial,sans-serif" font-size="12" font-weight="800" fill="white">${String(text).replace(/[&<>"']/g, '')}</text></svg>` : '';
+            const endpointSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="38" height="46" viewBox="0 0 38 46"><path d="M19 2C9.6 2 2 9.5 2 18.8 2 31 19 44 19 44s17-13 17-25.2C36 9.5 28.4 2 19 2Z" fill="${markerColor}" stroke="white" stroke-width="3"/><circle cx="19" cy="18" r="10" fill="white" fill-opacity=".16"/><text x="19" y="23" text-anchor="middle" font-family="Manrope,Arial,sans-serif" font-size="14" font-weight="900" fill="white">${String(text).replace(/[&<>"']/g, '')}</text></svg>`;
             this.native = new google.maps.Marker({
                 map:nativeMap, position:this.point,
                 icon: isStop ? { path:google.maps.SymbolPath.CIRCLE, scale:5, fillColor:'#ffffff', fillOpacity:1, strokeColor:'#475569', strokeWeight:1.5 }
+                    : isEndpoint ? { url:`data:image/svg+xml;charset=UTF-8,${encodeURIComponent(endpointSvg)}`, scaledSize:new google.maps.Size(38, 46), anchor:new google.maps.Point(19, 44) }
                     : text ? { url:`data:image/svg+xml;charset=UTF-8,${encodeURIComponent(pillSvg)}`, scaledSize:new google.maps.Size(pillWidth, 34), anchor:new google.maps.Point(pillWidth / 2, 17) }
                     : undefined,
                 title:this.options.title || '',
@@ -221,7 +224,7 @@
                 : html.includes('mybas-pill') ? '#f93999'
                 : html.includes('rapid-pill') ? '#f60404'
                 : undefined);
-            return { text:textFromIconHtml(html), kind:html.includes('stop-marker') ? 'stop' : 'vehicle', color };
+            return { text:textFromIconHtml(html), kind:html.includes('journey-endpoint-marker') ? 'endpoint' : html.includes('stop-marker') ? 'stop' : 'vehicle', color };
         },
         marker:(point, options) => new MarkerWrapper(point, options),
         circleMarker:(point, options) => new CircleWrapper(point, options),

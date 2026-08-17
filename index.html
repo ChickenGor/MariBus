@@ -785,7 +785,7 @@
         @keyframes circle-inner162 { 0%{stroke-dashoffset:9} 25%{stroke-dashoffset:0} 65%{stroke-dashoffset:106} 80%,100%{stroke-dashoffset:97} }
         @keyframes text-animation76 { 0%{clip-path:inset(0 100% 0 0)} 50%{clip-path:inset(0)} 100%{clip-path:inset(0 0 0 100%)} }
         @media (prefers-reduced-motion:reduce) { #wifi-loader * { animation-duration:4s !important; } }
-        .journey-card.modern { cursor:pointer; padding:12px; margin:8px 0; transition:border-color .2s, background .2s; }
+        .journey-card.modern { cursor:pointer; padding:10px; margin:6px 0; transition:border-color .2s, background .2s; }
         .journey-card.modern.selected { border:2px solid #2563eb; background:rgba(37,99,235,.04); }
         .journey-option-top { display:block; }
         .journey-option-head { display:flex; align-items:center; justify-content:space-between; gap:12px; }
@@ -796,12 +796,12 @@
         .journey-total small { display:block; margin-top:5px; font-size:12px; letter-spacing:0; color:var(--text-muted); }
         .journey-main-time { font-size:15px; font-weight:900; white-space:nowrap; }
         .journey-steps { display:flex; align-items:center; flex-wrap:wrap; gap:6px; margin-top:8px; color:var(--text-muted); font-size:12px; }
-        .journey-board { margin-top:7px; color:var(--text-muted); font-size:11px; line-height:1.4; }
+        .journey-board { margin-top:5px; color:var(--text-muted); font-size:11px; line-height:1.35; }
         .journey-fare { margin-top:7px; display:flex; align-items:baseline; gap:6px; color:var(--text-main); font-size:11px; }
         .journey-fare strong { font-size:13px; }
         .journey-fare-note { color:var(--text-muted); }
         .journey-alternatives { margin-top:5px; color:var(--text-muted); font-size:10px; }
-        .journey-card.modern .route-action { margin-top:8px; padding:8px 12px; }
+        .journey-card.modern .route-action { margin-top:6px; padding:7px 12px; }
         .journey-actions { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:8px; }
         .journey-actions .route-action { margin-top:0; }
         .save-route-action { background:transparent !important; color:var(--text-main); border:1px solid var(--border) !important; }
@@ -2731,12 +2731,12 @@
         function updateJourneyPlaceMarkers() {
             journeyPlaceLayer.clearLayers();
             const selected = [
-                { item:journeySelection.from, label:'A', title:'Starting point' },
-                { item:journeySelection.to, label:'B', title:'Destination' },
+                { item:journeySelection.from, label:'A', title:'Starting point', color:'#2563eb' },
+                { item:journeySelection.to, label:'B', title:'Destination', color:'#f93999' },
             ].filter(entry => entry.item?.place);
             const markers = selected.map(entry => {
                 const place = entry.item.place;
-                const icon = L.divIcon({ html:`<div class="route-pill">${entry.label}</div>`, className:'' });
+                const icon = L.divIcon({ html:`<div class="route-pill journey-endpoint-marker" style="background-color:${entry.color}">${entry.label}</div>`, className:'' });
                 return L.marker([place.lat, place.lng], { icon, title:`${entry.title}: ${place.name}` })
                     .bindPopup(`<div class="custom-popup"><strong>${entry.title}</strong><div>${escapeHtml(place.name)}</div></div>`)
                     .addTo(journeyPlaceLayer);
@@ -3261,7 +3261,7 @@
                 map:map.native,
                 directions:response,
                 routeIndex,
-                suppressMarkers:false,
+                suppressMarkers:true,
                 preserveViewport:false,
             });
             routeDirectionsRenderers.push(renderer);
@@ -3293,9 +3293,10 @@
                     routeIndex,
                     walkSeconds:googleRouteWalkingSeconds(route),
                     durationSeconds:Number(route.legs?.[0]?.duration?.value || Number.MAX_SAFE_INTEGER),
+                    arrivalTimestamp:Number(route.legs?.[0]?.arrival_time?.value?.getTime?.() || Number.MAX_SAFE_INTEGER),
                 })).sort((a, b) => transitJourneyPriority === 'less-walking'
-                    ? a.walkSeconds - b.walkSeconds || a.durationSeconds - b.durationSeconds
-                    : a.durationSeconds - b.durationSeconds || a.walkSeconds - b.walkSeconds);
+                    ? a.walkSeconds - b.walkSeconds || a.arrivalTimestamp - b.arrivalTimestamp
+                    : a.arrivalTimestamp - b.arrivalTimestamp || a.durationSeconds - b.durationSeconds || a.walkSeconds - b.walkSeconds);
                 const priorityControl = `<div class="transit-priority" role="group" aria-label="Journey priority">
                     <button type="button" data-transit-priority="fastest" class="${transitJourneyPriority === 'fastest' ? 'active' : ''}">Arrive faster</button>
                     <button type="button" data-transit-priority="less-walking" class="${transitJourneyPriority === 'less-walking' ? 'active' : ''}">Walk less</button>
@@ -3325,7 +3326,7 @@
                     agency:'google-transit',
                 };
                 activeTrackedJourneyIndex = rankedRoutes[0].routeIndex;
-                openTransitPanel('Public transport options', transitJourneyPriority === 'less-walking' ? 'Prioritising less walking' : 'Prioritising arrival time', priorityControl + cards, preserveSheetState);
+                openTransitPanel('', '', priorityControl + cards, preserveSheetState);
                 document.querySelectorAll('[data-transit-priority]').forEach(button => button.addEventListener('click', () => {
                     const priority = button.dataset.transitPriority;
                     if (priority === transitJourneyPriority) return;
