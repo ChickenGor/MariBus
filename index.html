@@ -796,6 +796,8 @@
         .journey-total small { display:block; margin-top:5px; font-size:12px; letter-spacing:0; color:var(--text-muted); }
         .journey-main-time { font-size:15px; font-weight:900; white-space:nowrap; }
         .journey-steps { display:flex; align-items:center; flex-wrap:wrap; gap:6px; margin-top:8px; color:var(--text-muted); font-size:12px; }
+        .journey-route.mode-labelled { display:inline-flex; align-items:center; gap:5px; }
+        .journey-route.mode-labelled .inline-icon { width:13px; height:13px; }
         .journey-board { margin-top:5px; color:var(--text-muted); font-size:11px; line-height:1.35; }
         .journey-fare { margin-top:7px; display:flex; align-items:baseline; gap:6px; color:var(--text-main); font-size:11px; }
         .journey-fare strong { font-size:13px; }
@@ -1392,8 +1394,10 @@
         let liveJourneyTrackingTimer = null;
         let routeBrowseTimer = null;
         let activeTrackedJourneyIndex = 0;
+        let activeJourneyRouteNames = new Set();
         let currentJourneyOptions = [];
         let journeyMapFocused = false;
+        let journeyDetailBackAction = null;
         let countdownValue = 30;
         let countdownInterval;
         const journeySelection = { from: null, to: null };
@@ -1932,6 +1936,15 @@
         }
 
         function closeTransitPanel() {
+            if (journeyDetailBackAction) {
+                const goBack = journeyDetailBackAction;
+                journeyDetailBackAction = null;
+                const closeButton = document.querySelector('#transit-panel .panel-close');
+                closeButton.innerHTML = '&times;';
+                closeButton.setAttribute('aria-label', 'Back to active service');
+                goBack();
+                return;
+            }
             document.getElementById('transit-panel').classList.remove('open');
             const sheet = document.getElementById('bottom-sheet');
             sheet.classList.remove('detail-mode', 'sheet-half', 'sheet-expanded', 'sheet-dragging');
@@ -1945,8 +1958,15 @@
             journeyLiveVehicleLayer.clearLayers();
             if (routeBrowseTimer) clearInterval(routeBrowseTimer);
             routeBrowseTimer = null;
-            journeyMapFocused = false;
-            fetchBuses();
+            if (canResumeJourney) {
+                journeyMapFocused = true;
+                showRelatedJourneyBuses();
+                document.getElementById('refresh-timer').innerText = 'Journey mode';
+            } else {
+                journeyMapFocused = false;
+                activeJourneyRouteNames.clear();
+                fetchBuses();
+            }
         }
 
         function resumeTransitPanel() {
@@ -1970,6 +1990,31 @@
             if (countdownInterval) clearInterval(countdownInterval);
             countdownInterval = null;
             document.getElementById('refresh-timer').innerText = 'Journey mode';
+        }
+
+        function setActiveJourneyRoutes(routeNames) {
+            activeJourneyRouteNames = new Set((routeNames || []).map(name => String(name || '').trim().toUpperCase()).filter(Boolean));
+            showRelatedJourneyBuses();
+        }
+
+        function showRelatedJourneyBuses() {
+            markersGroup.clearLayers();
+            if (!activeJourneyRouteNames.size) return;
+            const related = [];
+            const seen = new Set();
+            activeJourneyRouteNames.forEach(routeName => {
+                (routeMarkersDict[routeName] || []).forEach(marker => {
+                    if (seen.has(marker)) return;
+                    seen.add(marker);
+                    related.push(marker);
+                });
+            });
+            if (related.length) markersGroup.addLayers(related);
+        }
+
+        function journeyRouteNames(journey) {
+            const legs = journey?.legs?.length ? journey.legs : [journey];
+            return legs.map(leg => compactRouteLabel(leg?.route_id, leg?.route_short_name));
         }
 
         function createStopMarker(stop, color = null) {
@@ -2888,6 +2933,7 @@
             }
             // Once A and B are ready, the full fleet is unrelated. Hide it and
             // pause its refresh loop; selected-journey live tracking continues.
+            activeJourneyRouteNames.clear();
             focusJourneyMap();
             if (journeySelection.from.place && journeySelection.to.place) {
                 if (window.MARIBUS_CONFIG?.multimodal_routing_enabled) {
@@ -2933,8 +2979,12 @@
                         <button class="route-action" data-journey-index="${index}">Show route</button>
                     </article>`).join('');
                 openTransitPanel('Journey options', result.notice, html);
+                activeTrackedJourneyIndex = 0;
+                setActiveJourneyRoutes(journeyRouteNames(result.data[0]));
                 document.querySelectorAll('[data-journey-index]').forEach(button => button.addEventListener('click', () => {
                     const journey = result.data[Number(button.dataset.journeyIndex)];
+                    activeTrackedJourneyIndex = Number(button.dataset.journeyIndex);
+                    setActiveJourneyRoutes(journeyRouteNames(journey));
                     showJourneySegment(journey);
                 }));
             } catch (error) {
@@ -3004,6 +3054,7 @@
                     card.classList.add('selected');
                     activeTrackedJourneyIndex = Number(card.dataset.nearbyIndex);
                     const journey = result.data[Number(card.dataset.nearbyIndex)];
+                    setActiveJourneyRoutes(journeyRouteNames(journey));
                     if (journey.legs) showJourneyRoutes(journey);
                     else showJourneySegment(journey, true);
                     updateLiveJourneyTracking(result.data);
@@ -3020,6 +3071,7 @@
                 }));
                 const firstJourney = result.data[0];
                 activeTrackedJourneyIndex = 0;
+                setActiveJourneyRoutes(journeyRouteNames(firstJourney));
                 if (firstJourney.legs) showJourneyRoutes(firstJourney);
                 else showJourneySegment(firstJourney, true);
                 startLiveJourneyTracking(result.data);
@@ -3234,8 +3286,21 @@
             const line = transit.line || {};
             const vehicle = line.vehicle || {};
             const route = line.short_name || line.name || vehicle.name || 'Transit';
+            const mode = googleTransitVehicleMode(vehicle);
+            const labelledRoute = new RegExp(`^${mode.label}\\b`, 'i').test(route) ? route : `${mode.label} ${route}`;
             const color = /^#[0-9a-f]{6}$/i.test(line.color || '') ? line.color : '#2563eb';
-            return `<span class="journey-route" style="background:${color}">${escapeHtml(route)}</span>`;
+            return `<span class="journey-route mode-labelled" style="background:${color}" title="${escapeHtml(labelledRoute)}">${iconSvg(mode.icon, 'inline-icon')}<span>${escapeHtml(labelledRoute)}</span></span>`;
+        }
+
+        function googleTransitVehicleMode(vehicle = {}) {
+            const type = String(vehicle.type || '').toUpperCase();
+            const suppliedName = String(vehicle.name || '').trim();
+            if (type.includes('BUS') || /bus/i.test(suppliedName)) return { icon:'bus', label:'Bus' };
+            const labels = {
+                MONORAIL:'Monorail', TRAM:'Tram', SUBWAY:'MRT/LRT', METRO_RAIL:'MRT/LRT',
+                HEAVY_RAIL:'Train', COMMUTER_TRAIN:'Train', RAIL:'Train', HIGH_SPEED_TRAIN:'Train',
+            };
+            return { icon:'train', label:labels[type] || suppliedName || 'Train' };
         }
 
         function googleDirectionsLocation(place) {
@@ -3265,6 +3330,13 @@
             };
         }
 
+        function googleTransitRouteNames(route) {
+            return (route?.legs?.[0]?.steps || [])
+                .filter(step => step.travel_mode === google.maps.TravelMode.TRANSIT)
+                .map(step => step.transit?.line?.short_name || step.transit?.line?.name || '')
+                .filter(Boolean);
+        }
+
         function plainGoogleInstruction(value) {
             const holder = document.createElement('div');
             holder.innerHTML = value || '';
@@ -3272,13 +3344,23 @@
         }
 
         function googleTransitLiveStatus(transitSteps) {
-            const routeNames = new Set(transitSteps.map(step => String(step.transit?.line?.short_name || '').trim().toUpperCase()).filter(Boolean));
-            const matches = Object.values(busLiveDataDict).filter(vehicle => routeNames.has(String(vehicle.routeShortName || '').trim().toUpperCase()));
-            if (!routeNames.size) return '';
-            const routes = [...routeNames].join(', ');
-            return matches.length
-                ? `<div class="live-journey-status live"><span class="live-dot"></span><span>Live feed · ${matches.length} bus${matches.length === 1 ? '' : 'es'} detected on ${escapeHtml(routes)}</span></div>`
-                : `<div class="live-journey-status"><span class="live-dot"></span><span>No live vehicle currently matched to ${escapeHtml(routes)}</span></div>`;
+            const firstTransit = transitSteps[0];
+            const routeName = String(firstTransit?.transit?.line?.short_name || '').trim().toUpperCase();
+            if (!routeName) return '';
+            const matches = Object.values(busLiveDataDict).filter(vehicle => String(vehicle.routeShortName || '').trim().toUpperCase() === routeName);
+            const location = firstTransit.transit?.departure_stop?.location;
+            const boardPoint = location ? { lat:Number(location.lat()), lng:Number(location.lng()) } : null;
+            const estimates = boardPoint ? matches.map(vehicle => {
+                const distance = distanceMetres({ lat:vehicle.latitude, lng:vehicle.longitude }, boardPoint);
+                const speedMetresPerSecond = Math.max(4.5, Number(vehicle.speedKmh || 22) / 3.6);
+                return { vehicle, distance, minutes:Math.max(1, Math.ceil((distance * 1.3) / speedMetresPerSecond / 60)) };
+            }).filter(item => Number.isFinite(item.distance) && item.distance < 60000).sort((a, b) => a.minutes - b.minutes) : [];
+            if (estimates.length) {
+                const closest = estimates[0];
+                const station = firstTransit.transit?.departure_stop?.name || 'boarding station';
+                return `<div class="live-journey-status live"><span class="live-dot"></span><span>Estimated ~${closest.minutes} min to ${escapeHtml(station)} · ${matches.length} live bus${matches.length === 1 ? '' : 'es'} on ${escapeHtml(routeName)}</span></div>`;
+            }
+            return `<div class="live-journey-status"><span class="live-dot"></span><span>No approaching live ${escapeHtml(routeName)} bus can be estimated</span></div>`;
         }
 
         function googleJourneyFlowHtml(route) {
@@ -3290,10 +3372,11 @@
                 const transit = step.transit || {};
                 const line = transit.line || {};
                 const routeName = line.short_name || line.name || line.vehicle?.name || 'Transit';
+                const mode = googleTransitVehicleMode(line.vehicle || {});
                 const from = transit.departure_stop?.name || 'boarding stop';
                 const to = transit.arrival_stop?.name || 'exit stop';
                 const stopCount = Number(transit.num_stops || 0);
-                return `<div class="google-flow-step"><span class="google-flow-icon">${iconSvg(line.vehicle?.type === 'BUS' ? 'bus' : 'train')}</span><div class="google-flow-copy"><strong>${escapeHtml(routeName)} · ${escapeHtml(from)} → ${escapeHtml(to)}</strong><span>${escapeHtml(transit.departure_time?.text || '')}${stopCount ? ` · ${stopCount} stop${stopCount === 1 ? '' : 's'}` : ''}${transit.arrival_time?.text ? ` · arrive ${escapeHtml(transit.arrival_time.text)}` : ''}${transit.headsign ? ` · towards ${escapeHtml(transit.headsign)}` : ''}</span></div></div>`;
+                return `<div class="google-flow-step"><span class="google-flow-icon">${iconSvg(mode.icon)}</span><div class="google-flow-copy"><strong>${escapeHtml(mode.label)} ${escapeHtml(routeName)} · ${escapeHtml(from)} → ${escapeHtml(to)}</strong><span>${escapeHtml(transit.departure_time?.text || '')}${stopCount ? ` · ${stopCount} stop${stopCount === 1 ? '' : 's'}` : ''}${transit.arrival_time?.text ? ` · arrive ${escapeHtml(transit.arrival_time.text)}` : ''}${transit.headsign ? ` · towards ${escapeHtml(transit.headsign)}` : ''}</span></div></div>`;
             }).join('')}</div>`;
         }
 
@@ -3303,6 +3386,27 @@
             renderGoogleTransitRoute(response, routeIndex);
             const leg = route.legs?.[0];
             openRouteTransitPanel('Journey details', `${leg?.departure_time?.text || ''} – ${leg?.arrival_time?.text || ''}`, googleJourneyFlowHtml(route));
+            journeyDetailBackAction = () => tryGoogleTransitJourney(true);
+            const closeButton = document.querySelector('#transit-panel .panel-close');
+            closeButton.innerHTML = '&#8592;';
+            closeButton.setAttribute('aria-label', 'Back to journey options');
+        }
+
+        function googleTransitLineColor(step) {
+            const line = step.transit?.line || {};
+            const supplied = String(line.color || '').trim();
+            if (/^#[0-9a-f]{6}$/i.test(supplied)) return supplied;
+            if (/^[0-9a-f]{6}$/i.test(supplied)) return `#${supplied}`;
+            const routeName = String(line.short_name || line.name || '').trim().toUpperCase();
+            if (routeName === 'MRL') return '#78b900';
+            return safeRouteColor('');
+        }
+
+        function darkenRouteColor(color, factor = .52) {
+            const match = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(color || '');
+            if (!match) return '#263244';
+            const channel = value => Math.max(0, Math.min(255, Math.round(parseInt(value, 16) * factor))).toString(16).padStart(2, '0');
+            return `#${channel(match[1])}${channel(match[2])}${channel(match[3])}`;
         }
 
         function renderGoogleTransitRoute(response, routeIndex) {
@@ -3310,23 +3414,34 @@
             routeDirectionsRenderers.forEach(renderer => renderer.setMap(null));
             routeDirectionsRenderers = [];
             activeRouteLayer.clearLayers();
-            const outline = new google.maps.DirectionsRenderer({
-                map:map.native,
-                directions:response,
-                routeIndex,
-                suppressMarkers:true,
-                preserveViewport:false,
-                polylineOptions:{ strokeColor:'#7a174c', strokeOpacity:.92, strokeWeight:10, zIndex:20 },
+            const route = response.routes?.[routeIndex];
+            if (!route) return;
+            const bounds = new google.maps.LatLngBounds();
+            const steps = (route.legs || []).flatMap(leg => leg.steps || []);
+            steps.forEach(step => {
+                const path = Array.from(step.path || []);
+                if (path.length < 2) return;
+                path.forEach(point => bounds.extend(point));
+                const isTransit = step.travel_mode === google.maps.TravelMode.TRANSIT;
+                const color = isTransit ? googleTransitLineColor(step) : '#94a3b8';
+                const outline = new google.maps.Polyline({
+                    map:map.native, path, clickable:false,
+                    strokeColor:darkenRouteColor(color, isTransit ? .5 : .45), strokeOpacity:.95,
+                    strokeWeight:isTransit ? 10 : 7, zIndex:20,
+                });
+                const lineOptions = {
+                    map:map.native, path, clickable:false,
+                    strokeColor:color, strokeOpacity:1,
+                    strokeWeight:isTransit ? 6 : 4, zIndex:21,
+                };
+                if (!isTransit) {
+                    lineOptions.strokeOpacity = 0;
+                    lineOptions.icons = [{ icon:{ path:'M 0,-1 0,1', strokeColor:color, strokeOpacity:1, strokeWeight:3, scale:2 }, offset:'0', repeat:'12px' }];
+                }
+                const routeLine = new google.maps.Polyline(lineOptions);
+                routeDirectionsRenderers.push(outline, routeLine);
             });
-            const routeLine = new google.maps.DirectionsRenderer({
-                map:map.native,
-                directions:response,
-                routeIndex,
-                suppressMarkers:true,
-                preserveViewport:true,
-                polylineOptions:{ strokeColor:'#f93999', strokeOpacity:1, strokeWeight:6, zIndex:21 },
-            });
-            routeDirectionsRenderers.push(outline, routeLine);
+            if (!bounds.isEmpty()) map.native.fitBounds(bounds, 64);
         }
 
         function tryGoogleTransitJourney(preserveSheetState = false) {
@@ -3392,6 +3507,7 @@
                     agency:'google-transit',
                 };
                 activeTrackedJourneyIndex = rankedRoutes[0].routeIndex;
+                setActiveJourneyRoutes(googleTransitRouteNames(response.routes[activeTrackedJourneyIndex]));
                 openTransitPanel('', '', priorityControl + cards, preserveSheetState);
                 document.querySelectorAll('[data-transit-priority]').forEach(button => button.addEventListener('click', () => {
                     const priority = button.dataset.transitPriority;
@@ -3404,6 +3520,7 @@
                     document.querySelectorAll('.journey-card.modern').forEach(item => item.classList.remove('selected'));
                     card.classList.add('selected');
                     activeTrackedJourneyIndex = Number(card.dataset.googleTransitIndex);
+                    setActiveJourneyRoutes(googleTransitRouteNames(response.routes[activeTrackedJourneyIndex]));
                     renderGoogleTransitRoute(response, activeTrackedJourneyIndex);
                 }));
                 document.querySelectorAll('[data-google-transit-show]').forEach(button => button.addEventListener('click', event => {
