@@ -40,6 +40,7 @@ deleteButton.addEventListener('click',async()=>{
   try{
     const uid=currentUser.uid;
     await deleteCollection(['users',uid,'savedRoutes']);
+    await deleteCollection(['users',uid,'notificationDevices']);
     await deleteDoc(doc(db,'users',uid));
     await deleteUser(currentUser);
     location.replace('/?accountDeleted=1');

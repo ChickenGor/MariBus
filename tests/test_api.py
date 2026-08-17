@@ -97,6 +97,13 @@ class MariBusApiTests(unittest.TestCase):
                 self.assertEqual(response.status_code, 200)
                 response.close()
 
+    def test_messaging_service_worker_is_root_scoped_and_not_cached(self):
+        response = self.client.get("/firebase-messaging-sw.js")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers["Service-Worker-Allowed"], "/")
+        self.assertEqual(response.headers["Cache-Control"], "no-cache")
+        self.assertIn(b"firebase.messaging", response.data)
+
     def test_api_responses_include_security_headers(self):
         response = self.client.get("/api/health")
         self.assertEqual(response.headers["X-Content-Type-Options"], "nosniff")

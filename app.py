@@ -527,7 +527,46 @@ def frontend_config():
         "routing_version": ROUTING_VERSION,
         "firebase_enabled": all(firebase_config.values()),
         "firebase_config": firebase_config,
+        "firebase_vapid_key": os.getenv("FIREBASE_VAPID_KEY", "").strip(),
     })
+
+
+@app.get("/firebase-messaging-sw.js")
+def firebase_messaging_service_worker():
+    firebase_config = {
+        "apiKey": os.getenv("FIREBASE_API_KEY", "").strip(),
+        "authDomain": os.getenv("FIREBASE_AUTH_DOMAIN", "").strip(),
+        "projectId": os.getenv("FIREBASE_PROJECT_ID", "").strip(),
+        "storageBucket": os.getenv("FIREBASE_STORAGE_BUCKET", "").strip(),
+        "messagingSenderId": os.getenv("FIREBASE_MESSAGING_SENDER_ID", "").strip(),
+        "appId": os.getenv("FIREBASE_APP_ID", "").strip(),
+    }
+    script = f"""
+importScripts('https://www.gstatic.com/firebasejs/12.1.0/firebase-app-compat.js');
+importScripts('https://www.gstatic.com/firebasejs/12.1.0/firebase-messaging-compat.js');
+firebase.initializeApp({json.dumps(firebase_config)});
+const messaging = firebase.messaging();
+messaging.onBackgroundMessage(payload => {{
+  const data = payload.data || {{}};
+  if (!data.title) return;
+  self.registration.showNotification(data.title, {{
+    body:data.body || '', tag:data.tag || 'maribus-update',
+    data:{{ url:data.url || '/notifications' }}
+  }});
+}});
+self.addEventListener('notificationclick', event => {{
+  event.notification.close();
+  const target = new URL(event.notification.data?.url || '/notifications', self.location.origin).href;
+  event.waitUntil(clients.matchAll({{ type:'window', includeUncontrolled:true }}).then(windows => {{
+    const existing = windows.find(windowClient => windowClient.url === target);
+    return existing ? existing.focus() : clients.openWindow(target);
+  }}));
+}});
+""".strip()
+    response = app.response_class(script, mimetype="application/javascript")
+    response.headers["Service-Worker-Allowed"] = "/"
+    response.headers["Cache-Control"] = "no-cache"
+    return response
 
 
 @app.post("/api/feedback")

@@ -52,6 +52,15 @@ service cloud.firestore {
 
         allow update: if false;
       }
+
+      match /notificationDevices/{deviceId} {
+        allow read, delete: if signedInAs(userId);
+        allow create, update: if signedInAs(userId)
+          && hasPlus(userId)
+          && request.resource.data.token is string
+          && request.resource.data.token.size() > 20
+          && request.resource.data.token.size() < 2048;
+      }
     }
   }
 }
