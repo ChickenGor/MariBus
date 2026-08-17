@@ -668,24 +668,42 @@
             position: absolute; bottom: calc(100% + 10px); left: 0; width: 100%; 
             background: var(--sheet-bg); border: 1px solid var(--border-color); 
             border-radius: 12px; box-shadow: 0 -10px 25px var(--shadow-color); 
-            max-height: 250px; overflow-y: auto; display: none; flex-direction: column; 
-            padding: 6px; z-index: 2000; box-sizing: border-box; 
+            max-height: min(310px, calc(100vh - 150px)); overflow-y: auto; display: none;
+            grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px;
+            padding: 8px; z-index: 2000; box-sizing: border-box;
         }
-        .custom-select.open .select-dropdown { display: flex; }
+        .custom-select.open .select-dropdown { display: grid; }
 
         .select-option { 
-            display: flex; align-items: center; gap: 12px; padding: 12px; 
-            border-radius: 8px; cursor: pointer; font-size: 15px; font-weight: 500; 
-            color: var(--text-main); transition: background 0.2s; 
+            min-width:0; min-height:58px; display:flex; flex-direction:column;
+            align-items:center; justify-content:center; gap:6px; padding:8px 5px;
+            border-radius:10px; cursor:pointer; font-size:12px; line-height:1.15;
+            font-weight:600; text-align:center; color:var(--text-main);
+            transition:background .2s, color .2s, transform .2s;
         }
+        .select-option .text { overflow-wrap:anywhere; }
         .select-option:hover { background: var(--bg-color); }
+        .select-option:active { transform:scale(.97); }
         .select-option.active { background: rgba(99,102,241,0.1); color: #6366f1; font-weight: 700; }
         
-        /* The colored dots matching the map pills */
-        .agency-dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; flex-shrink: 0; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
-        .dot-rapid { background-color: var(--rapid-color); }
-        .dot-mybas { background-color: var(--mybas-color); }
-        .dot-ktmb { background-color: #0205a2; }
+        /* Compact service flags matching each network's map colour. */
+        .agency-dot {
+            --flag-color:#64748b;
+            position:relative; width:18px; height:17px; display:inline-block;
+            flex:0 0 18px; background:transparent; box-shadow:none;
+        }
+        .agency-dot::before {
+            content:""; position:absolute; left:3px; top:1px; width:11px; height:8px;
+            border-radius:2px 2px 2px 0; background:var(--flag-color);
+            box-shadow:0 1px 2px rgba(15,23,42,.22);
+        }
+        .agency-dot::after {
+            content:""; position:absolute; left:2px; top:1px; width:2px; height:15px;
+            border-radius:2px; background:color-mix(in srgb, var(--flag-color) 65%, #111827);
+        }
+        .dot-rapid { --flag-color:var(--rapid-color); }
+        .dot-mybas { --flag-color:var(--mybas-color); }
+        .dot-ktmb { --flag-color:#0205a2; }
         
         /* Custom sleek scrollbar for the menu */
         .select-dropdown::-webkit-scrollbar { width: 6px; }
