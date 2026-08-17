@@ -1802,7 +1802,7 @@
             })[character]);
         }
 
-        function openTransitPanel(title, subtitle, html) {
+        function openTransitPanel(title, subtitle, html, preserveSheetState = false) {
             document.getElementById('panel-title').textContent = title;
             document.getElementById('panel-subtitle').textContent = subtitle || '';
             document.getElementById('panel-content').innerHTML = html;
@@ -1810,11 +1810,11 @@
             const sheet = document.getElementById('bottom-sheet');
             document.getElementById('resume-journey-button').classList.remove('visible');
             sheet.classList.add('detail-mode');
-            if (window.innerWidth < 768 && !sheet.classList.contains('sheet-dragging')) {
+            if (!preserveSheetState && window.innerWidth < 768 && !sheet.classList.contains('sheet-dragging')) {
                 sheet.classList.remove('sheet-half', 'sheet-expanded');
                 sheet.style.height = '';
             }
-            sheet.scrollTop = 0;
+            if (!preserveSheetState) sheet.scrollTop = 0;
         }
 
         function openRouteTransitPanel(title, subtitle, html) {
@@ -2718,8 +2718,9 @@
         }
 
         function saveCurrentJourneyFromMap(button) {
-            const selectedCard = document.querySelector('.journey-card.modern.selected[data-nearby-index]');
-            const index = selectedCard ? Number(selectedCard.dataset.nearbyIndex) : Number(activeTrackedJourneyIndex || 0);
+            const selectedCard = document.querySelector('.journey-card.modern.selected[data-nearby-index], .journey-card.modern.selected[data-google-transit-index]');
+            const selectedIndex = selectedCard?.dataset.nearbyIndex ?? selectedCard?.dataset.googleTransitIndex;
+            const index = selectedIndex !== undefined ? Number(selectedIndex) : Number(activeTrackedJourneyIndex || 0);
             if (!window.__mariBusJourneyOptions?.[index] || !window.__mariBusJourneyEndpoints) {
                 showMenuNotice('Choose an A to B journey first');
                 return;
@@ -3236,6 +3237,21 @@
                 .reduce((total, step) => total + Number(step.duration?.value || 0), 0);
         }
 
+        function googleTransitRouteForSaving(route) {
+            const leg = route.legs?.[0] || {};
+            const transitSteps = (leg.steps || []).filter(step => step.travel_mode === google.maps.TravelMode.TRANSIT);
+            return {
+                total_minutes:Math.ceil(Number(leg.duration?.value || 0) / 60),
+                walk_minutes:Math.ceil(googleRouteWalkingSeconds(route) / 60),
+                transfers:Math.max(0, transitSteps.length - 1),
+                legs:transitSteps.map(step => {
+                    const line = step.transit?.line || {};
+                    const routeName = line.short_name || line.name || line.vehicle?.name || 'Transit';
+                    return { route_id:routeName, route_short_name:routeName, route_color:line.color || '#2563eb' };
+                }),
+            };
+        }
+
         function renderGoogleTransitRoute(response, routeIndex) {
             if (walkingDirectionsRenderer) walkingDirectionsRenderer.setMap(null);
             routeDirectionsRenderers.forEach(renderer => renderer.setMap(null));
@@ -3251,7 +3267,7 @@
             routeDirectionsRenderers.push(renderer);
         }
 
-        function tryGoogleTransitJourney() {
+        function tryGoogleTransitJourney(preserveSheetState = false) {
             const fromPlace = journeySelection.from.place;
             const toPlace = journeySelection.to.place;
             if (!fromPlace || !toPlace || !google.maps.DirectionsService) return Promise.resolve(false);
@@ -3302,19 +3318,26 @@
                         <button class="route-action" data-google-transit-show="${routeIndex}">Show journey</button>
                     </article>`;
                 }).join('');
-                openTransitPanel('Public transport options', transitJourneyPriority === 'less-walking' ? 'Prioritising less walking' : 'Prioritising arrival time', priorityControl + cards);
+                window.__mariBusJourneyOptions = response.routes.map(googleTransitRouteForSaving);
+                window.__mariBusJourneyEndpoints = {
+                    from:{ name:fromPlace.name, lat:fromPlace.lat, lng:fromPlace.lng },
+                    to:{ name:toPlace.name, lat:toPlace.lat, lng:toPlace.lng },
+                    agency:'google-transit',
+                };
+                activeTrackedJourneyIndex = rankedRoutes[0].routeIndex;
+                openTransitPanel('Public transport options', transitJourneyPriority === 'less-walking' ? 'Prioritising less walking' : 'Prioritising arrival time', priorityControl + cards, preserveSheetState);
                 document.querySelectorAll('[data-transit-priority]').forEach(button => button.addEventListener('click', () => {
                     const priority = button.dataset.transitPriority;
                     if (priority === transitJourneyPriority) return;
                     transitJourneyPriority = priority;
                     localStorage.setItem('maribus-transit-priority', priority);
-                    openTransitPanel('Updating journey options', '', '<p class="panel-message">Applying your journey priority…</p>');
-                    tryGoogleTransitJourney();
+                    tryGoogleTransitJourney(true);
                 }));
                 document.querySelectorAll('[data-google-transit-index]').forEach(card => card.addEventListener('click', () => {
                     document.querySelectorAll('.journey-card.modern').forEach(item => item.classList.remove('selected'));
                     card.classList.add('selected');
-                    renderGoogleTransitRoute(response, Number(card.dataset.googleTransitIndex));
+                    activeTrackedJourneyIndex = Number(card.dataset.googleTransitIndex);
+                    renderGoogleTransitRoute(response, activeTrackedJourneyIndex);
                 }));
                 document.querySelectorAll('[data-google-transit-show]').forEach(button => button.addEventListener('click', event => {
                     event.stopPropagation();
