@@ -1052,52 +1052,45 @@
             <div class="select-trigger" onclick="toggleAgencyDropdown()">
                 <div class="select-value">
                     <div class="agency-dot dot-rapid" id="selected-dot"></div>
-                    <span class="text" id="selected-text">Rapid KL + MRT Feeder</span>
+                    <span class="text" id="selected-text">Klang Valley</span>
                 </div>
                 <svg class="chevron" viewBox="0 0 24 24"><path d="M7 10l5 5 5-5z"/></svg>
             </div>
             
             <div class="select-dropdown">
-                <!-- RapidKL & Trains -->
-                <div class="select-option active" data-value="rapid-bus-kl" onclick="selectAgencyOption('rapid-bus-kl', 'Rapid KL + MRT Feeder', 'dot-rapid')">
-                    <div class="agency-dot dot-rapid"></div><span class="text">Rapid KL + MRT Feeder</span>
+                <!-- State and regional networks -->
+                <div class="select-option active" data-value="rapid-bus-kl" onclick="selectAgencyOption('rapid-bus-kl', 'Klang Valley', 'dot-rapid')">
+                    <div class="agency-dot dot-rapid"></div><span class="text">Klang Valley</span>
                 </div>
-                <div class="select-option" data-value="rapid-bus-penang" onclick="selectAgencyOption('rapid-bus-penang', 'Rapid Penang', 'dot-rapid')">
-                    <div class="agency-dot dot-rapid"></div><span class="text">Rapid Penang</span>
+                <div class="select-option" data-value="rapid-bus-penang" onclick="selectAgencyOption('rapid-bus-penang', 'Penang', 'dot-rapid')">
+                    <div class="agency-dot dot-rapid"></div><span class="text">Penang</span>
                 </div>
-                <div class="select-option" data-value="ktmb" onclick="selectAgencyOption('ktmb', 'KTMB Trains', 'dot-ktmb')">
-                    <div class="agency-dot dot-ktmb"></div><span class="text">KTMB Trains</span>
+                <div class="select-option" data-value="mybas-ipoh" onclick="selectAgencyOption('mybas-ipoh', 'Perak', 'dot-mybas')">
+                    <div class="agency-dot dot-mybas"></div><span class="text">Perak</span>
                 </div>
-                <!-- BAS.MY Network -->
-                <div class="select-option" data-value="mybas-johor-bahru" onclick="selectAgencyOption('mybas-johor-bahru', 'BAS.MY Johor Bahru', 'dot-mybas')">
-                    <div class="agency-dot dot-mybas"></div><span class="text">BAS.MY Johor Bahru</span>
+                <div class="select-option" data-value="mybas-johor-bahru" onclick="selectAgencyOption('mybas-johor-bahru', 'Johor', 'dot-mybas')">
+                    <div class="agency-dot dot-mybas"></div><span class="text">Johor</span>
                 </div>
-                <div class="select-option" data-value="mybas-melaka" onclick="selectAgencyOption('mybas-melaka', 'BAS.MY Melaka', 'dot-mybas')">
-                    <div class="agency-dot dot-mybas"></div><span class="text">BAS.MY Melaka</span>
+                <div class="select-option" data-value="mybas-melaka" onclick="selectAgencyOption('mybas-melaka', 'Melaka', 'dot-mybas')">
+                    <div class="agency-dot dot-mybas"></div><span class="text">Melaka</span>
                 </div>
-                <div class="select-option" data-value="mybas-seremban-A" onclick="selectAgencyOption('mybas-seremban-A', 'BAS.MY Seremban A', 'dot-mybas')">
-                    <div class="agency-dot dot-mybas"></div><span class="text">BAS.MY Seremban A</span>
+                <div class="select-option" data-value="mybas-seremban-A" onclick="selectAgencyOption('mybas-seremban-A', 'Negeri Sembilan', 'dot-mybas')">
+                    <div class="agency-dot dot-mybas"></div><span class="text">Negeri Sembilan</span>
                 </div>
-                <div class="select-option" data-value="mybas-seremban-B" onclick="selectAgencyOption('mybas-seremban-B', 'BAS.MY Seremban B', 'dot-mybas')">
-                    <div class="agency-dot dot-mybas"></div><span class="text">BAS.MY Seremban B</span>
+                <div class="select-option" data-value="mybas-kuala-terengganu" onclick="selectAgencyOption('mybas-kuala-terengganu', 'Terengganu', 'dot-mybas')">
+                    <div class="agency-dot dot-mybas"></div><span class="text">Terengganu</span>
                 </div>
-                <div class="select-option" data-value="mybas-ipoh" onclick="selectAgencyOption('mybas-ipoh', 'BAS.MY Ipoh', 'dot-mybas')">
-                    <div class="agency-dot dot-mybas"></div><span class="text">BAS.MY Ipoh</span>
+                <div class="select-option" data-value="mybas-kota-bharu" onclick="selectAgencyOption('mybas-kota-bharu', 'Kelantan', 'dot-mybas')">
+                    <div class="agency-dot dot-mybas"></div><span class="text">Kelantan</span>
                 </div>
-                <div class="select-option" data-value="mybas-kuala-terengganu" onclick="selectAgencyOption('mybas-kuala-terengganu', 'BAS.MY K. Terengganu', 'dot-mybas')">
-                    <div class="agency-dot dot-mybas"></div><span class="text">BAS.MY K. Terengganu</span>
+                <div class="select-option" data-value="mybas-alor-setar" onclick="selectAgencyOption('mybas-alor-setar', 'Kedah', 'dot-mybas')">
+                    <div class="agency-dot dot-mybas"></div><span class="text">Kedah</span>
                 </div>
-                <div class="select-option" data-value="mybas-kota-bharu" onclick="selectAgencyOption('mybas-kota-bharu', 'BAS.MY Kota Bharu', 'dot-mybas')">
-                    <div class="agency-dot dot-mybas"></div><span class="text">BAS.MY Kota Bharu</span>
+                <div class="select-option" data-value="mybas-kangar" onclick="selectAgencyOption('mybas-kangar', 'Perlis', 'dot-mybas')">
+                    <div class="agency-dot dot-mybas"></div><span class="text">Perlis</span>
                 </div>
-                <div class="select-option" data-value="mybas-alor-setar" onclick="selectAgencyOption('mybas-alor-setar', 'BAS.MY Alor Setar', 'dot-mybas')">
-                    <div class="agency-dot dot-mybas"></div><span class="text">BAS.MY Alor Setar</span>
-                </div>
-                <div class="select-option" data-value="mybas-kangar" onclick="selectAgencyOption('mybas-kangar', 'BAS.MY Kangar', 'dot-mybas')">
-                    <div class="agency-dot dot-mybas"></div><span class="text">BAS.MY Kangar</span>
-                </div>
-                <div class="select-option" data-value="mybas-kuching" onclick="selectAgencyOption('mybas-kuching', 'BAS.MY Kuching', 'dot-mybas')">
-                    <div class="agency-dot dot-mybas"></div><span class="text">BAS.MY Kuching</span>
+                <div class="select-option" data-value="mybas-kuching" onclick="selectAgencyOption('mybas-kuching', 'Sarawak', 'dot-mybas')">
+                    <div class="agency-dot dot-mybas"></div><span class="text">Sarawak</span>
                 </div>
             </div>
             <footer id="app-footer">
@@ -1395,6 +1388,40 @@
             "mybas-kuching": { lat: 1.5535, lng: 110.3593, zoom: 13 }
         };
 
+        // The selector is region-first, while API calls retain their original
+        // operator IDs. This lets one state display every feed MariBus has.
+        const agencyGroups = {
+            "rapid-bus-kl": ["rapid-bus-kl", "rapid-bus-mrtfeeder", "ktmb"],
+            "rapid-bus-penang": ["rapid-bus-penang", "ktmb"],
+            "mybas-ipoh": ["mybas-ipoh", "ktmb"],
+            "mybas-seremban-A": ["mybas-seremban-A", "mybas-seremban-B", "ktmb"],
+            "mybas-johor-bahru": ["mybas-johor-bahru", "ktmb"],
+            "mybas-melaka": ["mybas-melaka", "ktmb"],
+            "mybas-alor-setar": ["mybas-alor-setar", "ktmb"],
+            "mybas-kangar": ["mybas-kangar", "ktmb"],
+        };
+
+        function agenciesForSelection(selection = document.getElementById('agency-select').value) {
+            return agencyGroups[selection] || [selection];
+        }
+
+        function operatorLabel(agency) {
+            const labels = {
+                "rapid-bus-kl":"Rapid KL",
+                "rapid-bus-mrtfeeder":"MRT Feeder",
+                "rapid-bus-penang":"Rapid Penang",
+                "ktmb":"KTMB",
+                "mybas-ipoh":"BAS.MY Ipoh",
+                "mybas-seremban-A":"BAS.MY Seremban A",
+                "mybas-seremban-B":"BAS.MY Seremban B",
+                "mybas-johor-bahru":"BAS.MY Johor Bahru",
+                "mybas-melaka":"BAS.MY Melaka",
+                "mybas-alor-setar":"BAS.MY Alor Setar",
+                "mybas-kangar":"BAS.MY Kangar",
+            };
+            return labels[agency] || agency.replaceAll('-', ' ');
+        }
+
         function updateCountdownDisplay() {
             // Changed from "Sync in 30s" to a cleaner "Live (30s)"
             document.getElementById('refresh-timer').innerText = `Live (${countdownValue}s)`;
@@ -1427,9 +1454,7 @@
             startCountdown();
 
             try {
-                const agenciesToLoad = selectedAgency === 'rapid-bus-kl'
-                    ? ['rapid-bus-kl', 'rapid-bus-mrtfeeder']
-                    : [selectedAgency];
+                const agenciesToLoad = agenciesForSelection(selectedAgency);
                 const feedResults = await Promise.all(agenciesToLoad.map(async agency => {
                     const response = await fetch(`${API_BASE}/api/live-buses?agency=${encodeURIComponent(agency)}`);
                     const result = await response.json();
@@ -1527,6 +1552,7 @@
                                     <div class="route-name">${escapeHtml(longName)}</div>
                                 </div>
                                 <div class="popup-body">
+                                    <div class="info-row"><span>Operator</span><strong>${escapeHtml(operatorLabel(sourceAgency))}</strong></div>
                                     <div class="info-row"><span>Vehicle ID</span><strong>${safeVehicleId}</strong></div>
                                     ${destinationName ? `<div class="info-row"><span>Destination</span><strong>${escapeHtml(destinationName)}</strong></div>` : ''}
                                     <div class="info-row"><span>Trip ID</span><strong>${escapeHtml(vehicle.trip?.tripId || 'N/A')}</strong></div>
@@ -1892,15 +1918,19 @@
         }
 
         async function loadNearbyStops(lat, lng) {
-            const agency = document.getElementById('agency-select').value;
+            const agencies = agenciesForSelection();
             try {
-                const response = await fetch(`${API_BASE}/api/stops?agency=${encodeURIComponent(agency)}&lat=${lat}&lng=${lng}&radius_km=2&limit=40`);
-                const result = await response.json();
-                if (!result.success) return;
+                const results = await Promise.all(agencies.map(async agency => {
+                    const response = await fetch(`${API_BASE}/api/stops?agency=${encodeURIComponent(agency)}&lat=${lat}&lng=${lng}&radius_km=2&limit=40`);
+                    const result = await response.json();
+                    return result.success ? result.data.map(stop => ({ ...stop, source_agency:agency })) : [];
+                }));
+                const stops = [...new Map(results.flat().map(stop => [`${stop.source_agency}:${stop.stop_id}`, stop])).values()]
+                    .sort((a, b) => Number(a.distance_m) - Number(b.distance_m));
                 stopMarkersLayer.clearLayers();
-                result.data.forEach(stop => createStopMarker(stop).addTo(stopMarkersLayer));
-                if (result.data.length) {
-                    openTransitPanel('Stops near you', `${result.data.length} stops within 2 km`, result.data.slice(0, 8).map(stop => `
+                stops.forEach(stop => createStopMarker(stop).addTo(stopMarkersLayer));
+                if (stops.length) {
+                    openTransitPanel('Stops near you', `${stops.length} stops within 2 km`, stops.slice(0, 8).map(stop => `
                         <div class="stop-row"><span class="stop-name">${escapeHtml(stop.stop_name)}</span><strong>${stop.distance_m} m</strong></div>
                     `).join(''));
                 }
@@ -1910,22 +1940,26 @@
         }
 
         async function searchStops(query) {
-            const agency = document.getElementById('agency-select').value;
+            const agencies = agenciesForSelection();
             try {
-                const response = await fetch(`${API_BASE}/api/stops?agency=${encodeURIComponent(agency)}&q=${encodeURIComponent(query)}&limit=20`);
-                const result = await response.json();
-                if (!result.success || !result.data.length) {
+                const results = await Promise.all(agencies.map(async agency => {
+                    const response = await fetch(`${API_BASE}/api/stops?agency=${encodeURIComponent(agency)}&q=${encodeURIComponent(query)}&limit=20`);
+                    const result = await response.json();
+                    return result.success ? result.data.map(stop => ({ ...stop, source_agency:agency })) : [];
+                }));
+                const stops = [...new Map(results.flat().map(stop => [`${stop.source_agency}:${stop.stop_id}`, stop])).values()];
+                if (!stops.length) {
                     openTransitPanel('No results', '', '<p class="panel-message">No active vehicle, route, or stop matched your search.</p>');
                     return;
                 }
                 stopMarkersLayer.clearLayers();
-                const markers = result.data.map(stop => createStopMarker(stop).addTo(stopMarkersLayer));
+                const markers = stops.map(stop => createStopMarker(stop).addTo(stopMarkersLayer));
                 map.fitBounds(L.featureGroup(markers).getBounds(), { padding:[50,50], maxZoom:16 });
-                openTransitPanel('Matching stops', `${result.data.length} results`, result.data.map(stop => `
+                openTransitPanel('Matching stops', `${stops.length} results`, stops.map(stop => `
                     <button class="route-action" data-stop-id="${escapeHtml(stop.stop_id)}">${escapeHtml(stop.stop_name)}</button>
                 `).join(''));
                 document.querySelectorAll('#panel-content [data-stop-id]').forEach((button, index) => {
-                    button.addEventListener('click', () => showStopArrivals(result.data[index]));
+                    button.addEventListener('click', () => showStopArrivals(stops[index]));
                 });
             } catch (error) {
                 openTransitPanel('Stops unavailable', '', '<p class="panel-message">The stop database could not be reached.</p>');
@@ -1933,7 +1967,7 @@
         }
 
         async function showStopArrivals(stop) {
-            const agency = document.getElementById('agency-select').value;
+            const agency = stop.source_agency || document.getElementById('agency-select').value;
             openTransitPanel(stop.stop_name, stop.stop_code ? `Stop ${stop.stop_code}` : 'Scheduled arrivals', '<p class="panel-message">Loading arrivals…</p>');
             try {
                 const response = await fetch(`${API_BASE}/api/stops/${encodeURIComponent(stop.stop_id)}/arrivals?agency=${encodeURIComponent(agency)}`);
@@ -2089,9 +2123,7 @@
             if (routeBrowseTimer) clearInterval(routeBrowseTimer);
             routeBrowseTimer = null;
             const selectedAgency = document.getElementById('agency-select').value;
-            const agencies = selectedAgency === 'rapid-bus-kl'
-                ? ['rapid-bus-kl', 'rapid-bus-mrtfeeder']
-                : [selectedAgency];
+            const agencies = agenciesForSelection(selectedAgency);
             openTransitPanel('Finding route', code, '<p class="panel-message">Checking route directions…</p>');
             try {
                 const resultSets = await Promise.all(agencies.map(async agency => {
@@ -2780,6 +2812,10 @@
                     const multimodalHandled = await tryMultimodalJourney();
                     if (multimodalHandled) return;
                 }
+                if (agenciesForSelection().length > 1) {
+                    const googleTransitHandled = await tryGoogleTransitJourney();
+                    if (googleTransitHandled) return;
+                }
                 const nearbyHandled = await tryNearbyStopJourneys();
                 if (nearbyHandled) return;
             }
@@ -3106,6 +3142,87 @@
                 return `<strong>${escapeHtml(route)}</strong> from ${escapeHtml(leg.from?.name)} to ${escapeHtml(leg.to?.name)}`;
             }
             return `<strong>Walk</strong> ${Math.round(leg.distance || 0)} m to ${escapeHtml(leg.to?.name)}`;
+        }
+
+        function googleTransitStepLabel(step) {
+            if (step.travel_mode === google.maps.TravelMode.WALKING) {
+                return `${iconSvg('walk', 'inline-icon')} Walk ${escapeHtml(step.duration?.text || '')}`;
+            }
+            const transit = step.transit || {};
+            const line = transit.line || {};
+            const vehicle = line.vehicle || {};
+            const route = line.short_name || line.name || vehicle.name || 'Transit';
+            const color = /^#[0-9a-f]{6}$/i.test(line.color || '') ? line.color : '#2563eb';
+            return `<span class="journey-route" style="background:${color}">${escapeHtml(route)}</span>`;
+        }
+
+        function renderGoogleTransitRoute(response, routeIndex) {
+            if (walkingDirectionsRenderer) walkingDirectionsRenderer.setMap(null);
+            routeDirectionsRenderers.forEach(renderer => renderer.setMap(null));
+            routeDirectionsRenderers = [];
+            activeRouteLayer.clearLayers();
+            const renderer = new google.maps.DirectionsRenderer({
+                map:map.native,
+                directions:response,
+                routeIndex,
+                suppressMarkers:false,
+                preserveViewport:false,
+            });
+            routeDirectionsRenderers.push(renderer);
+        }
+
+        function tryGoogleTransitJourney() {
+            const fromPlace = journeySelection.from.place;
+            const toPlace = journeySelection.to.place;
+            if (!fromPlace || !toPlace || !google.maps.DirectionsService) return Promise.resolve(false);
+            const service = new google.maps.DirectionsService();
+            return new Promise(resolve => service.route({
+                origin:{ lat:Number(fromPlace.lat), lng:Number(fromPlace.lng) },
+                destination:{ lat:Number(toPlace.lat), lng:Number(toPlace.lng) },
+                travelMode:google.maps.TravelMode.TRANSIT,
+                provideRouteAlternatives:true,
+                // Transit results are time-sensitive and Google only accepts
+                // present/future departures. A small offset avoids clock skew.
+                transitOptions:{ departureTime:new Date(Date.now() + 60 * 1000) },
+            }, (response, status) => {
+                if (status !== google.maps.DirectionsStatus.OK || !response?.routes?.length) {
+                    console.info('Google Transit returned no KL journey', status);
+                    resolve(false);
+                    return;
+                }
+                const html = response.routes.map((route, routeIndex) => {
+                    const leg = route.legs?.[0];
+                    if (!leg) return '';
+                    const steps = leg.steps || [];
+                    const transitSteps = steps.filter(step => step.travel_mode === google.maps.TravelMode.TRANSIT);
+                    const walkSeconds = steps.filter(step => step.travel_mode === google.maps.TravelMode.WALKING)
+                        .reduce((total, step) => total + Number(step.duration?.value || 0), 0);
+                    const routeSteps = steps.map(googleTransitStepLabel).join('<span>&rsaquo;</span>');
+                    const board = transitSteps[0]?.transit?.departure_stop?.name;
+                    const exit = transitSteps[transitSteps.length - 1]?.transit?.arrival_stop?.name;
+                    return `<article class="journey-card modern ${routeIndex === 0 ? 'selected' : ''}" data-google-transit-index="${routeIndex}">
+                        <div class="journey-option-top">
+                            <div class="journey-option-head"><div class="journey-total">${escapeHtml(leg.duration?.text || '')}</div><div class="journey-main-time">${escapeHtml(leg.departure_time?.text || '')} &ndash; ${escapeHtml(leg.arrival_time?.text || '')}</div></div>
+                            <div class="journey-steps">${routeSteps}</div>
+                            <div class="journey-board">${board ? `Board at <strong>${escapeHtml(board)}</strong>` : ''}${board && exit ? '<br>' : ''}${exit ? `Exit at ${escapeHtml(exit)}` : ''}</div>
+                            <div class="journey-meta">${Math.ceil(walkSeconds / 60)} min walking · ${Math.max(0, transitSteps.length - 1)} change${transitSteps.length === 2 ? '' : 's'} · Google Transit</div>
+                        </div>
+                        <button class="route-action" data-google-transit-show="${routeIndex}">Show journey</button>
+                    </article>`;
+                }).join('');
+                openTransitPanel('Public transport options', 'MRT, LRT, Monorail, KTM and buses', html);
+                document.querySelectorAll('[data-google-transit-index]').forEach(card => card.addEventListener('click', () => {
+                    document.querySelectorAll('.journey-card.modern').forEach(item => item.classList.remove('selected'));
+                    card.classList.add('selected');
+                    renderGoogleTransitRoute(response, Number(card.dataset.googleTransitIndex));
+                }));
+                document.querySelectorAll('[data-google-transit-show]').forEach(button => button.addEventListener('click', event => {
+                    event.stopPropagation();
+                    renderGoogleTransitRoute(response, Number(button.dataset.googleTransitShow));
+                }));
+                renderGoogleTransitRoute(response, 0);
+                resolve(true);
+            }));
         }
 
         function drawMultimodalItinerary(itinerary) {
