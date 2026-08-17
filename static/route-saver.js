@@ -11,7 +11,7 @@ window.saveMariBusJourney=async function(index,button){
   const journey=window.__mariBusJourneyOptions?.[Number(index)];const endpoints=window.__mariBusJourneyEndpoints;
   if(!journey||!endpoints)return;
   if(!db)return;
-  const iconOnly=button.classList.contains('map-tool-button');
+  const iconOnly=button.classList.contains('map-tool-button')||button.classList.contains('icon-only');
   const previous=button.textContent;
   const setButtonLabel=label=>{if(iconOnly){button.title=label;button.setAttribute('aria-label',label);}else button.textContent=label;};
   button.disabled=true;setButtonLabel('Saving route');

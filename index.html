@@ -803,13 +803,24 @@
         .journey-alternatives { margin-top:5px; color:var(--text-muted); font-size:10px; }
         .journey-card.modern .route-action { margin-top:6px; padding:7px 12px; }
         .journey-actions { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:8px; }
+        .journey-actions:has(.icon-only) { grid-template-columns:1fr 42px; }
         .journey-actions .route-action { margin-top:0; }
+        .route-action.icon-only { width:42px; min-width:42px; display:grid; place-items:center; padding:7px !important; }
+        .route-action.icon-only .ui-icon { width:18px; height:18px; }
         .save-route-action { background:transparent !important; color:var(--text-main); border:1px solid var(--border) !important; }
         .save-route-action.saved { color:#15803d; border-color:rgba(22,163,74,.35) !important; background:rgba(22,163,74,.08) !important; }
         .live-journey-status { display:flex; align-items:center; gap:7px; margin-top:8px; padding:7px 9px; border-radius:9px; background:var(--input-bg); color:var(--text-muted); font-size:11px; }
         .live-journey-status.live { color:#15803d; background:rgba(22,163,74,.1); font-weight:750; }
         .live-dot { width:7px; height:7px; flex:0 0 7px; border-radius:50%; background:#94a3b8; }
         .live-journey-status.live .live-dot { background:#16a34a; box-shadow:0 0 0 4px rgba(22,163,74,.14); }
+        .google-journey-flow { display:grid; gap:0; padding:2px 0 8px; }
+        .google-flow-step { position:relative; display:grid; grid-template-columns:34px 1fr; gap:10px; min-height:54px; padding:7px 0; }
+        .google-flow-step:not(:last-child)::after { content:""; position:absolute; top:37px; bottom:-8px; left:16px; width:2px; background:var(--border-color); }
+        .google-flow-icon { width:32px; height:32px; display:grid; place-items:center; z-index:1; border-radius:50%; background:var(--input-bg); color:#2563eb; }
+        .google-flow-icon .ui-icon { width:17px; height:17px; }
+        .google-flow-copy strong,.google-flow-copy span { display:block; }
+        .google-flow-copy strong { font-size:12px; }
+        .google-flow-copy span { margin-top:3px; color:var(--text-muted); font-size:11px; line-height:1.35; }
         .journey-live-progress { margin-top:9px; padding:9px 10px 8px; border-radius:10px; background:var(--input-bg); }
         .journey-progress-track { position:relative; height:6px; margin:8px 7px 7px; border-radius:999px; background:#dbe2ea; }
         .journey-progress-fill { position:absolute; inset:0 auto 0 0; width:0; border-radius:inherit; background:#16a34a; transition:width .45s ease; }
@@ -886,7 +897,7 @@
                 box-sizing:border-box;
             }
             #bottom-sheet.detail-mode {
-                height:150px;
+                height:clamp(280px,30dvh,350px);
                 max-height:none;
                 padding:8px 16px 8px;
                 gap:4px;
@@ -958,6 +969,7 @@
             #bottom-sheet.detail-mode:not(.sheet-half):not(.sheet-expanded) .journey-card.modern .journey-board,
             #bottom-sheet.detail-mode:not(.sheet-half):not(.sheet-expanded) .journey-card.modern .journey-fare,
             #bottom-sheet.detail-mode:not(.sheet-half):not(.sheet-expanded) .journey-card.modern .journey-live-progress,
+            #bottom-sheet.detail-mode:not(.sheet-half):not(.sheet-expanded) .journey-card.modern .live-journey-status,
             #bottom-sheet.detail-mode:not(.sheet-half):not(.sheet-expanded) .journey-card.modern .journey-alternatives,
             #bottom-sheet.detail-mode:not(.sheet-half):not(.sheet-expanded) .journey-card.modern .route-action {
                 display:none;
@@ -1836,7 +1848,7 @@
 
             const snapSheet = height => {
                 const viewportHeight = window.innerHeight;
-                const compactHeight = 150;
+                const compactHeight = Math.min(350, Math.max(280, viewportHeight * .30));
                 const halfHeight = viewportHeight * .52;
                 const expandedHeight = viewportHeight * .80;
                 const nearest = [
@@ -1914,6 +1926,7 @@
                 walk:'<circle cx="12" cy="4" r="2"></circle><path d="m10 22 1-7-3-3 2-5 4 3 3 1M14 22l-2-7M8 12l-3 4"></path>',
                 bus:'<rect x="4" y="3" width="16" height="15" rx="3"></rect><path d="M7 7h10M7 12h.01M17 12h.01M7 21v-3M17 21v-3"></path>',
                 train:'<rect x="5" y="3" width="14" height="15" rx="3"></rect><path d="M8 7h8M8 12h.01M16 12h.01M8 21l2-3M16 21l-2-3"></path>',
+                bookmark:'<path d="M6 4h12v17l-6-4-6 4z"></path>',
             };
             return `<svg class="${className}" viewBox="0 0 24 24">${paths[name] || ''}</svg>`;
         }
@@ -2974,7 +2987,7 @@
                         </div>
                         <div class="journey-actions">
                             <button class="route-action" data-show-route="${index}" style="background:${safeRouteColor(journey.route_color)}">Show route</button>
-                            <button class="route-action save-route-action" data-save-route="${index}">Save route</button>
+                            <button class="route-action save-route-action icon-only" data-save-route="${index}" title="Save route" aria-label="Save route">${iconSvg('bookmark')}</button>
                         </div>
                     </article>`;
                 }).join('');
@@ -3252,19 +3265,68 @@
             };
         }
 
+        function plainGoogleInstruction(value) {
+            const holder = document.createElement('div');
+            holder.innerHTML = value || '';
+            return holder.textContent?.trim() || 'Continue to the next step';
+        }
+
+        function googleTransitLiveStatus(transitSteps) {
+            const routeNames = new Set(transitSteps.map(step => String(step.transit?.line?.short_name || '').trim().toUpperCase()).filter(Boolean));
+            const matches = Object.values(busLiveDataDict).filter(vehicle => routeNames.has(String(vehicle.routeShortName || '').trim().toUpperCase()));
+            if (!routeNames.size) return '';
+            const routes = [...routeNames].join(', ');
+            return matches.length
+                ? `<div class="live-journey-status live"><span class="live-dot"></span><span>Live feed · ${matches.length} bus${matches.length === 1 ? '' : 'es'} detected on ${escapeHtml(routes)}</span></div>`
+                : `<div class="live-journey-status"><span class="live-dot"></span><span>No live vehicle currently matched to ${escapeHtml(routes)}</span></div>`;
+        }
+
+        function googleJourneyFlowHtml(route) {
+            const steps = route.legs?.[0]?.steps || [];
+            return `<div class="google-journey-flow">${steps.map(step => {
+                if (step.travel_mode === google.maps.TravelMode.WALKING) {
+                    return `<div class="google-flow-step"><span class="google-flow-icon">${iconSvg('walk')}</span><div class="google-flow-copy"><strong>Walk ${escapeHtml(step.duration?.text || '')}</strong><span>${escapeHtml(plainGoogleInstruction(step.instructions))}${step.distance?.text ? ` · ${escapeHtml(step.distance.text)}` : ''}</span></div></div>`;
+                }
+                const transit = step.transit || {};
+                const line = transit.line || {};
+                const routeName = line.short_name || line.name || line.vehicle?.name || 'Transit';
+                const from = transit.departure_stop?.name || 'boarding stop';
+                const to = transit.arrival_stop?.name || 'exit stop';
+                const stopCount = Number(transit.num_stops || 0);
+                return `<div class="google-flow-step"><span class="google-flow-icon">${iconSvg(line.vehicle?.type === 'BUS' ? 'bus' : 'train')}</span><div class="google-flow-copy"><strong>${escapeHtml(routeName)} · ${escapeHtml(from)} → ${escapeHtml(to)}</strong><span>${escapeHtml(transit.departure_time?.text || '')}${stopCount ? ` · ${stopCount} stop${stopCount === 1 ? '' : 's'}` : ''}${transit.arrival_time?.text ? ` · arrive ${escapeHtml(transit.arrival_time.text)}` : ''}${transit.headsign ? ` · towards ${escapeHtml(transit.headsign)}` : ''}</span></div></div>`;
+            }).join('')}</div>`;
+        }
+
+        function showGoogleTransitJourneyDetails(response, routeIndex) {
+            const route = response.routes?.[routeIndex];
+            if (!route) return;
+            renderGoogleTransitRoute(response, routeIndex);
+            const leg = route.legs?.[0];
+            openRouteTransitPanel('Journey details', `${leg?.departure_time?.text || ''} – ${leg?.arrival_time?.text || ''}`, googleJourneyFlowHtml(route));
+        }
+
         function renderGoogleTransitRoute(response, routeIndex) {
             if (walkingDirectionsRenderer) walkingDirectionsRenderer.setMap(null);
             routeDirectionsRenderers.forEach(renderer => renderer.setMap(null));
             routeDirectionsRenderers = [];
             activeRouteLayer.clearLayers();
-            const renderer = new google.maps.DirectionsRenderer({
+            const outline = new google.maps.DirectionsRenderer({
                 map:map.native,
                 directions:response,
                 routeIndex,
                 suppressMarkers:true,
                 preserveViewport:false,
+                polylineOptions:{ strokeColor:'#7a174c', strokeOpacity:.92, strokeWeight:10, zIndex:20 },
             });
-            routeDirectionsRenderers.push(renderer);
+            const routeLine = new google.maps.DirectionsRenderer({
+                map:map.native,
+                directions:response,
+                routeIndex,
+                suppressMarkers:true,
+                preserveViewport:true,
+                polylineOptions:{ strokeColor:'#f93999', strokeOpacity:1, strokeWeight:6, zIndex:21 },
+            });
+            routeDirectionsRenderers.push(outline, routeLine);
         }
 
         function tryGoogleTransitJourney(preserveSheetState = false) {
@@ -3315,8 +3377,12 @@
                             <div class="journey-steps">${routeSteps}</div>
                             <div class="journey-board">${board ? `Board at <strong>${escapeHtml(board)}</strong>` : ''}${board && exit ? '<br>' : ''}${exit ? `Exit at ${escapeHtml(exit)}` : ''}</div>
                             <div class="journey-meta">${Math.ceil(walkSeconds / 60)} min walking · ${Math.max(0, transitSteps.length - 1)} change${transitSteps.length === 2 ? '' : 's'} · Google Transit</div>
+                            ${googleTransitLiveStatus(transitSteps)}
                         </div>
-                        <button class="route-action" data-google-transit-show="${routeIndex}">Show journey</button>
+                        <div class="journey-actions">
+                            <button class="route-action" data-google-transit-show="${routeIndex}">Show journey</button>
+                            <button class="route-action save-route-action icon-only" data-google-transit-save="${routeIndex}" title="Save route" aria-label="Save route">${iconSvg('bookmark')}</button>
+                        </div>
                     </article>`;
                 }).join('');
                 window.__mariBusJourneyOptions = response.routes.map(googleTransitRouteForSaving);
@@ -3342,7 +3408,11 @@
                 }));
                 document.querySelectorAll('[data-google-transit-show]').forEach(button => button.addEventListener('click', event => {
                     event.stopPropagation();
-                    renderGoogleTransitRoute(response, Number(button.dataset.googleTransitShow));
+                    showGoogleTransitJourneyDetails(response, Number(button.dataset.googleTransitShow));
+                }));
+                document.querySelectorAll('[data-google-transit-save]').forEach(button => button.addEventListener('click', event => {
+                    event.stopPropagation();
+                    window.saveMariBusJourney?.(button.dataset.googleTransitSave, button);
                 }));
                 renderGoogleTransitRoute(response, rankedRoutes[0].routeIndex);
                 resolve(true);
