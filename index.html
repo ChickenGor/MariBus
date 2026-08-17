@@ -807,9 +807,19 @@
         .journey-card.modern.selected { border:2px solid #2563eb; background:rgba(37,99,235,.04); }
         .journey-option-top { display:block; }
         .journey-option-head { display:flex; align-items:center; justify-content:space-between; gap:12px; }
-        .transit-priority { display:grid; grid-template-columns:1fr 1fr; gap:6px; margin:2px 0 12px; padding:4px; border-radius:12px; background:var(--input-bg); }
+        .transit-priority { display:grid; grid-template-columns:1fr 1fr auto; gap:6px; margin:2px 0 8px; padding:4px; border-radius:12px; background:var(--input-bg); }
         .transit-priority button { min-height:36px; border:0; border-radius:9px; background:transparent; color:var(--text-muted); font:inherit; font-size:11px; font-weight:800; cursor:pointer; }
         .transit-priority button.active { background:var(--sheet-bg); color:#2563eb; box-shadow:0 2px 8px var(--shadow-color); }
+        .transit-priority .adjust-transit-button { width:40px; display:grid; place-items:center; }
+        .transit-priority .adjust-transit-button .ui-icon { width:17px; height:17px; }
+        .transit-mode-panel { display:none; margin:0 0 10px; padding:10px; border:1px solid var(--border-color); border-radius:12px; background:var(--input-bg); }
+        .transit-mode-panel.open { display:block; }
+        .transit-mode-title { display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:8px; color:var(--text-main); font-size:11px; font-weight:800; }
+        .transit-mode-options { display:flex; flex-wrap:wrap; gap:6px; }
+        .transit-mode-chip { display:inline-flex; align-items:center; gap:5px; min-height:30px; padding:5px 9px; border:1px solid var(--border-color); border-radius:999px; background:var(--sheet-bg); color:var(--text-muted); font:inherit; font-size:10px; font-weight:800; cursor:pointer; }
+        .transit-mode-chip.active { border-color:#2563eb; color:#2563eb; background:rgba(37,99,235,.08); }
+        .transit-mode-chip .ui-icon { width:14px; height:14px; }
+        .apply-transit-modes { width:100%; margin-top:9px; padding:8px; border:0; border-radius:9px; background:#2563eb; color:#fff; font:inherit; font-size:11px; font-weight:850; cursor:pointer; }
         .journey-total { font-size:19px; line-height:1.1; font-weight:900; letter-spacing:-.4px; white-space:nowrap; }
         .journey-total small { display:block; margin-top:5px; font-size:12px; letter-spacing:0; color:var(--text-muted); }
         .journey-main-time { font-size:15px; font-weight:900; white-space:nowrap; }
@@ -926,16 +936,18 @@
                 box-sizing:border-box;
             }
             #bottom-sheet.detail-mode {
-                height:clamp(280px,30dvh,350px);
-                max-height:none;
+                height:auto;
+                max-height:min(350px, calc(100dvh - 96px));
                 padding:8px 16px 8px;
                 gap:4px;
                 overflow:hidden;
                 transition:height .28s cubic-bezier(.2,.8,.2,1), background-color .3s, box-shadow .3s;
             }
-            #bottom-sheet.detail-mode #transit-panel.open { flex:1 1 auto; min-height:0; overflow-y:auto; overscroll-behavior:contain; }
+            #bottom-sheet.detail-mode #transit-panel.open { flex:0 1 auto; min-height:0; overflow-y:auto; overscroll-behavior:contain; }
             #bottom-sheet.detail-mode.sheet-half { height:52dvh; }
             #bottom-sheet.detail-mode.sheet-expanded { height:80dvh; }
+            #bottom-sheet.detail-mode.sheet-half #transit-panel.open,
+            #bottom-sheet.detail-mode.sheet-expanded #transit-panel.open { flex:1 1 auto; }
             #bottom-sheet.detail-mode.sheet-dragging { transition:none; user-select:none; }
             #bottom-sheet.detail-mode > .drag-handle {
                 display:block;
@@ -1432,6 +1444,14 @@
         let routeCodeSearchTimer = null;
         let autoPlanAfterLocation = false;
         let transitJourneyPriority = localStorage.getItem('maribus-transit-priority') === 'less-walking' ? 'less-walking' : 'fastest';
+        let transitModePreferences = new Set((() => {
+            try {
+                const saved = JSON.parse(localStorage.getItem('maribus-transit-modes') || '[]');
+                return Array.isArray(saved) ? saved.filter(mode => ['bus', 'train', 'urban-rail', 'tram'].includes(mode)) : [];
+            } catch (_) {
+                return [];
+            }
+        })());
 
         function paddedVisibleBusBounds() {
             const bounds = map.native?.getBounds?.();
@@ -1960,6 +1980,7 @@
                 monorail:'<path d="M4 17h16M8 17v3M16 17v3"></path><rect x="5" y="3" width="14" height="11" rx="4"></rect><path d="M8 7h8M9 11h.01M15 11h.01"></path>',
                 metro:'<path d="M6 21h12M8 18l-2 3M16 18l2 3"></path><rect x="4" y="3" width="16" height="15" rx="5"></rect><path d="M8 7h8M8 12h.01M16 12h.01"></path>',
                 tram:'<path d="M8 2h8M12 2v3M6 21h12M8 18l-2 3M16 18l2 3"></path><rect x="4" y="5" width="16" height="13" rx="3"></rect><path d="M8 9h8M8 14h.01M16 14h.01"></path>',
+                adjust:'<path d="M4 7h10M18 7h2M4 17h2M10 17h10"></path><circle cx="16" cy="7" r="2"></circle><circle cx="8" cy="17" r="2"></circle>',
                 bookmark:'<path d="M6 4h12v17l-6-4-6 4z"></path>',
             };
             return `<svg class="${className}" viewBox="0 0 24 24">${paths[name] || ''}</svg>`;
@@ -3348,6 +3369,33 @@
                 .reduce((total, step) => total + Number(step.duration?.value || 0), 0);
         }
 
+        function preferredGoogleTransitModes() {
+            if (!transitModePreferences.size || !google.maps.TransitMode) return [];
+            const modeMap = {
+                bus:[google.maps.TransitMode.BUS],
+                train:[google.maps.TransitMode.TRAIN],
+                'urban-rail':[google.maps.TransitMode.RAIL, google.maps.TransitMode.SUBWAY],
+                tram:[google.maps.TransitMode.TRAM],
+            };
+            return [...new Set([...transitModePreferences].flatMap(mode => modeMap[mode] || []).filter(Boolean))];
+        }
+
+        function transitModeControlsHtml() {
+            const allSelected = !transitModePreferences.size;
+            const chip = (value, label, icon) => `<button type="button" class="transit-mode-chip ${value === 'all' ? (allSelected ? 'active' : '') : (transitModePreferences.has(value) ? 'active' : '')}" data-transit-mode="${value}">${iconSvg(icon)}<span>${label}</span></button>`;
+            return `<div class="transit-mode-panel" id="transit-mode-panel">
+                <div class="transit-mode-title"><span>Preferred transport</span><span>${allSelected ? 'Any mode' : `${transitModePreferences.size} selected`}</span></div>
+                <div class="transit-mode-options">
+                    ${chip('all', 'All', 'adjust')}
+                    ${chip('bus', 'Bus', 'bus')}
+                    ${chip('train', 'Train', 'train')}
+                    ${chip('urban-rail', 'MRT/LRT/Monorail', 'metro')}
+                    ${chip('tram', 'Tram', 'tram')}
+                </div>
+                <button type="button" class="apply-transit-modes" id="apply-transit-modes">Apply preferences</button>
+            </div>`;
+        }
+
         function googleTransitRouteForSaving(route) {
             const leg = route.legs?.[0] || {};
             const transitSteps = (leg.steps || []).filter(step => step.travel_mode === google.maps.TravelMode.TRANSIT);
@@ -3483,6 +3531,8 @@
             if (!fromPlace || !toPlace || !google.maps.DirectionsService) return Promise.resolve(false);
             const service = new google.maps.DirectionsService();
             const transitOptions = { departureTime:new Date() };
+            const preferredModes = preferredGoogleTransitModes();
+            if (preferredModes.length) transitOptions.modes = preferredModes;
             if (transitJourneyPriority === 'less-walking' && google.maps.TransitRoutePreference?.LESS_WALKING) {
                 transitOptions.routingPreference = google.maps.TransitRoutePreference.LESS_WALKING;
             }
@@ -3510,7 +3560,8 @@
                 const priorityControl = `<div class="transit-priority" role="group" aria-label="Journey priority">
                     <button type="button" data-transit-priority="fastest" class="${transitJourneyPriority === 'fastest' ? 'active' : ''}">Arrive faster</button>
                     <button type="button" data-transit-priority="less-walking" class="${transitJourneyPriority === 'less-walking' ? 'active' : ''}">Walk less</button>
-                </div>`;
+                    <button type="button" class="adjust-transit-button ${transitModePreferences.size ? 'active' : ''}" id="adjust-transit-modes" title="Preferred transport" aria-label="Adjust preferred transport" aria-expanded="false">${iconSvg('adjust')}</button>
+                </div>${transitModeControlsHtml()}`;
                 const cards = rankedRoutes.map(({ route, routeIndex, walkSeconds }, displayIndex) => {
                     const leg = route.legs?.[0];
                     if (!leg) return '';
@@ -3542,6 +3593,32 @@
                 activeTrackedJourneyIndex = rankedRoutes[0].routeIndex;
                 setActiveJourneyRoutes(googleTransitRouteNames(response.routes[activeTrackedJourneyIndex]));
                 openTransitPanel('', '', priorityControl + cards, preserveSheetState);
+                document.getElementById('adjust-transit-modes')?.addEventListener('click', event => {
+                    const panel = document.getElementById('transit-mode-panel');
+                    const open = panel.classList.toggle('open');
+                    event.currentTarget.classList.toggle('active', open || transitModePreferences.size > 0);
+                    event.currentTarget.setAttribute('aria-expanded', String(open));
+                });
+                document.querySelectorAll('[data-transit-mode]').forEach(button => button.addEventListener('click', () => {
+                    const mode = button.dataset.transitMode;
+                    if (mode === 'all') {
+                        transitModePreferences.clear();
+                    } else {
+                        if (transitModePreferences.has(mode)) transitModePreferences.delete(mode);
+                        else transitModePreferences.add(mode);
+                    }
+                    document.querySelectorAll('[data-transit-mode]').forEach(option => {
+                        option.classList.toggle('active', option.dataset.transitMode === 'all'
+                            ? transitModePreferences.size === 0
+                            : transitModePreferences.has(option.dataset.transitMode));
+                    });
+                    const status = document.querySelector('.transit-mode-title span:last-child');
+                    if (status) status.textContent = transitModePreferences.size ? `${transitModePreferences.size} selected` : 'Any mode';
+                }));
+                document.getElementById('apply-transit-modes')?.addEventListener('click', () => {
+                    localStorage.setItem('maribus-transit-modes', JSON.stringify([...transitModePreferences]));
+                    tryGoogleTransitJourney(true);
+                });
                 document.querySelectorAll('[data-transit-priority]').forEach(button => button.addEventListener('click', () => {
                     const priority = button.dataset.transitPriority;
                     if (priority === transitJourneyPriority) return;
