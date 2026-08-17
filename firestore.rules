@@ -1,4 +1,5 @@
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
     function signedInAs(userId) {
@@ -6,7 +7,9 @@ service cloud.firestore {
     }
 
     function hasPlus(userId) {
-      let profile = get(/databases/$(database)/documents/users/$(userId)).data;
+      let profile =
+        get(/databases/$(database)/documents/users/$(userId)).data;
+
       return profile.subscriptionPlan != 'free'
         && profile.subscriptionPlan != 'basic'
         && profile.subscriptionEnd is timestamp
@@ -24,21 +27,29 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
-      allow read: if request.auth != null && request.auth.uid == userId;
-      allow create: if request.auth != null
-        && request.auth.uid == userId
+      allow read: if signedInAs(userId);
+
+      allow create: if signedInAs(userId)
         && request.resource.data.subscriptionPlan == 'free'
         && request.resource.data.subscriptionEnd == null;
-      allow update: if request.auth != null
-        && request.auth.uid == userId
-        && request.resource.data.subscriptionPlan == resource.data.subscriptionPlan
-        && request.resource.data.subscriptionEnd == resource.data.subscriptionEnd;
+
+      allow update: if signedInAs(userId)
+        && request.resource.data.subscriptionPlan
+          == resource.data.subscriptionPlan
+        && request.resource.data.subscriptionEnd
+          == resource.data.subscriptionEnd;
+
       allow delete: if signedInAs(userId);
 
       match /savedRoutes/{routeId} {
         allow read, delete: if signedInAs(userId);
+
         allow create: if signedInAs(userId)
-          && (hasPlus(userId) || routeId in ['basic-1', 'basic-2', 'basic-3']);
+          && (
+            hasPlus(userId)
+            || routeId in ['basic-1', 'basic-2', 'basic-3']
+          );
+
         allow update: if false;
       }
     }
