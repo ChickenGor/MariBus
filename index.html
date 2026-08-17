@@ -114,6 +114,11 @@
         .drawer-icon { width:20px; height:20px; flex:0 0 20px; fill:none; stroke:currentColor; stroke-width:1.9; stroke-linecap:round; stroke-linejoin:round; color:var(--text-muted); }
         .sidebar-item-copy { flex:1; }
         .sidebar-item small { display:block; margin-top:2px; color:var(--text-muted); font-size:10px; font-weight:600; }
+        .sidebar-region { min-height:58px; display:grid; grid-template-columns:20px 1fr; gap:13px; align-items:center; padding:4px 12px; border-radius:12px; }
+        .sidebar-region-copy { min-width:0; }
+        .sidebar-region-copy label { display:block; margin-bottom:2px; font-size:10px; color:var(--text-muted); font-weight:700; }
+        #sidebar-region-select { width:100%; border:0; outline:0; padding:2px 0; background:transparent; color:var(--text-main); font:inherit; font-size:13px; font-weight:750; }
+        #sidebar-region-select option { background:var(--sheet-bg); color:var(--text-main); }
         .sidebar-theme-switch { width:38px; height:22px; position:relative; flex:0 0 38px; border-radius:999px; background:#cbd5e1; transition:background .2s; }
         .sidebar-theme-switch::after { content:''; position:absolute; top:3px; left:3px; width:16px; height:16px; border-radius:50%; background:#fff; box-shadow:0 1px 4px rgba(15,23,42,.25); transition:transform .2s; }
         body.dark-mode .sidebar-theme-switch { background:#2563eb; }
@@ -1036,6 +1041,28 @@
             #bottom-sheet.detail-mode:not(.sheet-half):not(.sheet-expanded) .journey-card.modern .journey-total { font-size:17px; }
             #bottom-sheet.detail-mode:not(.sheet-half):not(.sheet-expanded) .journey-card.modern .journey-main-time { font-size:14px; }
             #bottom-sheet.detail-mode:not(.sheet-half):not(.sheet-expanded) .journey-card.modern .journey-steps { margin-top:6px; }
+            #bottom-sheet:not(.detail-mode) { display:none; }
+            #top-bar {
+                height:64px; width:64px; padding:8px 10px; gap:0;
+                background:transparent; box-shadow:none; pointer-events:none;
+            }
+            #top-bar #menu-button { pointer-events:auto; background:color-mix(in srgb, var(--sheet-bg) 94%, transparent); box-shadow:0 3px 12px var(--shadow-color); }
+            #top-bar #journey-menu-button { pointer-events:auto; }
+            #header-journey-search,
+            #header-journey-search.expanded {
+                position:fixed; top:auto; right:16px; bottom:max(16px, env(safe-area-inset-bottom)); left:16px;
+                z-index:2050; width:auto; max-width:none; margin:0; box-sizing:border-box;
+                pointer-events:auto; background:var(--sheet-bg); box-shadow:0 5px 22px rgba(15,23,42,.2);
+            }
+            #header-journey-search { height:52px; padding:0 14px; font-size:14px; }
+            #header-journey-search.expanded { height:auto; padding:7px 12px; flex-direction:column; align-items:stretch; border-radius:20px; }
+            #top-bar:has(#header-journey-search.expanded) { height:64px; padding:8px 10px; align-items:center; }
+            #top-bar.search-focused #menu-button { display:grid; }
+            body:has(#bottom-sheet.detail-mode) #header-journey-search {
+                top:76px; right:16px; bottom:auto; left:16px;
+            }
+            body:has(#bottom-sheet.detail-mode) #map-view-toggle { bottom:292px; }
+            body:not(:has(#bottom-sheet.detail-mode)) #map-view-toggle { bottom:84px; }
             .planner-controls { flex-wrap:wrap; }
             .planner-controls input { flex-basis:40%; }
             #plan-journey-button { flex-basis:100%; }
@@ -1104,6 +1131,12 @@
             <a id="sidebar-plus-link" class="sidebar-item" href="/ad-free"><svg class="drawer-icon" viewBox="0 0 24 24"><path d="M4 7h16v12H4zM7 4h10v3M8 11h8M8 15h5"></path></svg><span class="sidebar-item-copy"><strong id="sidebar-plus-title">Upgrade to Plus</strong><small id="sidebar-plus-copy">Unlock more routes, alerts and an ad-free experience</small></span></a>
             <a class="sidebar-item" href="/saved-routes"><svg class="drawer-icon" viewBox="0 0 24 24"><path d="M6 4h12v17l-6-4-6 4z"></path></svg><span class="sidebar-item-copy">Saved routes</span></a>
             <a class="sidebar-item" href="/notifications"><svg class="drawer-icon" viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"></path></svg><span class="sidebar-item-copy">Notifications</span></a>
+            <div class="sidebar-region">
+                <svg class="drawer-icon" viewBox="0 0 24 24"><path d="M5 21V4M6 5h11l-2 4 2 4H6"></path></svg>
+                <span class="sidebar-region-copy"><label for="sidebar-region-select">Service region</label><select id="sidebar-region-select" onchange="selectSidebarRegion(this.value)">
+                    <option value="rapid-bus-kl">Klang Valley</option><option value="rapid-bus-penang">Penang</option><option value="mybas-ipoh">Perak</option><option value="mybas-johor-bahru">Johor</option><option value="mybas-melaka">Melaka</option><option value="mybas-seremban-A">Negeri Sembilan</option><option value="mybas-kuala-terengganu">Terengganu</option><option value="mybas-kota-bharu">Kelantan</option><option value="mybas-alor-setar">Kedah</option><option value="mybas-kangar">Perlis</option><option value="mybas-kuching">Sarawak</option>
+                </select></span>
+            </div>
             <a class="sidebar-item" href="/feedback"><svg class="drawer-icon" viewBox="0 0 24 24"><path d="M4 5h16v12H8l-4 4zM8 9h8M8 13h5"></path></svg><span class="sidebar-item-copy">User feedback</span></a>
             <a class="sidebar-item" href="/share"><svg class="drawer-icon" viewBox="0 0 24 24"><circle cx="18" cy="5" r="2.5"></circle><circle cx="6" cy="12" r="2.5"></circle><circle cx="18" cy="19" r="2.5"></circle><path d="m8.2 10.8 7.6-4.5M8.2 13.2l7.6 4.5"></path></svg><span class="sidebar-item-copy">Share us</span></a>
             <a class="sidebar-item" href="/rate-us"><svg class="drawer-icon" viewBox="0 0 24 24"><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-2.9-5.6 2.9 1.1-6.2L3 9.6l6.2-.9z"></path></svg><span class="sidebar-item-copy">Rate us</span></a>
@@ -1822,6 +1855,8 @@
             // 2. Update the main button text and dot color
             document.getElementById('selected-text').innerText = text;
             document.getElementById('selected-dot').className = `agency-dot ${dotClass}`;
+            const sidebarRegion = document.getElementById('sidebar-region-select');
+            if (sidebarRegion) sidebarRegion.value = value;
             if (!preserveJourney) {
                 journeySelection.from = null;
                 journeySelection.to = null;
@@ -1855,6 +1890,16 @@
             activeRouteLayer.clearLayers();
             closeTransitPanel();
             fetchBuses();
+        }
+
+        function selectSidebarRegion(value) {
+            const option = document.querySelector(`.select-option[data-value="${CSS.escape(value)}"]`);
+            if (!option) return;
+            const text = option.querySelector('.text')?.textContent?.trim() || 'Service region';
+            const dotClass = [...(option.querySelector('.agency-dot')?.classList || [])].find(name => name.startsWith('dot-')) || 'dot-mybas';
+            selectAgencyOption(value, text, dotClass);
+            toggleSidebar(false);
+            showMenuNotice(`${text} services selected`);
         }
 
         async function searchBus() {
@@ -4034,7 +4079,8 @@
             closeTransitPanel, resumeTransitPanel, showRoute, toggleJourneyPlanner, showMapSearch, planJourney,
             swapJourneyPoints, useCurrentLocationForJourney, toggleSidebar, showMenuNotice, shareMariBus,
             startBusTracking, stopBusTracking, backTransitPanel, toggleDetailSheetSize,
-            startGuidedJourney, advanceGuidedJourney, recenterGuidedJourney, endGuidedJourney
+            startGuidedJourney, advanceGuidedJourney, recenterGuidedJourney, endGuidedJourney,
+            selectSidebarRegion
         });
         initializeJourneyPlanner();
         restoreSavedJourneyFromUrl();
