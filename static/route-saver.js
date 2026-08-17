@@ -11,7 +11,10 @@ window.saveMariBusJourney=async function(index,button){
   const journey=window.__mariBusJourneyOptions?.[Number(index)];const endpoints=window.__mariBusJourneyEndpoints;
   if(!journey||!endpoints)return;
   if(!db)return;
-  button.disabled=true;const previous=button.textContent;button.textContent='Saving...';
+  const iconOnly=button.classList.contains('map-tool-button');
+  const previous=button.textContent;
+  const setButtonLabel=label=>{if(iconOnly){button.title=label;button.setAttribute('aria-label',label);}else button.textContent=label;};
+  button.disabled=true;setButtonLabel('Saving route');
   try{
     const profile=(await getDoc(doc(db,'users',user.uid))).data()||{};
     const subscriptionEnd=profile.subscriptionEnd?.toDate?.();
@@ -19,8 +22,8 @@ window.saveMariBusJourney=async function(index,button){
     const savedCollection=collection(db,'users',user.uid,'savedRoutes');
     const existing=await getDocs(savedCollection);
     if(!isPlus&&existing.size>=3){
-      button.textContent='3 route limit';
-      setTimeout(()=>{button.textContent=previous;button.disabled=false;location.href='/ad-free';},1200);
+      setButtonLabel('3 route limit');
+      setTimeout(()=>{if(!iconOnly)button.textContent=previous;button.disabled=false;location.href='/ad-free';},1200);
       return;
     }
     const routes=(journey.legs?.length?journey.legs:[journey]).map(leg=>({routeId:leg.route_id||'',routeName:leg.route_short_name||leg.route_id||'',routeColor:leg.route_color||''}));
@@ -33,6 +36,6 @@ window.saveMariBusJourney=async function(index,button){
       if(!slot)throw new Error('No basic route slot is available');
       await setDoc(doc(savedCollection,slot),savedRoute);
     }
-    button.textContent='Saved';button.classList.add('saved');
-  }catch(error){button.textContent='Could not save';button.disabled=false;setTimeout(()=>button.textContent=previous,1800);}
+    setButtonLabel('Route saved');button.classList.add('saved');
+  }catch(error){setButtonLabel('Could not save');button.disabled=false;setTimeout(()=>{if(iconOnly)setButtonLabel('Save current route');else button.textContent=previous;},1800);}
 };

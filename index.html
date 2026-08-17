@@ -77,6 +77,8 @@
         }
         #menu-button { width:40px; height:40px; flex:0 0 40px; display:grid; place-items:center; border:0; border-radius:50%; background:transparent; color:var(--text-main); cursor:pointer; }
         #menu-button:hover { background:var(--input-bg); }
+        #journey-menu-button { display:none; width:40px; height:40px; flex:0 0 40px; place-items:center; border:0; border-radius:50%; background:transparent; color:var(--text-main); cursor:pointer; }
+        #journey-menu-button:hover { background:var(--input-bg); }
 
         .logo-icon { font-size: 24px; }
         .logo-text { 
@@ -244,11 +246,6 @@
             transform: scale(0.9);
         }
 
-        #fab-locate {
-            bottom: 230px;
-            color: #6366f1;
-        }
-
         #map-view-toggle {
             position:absolute;
             right:15px;
@@ -273,6 +270,22 @@
             font:800 12px/1 Manrope, sans-serif;
             cursor:pointer;
         }
+        .map-tool-button {
+            width:44px;
+            height:38px;
+            display:grid;
+            place-items:center;
+            border:0;
+            border-radius:12px;
+            color:var(--muted-color);
+            background:transparent;
+            cursor:pointer;
+        }
+        .map-tool-button:hover { color:#2563eb; background:var(--input-bg); }
+        .map-tool-button:active { transform:scale(.94); }
+        .map-tool-button.saved { color:#16a34a; background:rgba(22,163,74,.1); }
+        .map-tool-button .ui-icon { width:19px; height:19px; }
+        .map-tool-divider { width:28px; height:1px; margin:3px auto; background:var(--border-color); }
         .map-view-button.active { color:#2563eb; background:#dbeafe; }
         body.dark-mode .map-view-button.active { color:#fff; background:#2563eb; }
 
@@ -497,10 +510,6 @@
                 display: none;
             }
 
-            #fab-locate {
-                bottom: 20px;
-                right: 390px;
-            }
             #map-view-toggle { right:390px; bottom:80px; }
 
         
@@ -527,7 +536,6 @@
             }
             #bottom-sheet:not(.detail-mode) #app-footer { display:none; }
             #bottom-sheet.detail-mode #transit-panel.open { min-height:0; overflow-y:visible; }
-            #fab-locate { right:calc(var(--desktop-side-column) + 22px); }
             #map-view-toggle { right:calc(var(--desktop-side-column) + 22px); }
             #top-bar { padding-right:calc(var(--desktop-side-column) + 24px); }
             #header-journey-search { max-width:680px; }
@@ -850,7 +858,6 @@
             #bottom-sheet:not(.detail-mode) .select-trigger { padding:10px 12px; }
             #bottom-sheet:not(.detail-mode) .select-value { gap:9px; font-size:14px; }
             #bottom-sheet:not(.detail-mode) #app-footer { display:none; }
-            body:not(:has(#bottom-sheet.detail-mode)) #fab-locate { bottom:145px; }
             #top-bar.search-focused #menu-button,
             #top-bar.search-focused #theme-toggle-header { display:none; }
             #top-bar.search-focused #header-journey-search {
@@ -866,12 +873,14 @@
             #top-bar:has(#header-journey-search.expanded) #menu-button,
             #top-bar:has(#header-journey-search.expanded) .desktop-brand,
             #top-bar:has(#header-journey-search.expanded) #theme-toggle-header { display:none; }
+            #top-bar:has(#header-journey-search.expanded) #journey-menu-button { display:grid; }
             #header-journey-search.expanded {
                 position:relative;
                 top:auto;
                 left:auto;
                 right:auto;
-                width:100%;
+                width:auto;
+                flex:1;
                 max-width:none;
                 margin:0;
                 box-sizing:border-box;
@@ -998,6 +1007,9 @@
         <button id="menu-button" type="button" onclick="toggleSidebar(true)" aria-label="Open menu" aria-expanded="false">
             <svg class="ui-icon" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"></path></svg>
         </button>
+        <button id="journey-menu-button" type="button" onclick="openSidebarFromJourney()" aria-label="Open menu" aria-expanded="false">
+            <svg class="ui-icon" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"></path></svg>
+        </button>
         <span class="desktop-brand">MARIBUS</span>
         <div id="header-journey-search">
             <div id="journey-origin-row" class="journey-input-row">
@@ -1050,9 +1062,14 @@
     <div id="map-view-toggle" role="group" aria-label="Map view">
         <button class="map-view-button active" type="button" data-map-view="2d" aria-pressed="true">2D</button>
         <button class="map-view-button" type="button" data-map-view="3d" aria-pressed="false">3D</button>
+        <span class="map-tool-divider" aria-hidden="true"></span>
+        <button id="map-save-route" class="map-tool-button" type="button" onclick="saveCurrentJourneyFromMap(this)" title="Save route" aria-label="Save current route">
+            <svg class="ui-icon" viewBox="0 0 24 24"><path d="M6 4h12v17l-6-4-6 4z"></path></svg>
+        </button>
+        <button id="map-current-location" class="map-tool-button" type="button" onclick="locateMe()" title="Current location" aria-label="Show current location">
+            <svg class="ui-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M12 2v3M12 19v3M2 12h3M19 12h3"></path><circle cx="12" cy="12" r="7"></circle></svg>
+        </button>
     </div>
-
-    <button id="fab-locate" class="fab-btn" onclick="locateMe()" title="Locate Me" aria-label="Locate me"><svg class="ui-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M12 2v3M12 19v3M2 12h3M19 12h3"></path><circle cx="12" cy="12" r="7"></circle></svg></button>
 
     <div id="bottom-sheet">
         <div class="drag-handle"></div>
@@ -1138,6 +1155,14 @@
             document.body.classList.toggle('sidebar-open', shouldOpen);
             document.getElementById('app-sidebar')?.setAttribute('aria-hidden', String(!shouldOpen));
             document.getElementById('menu-button')?.setAttribute('aria-expanded', String(shouldOpen));
+            document.getElementById('journey-menu-button')?.setAttribute('aria-expanded', String(shouldOpen));
+        };
+        window.openSidebarFromJourney = function() {
+            const search = document.getElementById('header-journey-search');
+            search?.classList.remove('expanded');
+            document.getElementById('top-bar')?.classList.remove('search-focused');
+            if (search?.contains(document.activeElement)) document.activeElement.blur();
+            window.toggleSidebar(true);
         };
         window.showMenuNotice = function(message) {
             const toast = document.getElementById('menu-toast');
@@ -1270,6 +1295,7 @@
             document.body.classList.toggle('sidebar-open', shouldOpen);
             document.getElementById('app-sidebar').setAttribute('aria-hidden', String(!shouldOpen));
             document.getElementById('menu-button').setAttribute('aria-expanded', String(shouldOpen));
+            document.getElementById('journey-menu-button').setAttribute('aria-expanded', String(shouldOpen));
         }
 
         function showMenuNotice(message) {
@@ -2689,6 +2715,16 @@
             [fromMatch.textContent, toMatch.textContent] = [toMatch.textContent, fromMatch.textContent];
             updateJourneyPlaceMarkers();
             planJourney();
+        }
+
+        function saveCurrentJourneyFromMap(button) {
+            const selectedCard = document.querySelector('.journey-card.modern.selected[data-nearby-index]');
+            const index = selectedCard ? Number(selectedCard.dataset.nearbyIndex) : Number(activeTrackedJourneyIndex || 0);
+            if (!window.__mariBusJourneyOptions?.[index] || !window.__mariBusJourneyEndpoints) {
+                showMenuNotice('Choose an A to B journey first');
+                return;
+            }
+            window.saveMariBusJourney?.(index, button);
         }
 
         function updateJourneyPlaceMarkers() {
