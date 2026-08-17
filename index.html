@@ -849,7 +849,10 @@
         .journey-card.modern .route-action { margin-top:6px; padding:7px 12px; }
         .journey-actions { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:8px; }
         .journey-actions:has(.icon-only) { grid-template-columns:1fr 42px; }
+        .journey-actions:has(.start-guidance-action) { grid-template-columns:minmax(0,1fr) minmax(74px,.62fr) 42px; }
         .journey-actions .route-action { margin-top:0; }
+        .start-guidance-action { display:flex; align-items:center; justify-content:center; gap:5px; background:#0f766e !important; }
+        .start-guidance-action .ui-icon { width:15px; height:15px; }
         .route-action.icon-only { width:42px; min-width:42px; display:grid; place-items:center; padding:7px !important; }
         .route-action.icon-only .ui-icon { width:18px; height:18px; }
         .save-route-action { background:transparent !important; color:var(--text-main); border:1px solid var(--border) !important; }
@@ -1057,7 +1060,13 @@
             #header-journey-search { height:52px; padding:0 14px; font-size:14px; }
             #header-journey-search.expanded { height:auto; padding:7px 12px; flex-direction:column; align-items:stretch; border-radius:20px; }
             #top-bar:has(#header-journey-search.expanded) { height:64px; padding:8px 10px; align-items:center; }
-            #top-bar.search-focused #menu-button { display:grid; }
+            #top-bar.search-focused #menu-button,
+            #top-bar.search-focused #journey-menu-button { display:none; }
+            #top-bar.search-focused #header-journey-search,
+            #top-bar.search-focused #header-journey-search.expanded {
+                top:max(12px, env(safe-area-inset-top)); right:12px; bottom:auto; left:12px;
+                width:auto; max-width:none;
+            }
             body:has(#bottom-sheet.detail-mode) #header-journey-search {
                 top:76px; right:16px; bottom:auto; left:16px;
             }
@@ -2085,6 +2094,7 @@
                 metro:'<path d="M6 21h12M8 18l-2 3M16 18l2 3"></path><rect x="4" y="3" width="16" height="15" rx="5"></rect><path d="M8 7h8M8 12h.01M16 12h.01"></path>',
                 tram:'<path d="M8 2h8M12 2v3M6 21h12M8 18l-2 3M16 18l2 3"></path><rect x="4" y="5" width="16" height="13" rx="3"></rect><path d="M8 9h8M8 14h.01M16 14h.01"></path>',
                 adjust:'<path d="M4 7h10M18 7h2M4 17h2M10 17h10"></path><circle cx="16" cy="7" r="2"></circle><circle cx="8" cy="17" r="2"></circle>',
+                navigation:'<path d="m12 3 7 17-7-4-7 4z"></path>',
                 bookmark:'<path d="M6 4h12v17l-6-4-6 4z"></path>',
             };
             return `<svg class="${className}" viewBox="0 0 24 24">${paths[name] || ''}</svg>`;
@@ -3897,6 +3907,7 @@
                         </div>
                         <div class="journey-actions">
                             <button class="route-action" data-google-transit-show="${routeIndex}">Show journey</button>
+                            <button class="route-action start-guidance-action" data-google-transit-start="${routeIndex}">${iconSvg('navigation')}<span>Start</span></button>
                             <button class="route-action save-route-action icon-only" data-google-transit-save="${routeIndex}" title="Save route" aria-label="Save route">${iconSvg('bookmark')}</button>
                         </div>
                     </article>`;
@@ -3954,6 +3965,10 @@
                 document.querySelectorAll('[data-google-transit-show]').forEach(button => button.addEventListener('click', event => {
                     event.stopPropagation();
                     showGoogleTransitJourneyDetails(response, Number(button.dataset.googleTransitShow));
+                }));
+                document.querySelectorAll('[data-google-transit-start]').forEach(button => button.addEventListener('click', event => {
+                    event.stopPropagation();
+                    startGuidedJourney(Number(button.dataset.googleTransitStart));
                 }));
                 document.querySelectorAll('[data-google-transit-save]').forEach(button => button.addEventListener('click', event => {
                     event.stopPropagation();
