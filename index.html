@@ -781,6 +781,9 @@
         .journey-card.modern.selected { border:2px solid #2563eb; background:rgba(37,99,235,.04); }
         .journey-option-top { display:block; }
         .journey-option-head { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+        .transit-priority { display:grid; grid-template-columns:1fr 1fr; gap:6px; margin:2px 0 12px; padding:4px; border-radius:12px; background:var(--input-bg); }
+        .transit-priority button { min-height:36px; border:0; border-radius:9px; background:transparent; color:var(--text-muted); font:inherit; font-size:11px; font-weight:800; cursor:pointer; }
+        .transit-priority button.active { background:var(--sheet-bg); color:#2563eb; box-shadow:0 2px 8px var(--shadow-color); }
         .journey-total { font-size:19px; line-height:1.1; font-weight:900; letter-spacing:-.4px; white-space:nowrap; }
         .journey-total small { display:block; margin-top:5px; font-size:12px; letter-spacing:0; color:var(--text-muted); }
         .journey-main-time { font-size:15px; font-weight:900; white-space:nowrap; }
@@ -855,7 +858,24 @@
                 max-width:none;
                 margin:0;
             }
-            #header-journey-search.expanded { top:78px; }
+            #top-bar:has(#header-journey-search.expanded) {
+                height:104px;
+                padding:6px 12px;
+                align-items:center;
+            }
+            #top-bar:has(#header-journey-search.expanded) #menu-button,
+            #top-bar:has(#header-journey-search.expanded) .desktop-brand,
+            #top-bar:has(#header-journey-search.expanded) #theme-toggle-header { display:none; }
+            #header-journey-search.expanded {
+                position:relative;
+                top:auto;
+                left:auto;
+                right:auto;
+                width:100%;
+                max-width:none;
+                margin:0;
+                box-sizing:border-box;
+            }
             #bottom-sheet.detail-mode {
                 height:150px;
                 max-height:none;
@@ -1342,6 +1362,7 @@
         const journeySearchTimers = {};
         let routeCodeSearchTimer = null;
         let autoPlanAfterLocation = false;
+        let transitJourneyPriority = localStorage.getItem('maribus-transit-priority') === 'less-walking' ? 'less-walking' : 'fastest';
 
         function paddedVisibleBusBounds() {
             const bounds = map.native?.getBounds?.();
@@ -1892,6 +1913,7 @@
         function resumeTransitPanel() {
             const panel = document.getElementById('transit-panel');
             if (!panel.querySelector('#panel-content')?.children.length) return;
+            focusJourneyMap();
             document.getElementById('resume-journey-button').classList.remove('visible');
             panel.classList.add('open');
             const sheet = document.getElementById('bottom-sheet');
@@ -1906,6 +1928,9 @@
             // selected journey. Hide the fleet layer while inspecting A-to-B.
             markersGroup.clearLayers();
             journeyMapFocused = true;
+            if (countdownInterval) clearInterval(countdownInterval);
+            countdownInterval = null;
+            document.getElementById('refresh-timer').innerText = 'Journey mode';
         }
 
         function createStopMarker(stop, color = null) {
@@ -2249,6 +2274,7 @@
                     searchRouteCode(routeCode);
                 });
                 input.addEventListener('input', () => {
+                    const hadOrigin = Boolean(journeySelection.from);
                     const routeCode = input.value.trim().toUpperCase();
                     const isRouteCode = /^[A-Z]{1,3}\d{1,4}(?:[A-Z]|\([A-Z]\))?$/.test(routeCode);
                     document.body.classList.toggle('route-code-entry', isRouteCode);
@@ -2265,10 +2291,12 @@
                     journeySelection[kind] = null;
                     document.getElementById(`journey-${kind}-match`).textContent = '';
                     if (kind === 'to') {
-                        journeySelection.from = null;
-                        document.getElementById('journey-from').value = '';
-                        document.getElementById('header-journey-search').classList.remove('expanded');
-                        document.getElementById('destination-prefix').innerHTML = iconSvg('search');
+                        // Editing B must never discard an origin the user has
+                        // already selected. Only use the compact destination-
+                        // first state when no A value exists yet.
+                        document.getElementById('header-journey-search').classList.toggle('expanded', hadOrigin);
+                        if (hadOrigin) document.getElementById('destination-prefix').textContent = 'B';
+                        else document.getElementById('destination-prefix').innerHTML = iconSvg('search');
                     }
                 });
                 const autocomplete = new google.maps.places.Autocomplete(input, {
@@ -2283,6 +2311,7 @@
                     matchPlaceToStop(kind, {
                         lat: place.geometry.location.lat(), lng: place.geometry.location.lng(),
                         name: place.name || place.formatted_address || input.value,
+                        placeId: place.place_id || '',
                     });
                 });
             });
@@ -2764,8 +2793,8 @@
         function showWalkingFallback(fromPlace, toPlace, transitNotice = '') {
             const service = new google.maps.DirectionsService();
             service.route({
-                origin: { lat:Number(fromPlace.lat), lng:Number(fromPlace.lng) },
-                destination: { lat:Number(toPlace.lat), lng:Number(toPlace.lng) },
+                origin: googleDirectionsLocation(fromPlace),
+                destination: googleDirectionsLocation(toPlace),
                 travelMode: google.maps.TravelMode.WALKING,
             }, (response, status) => {
                 if (status !== google.maps.DirectionsStatus.OK || !response?.routes?.[0]?.legs?.[0]) {
@@ -2807,6 +2836,9 @@
                 openTransitPanel('Choose your stops', '', '<p class="panel-message">Select both stops from the search suggestions.</p>');
                 return;
             }
+            // Once A and B are ready, the full fleet is unrelated. Hide it and
+            // pause its refresh loop; selected-journey live tracking continues.
+            focusJourneyMap();
             if (journeySelection.from.place && journeySelection.to.place) {
                 if (window.MARIBUS_CONFIG?.multimodal_routing_enabled) {
                     const multimodalHandled = await tryMultimodalJourney();
@@ -3156,6 +3188,18 @@
             return `<span class="journey-route" style="background:${color}">${escapeHtml(route)}</span>`;
         }
 
+        function googleDirectionsLocation(place) {
+            return place.placeId
+                ? { placeId:place.placeId }
+                : { lat:Number(place.lat), lng:Number(place.lng) };
+        }
+
+        function googleRouteWalkingSeconds(route) {
+            return (route.legs?.[0]?.steps || [])
+                .filter(step => step.travel_mode === google.maps.TravelMode.WALKING)
+                .reduce((total, step) => total + Number(step.duration?.value || 0), 0);
+        }
+
         function renderGoogleTransitRoute(response, routeIndex) {
             if (walkingDirectionsRenderer) walkingDirectionsRenderer.setMap(null);
             routeDirectionsRenderers.forEach(renderer => renderer.setMap(null));
@@ -3176,31 +3220,43 @@
             const toPlace = journeySelection.to.place;
             if (!fromPlace || !toPlace || !google.maps.DirectionsService) return Promise.resolve(false);
             const service = new google.maps.DirectionsService();
+            const transitOptions = { departureTime:new Date() };
+            if (transitJourneyPriority === 'less-walking' && google.maps.TransitRoutePreference?.LESS_WALKING) {
+                transitOptions.routingPreference = google.maps.TransitRoutePreference.LESS_WALKING;
+            }
             return new Promise(resolve => service.route({
-                origin:{ lat:Number(fromPlace.lat), lng:Number(fromPlace.lng) },
-                destination:{ lat:Number(toPlace.lat), lng:Number(toPlace.lng) },
+                origin:googleDirectionsLocation(fromPlace),
+                destination:googleDirectionsLocation(toPlace),
                 travelMode:google.maps.TravelMode.TRANSIT,
                 provideRouteAlternatives:true,
-                // Transit results are time-sensitive and Google only accepts
-                // present/future departures. A small offset avoids clock skew.
-                transitOptions:{ departureTime:new Date(Date.now() + 60 * 1000) },
+                transitOptions,
             }, (response, status) => {
                 if (status !== google.maps.DirectionsStatus.OK || !response?.routes?.length) {
                     console.info('Google Transit returned no KL journey', status);
                     resolve(false);
                     return;
                 }
-                const html = response.routes.map((route, routeIndex) => {
+                const rankedRoutes = response.routes.map((route, routeIndex) => ({
+                    route,
+                    routeIndex,
+                    walkSeconds:googleRouteWalkingSeconds(route),
+                    durationSeconds:Number(route.legs?.[0]?.duration?.value || Number.MAX_SAFE_INTEGER),
+                })).sort((a, b) => transitJourneyPriority === 'less-walking'
+                    ? a.walkSeconds - b.walkSeconds || a.durationSeconds - b.durationSeconds
+                    : a.durationSeconds - b.durationSeconds || a.walkSeconds - b.walkSeconds);
+                const priorityControl = `<div class="transit-priority" role="group" aria-label="Journey priority">
+                    <button type="button" data-transit-priority="fastest" class="${transitJourneyPriority === 'fastest' ? 'active' : ''}">Arrive faster</button>
+                    <button type="button" data-transit-priority="less-walking" class="${transitJourneyPriority === 'less-walking' ? 'active' : ''}">Walk less</button>
+                </div>`;
+                const cards = rankedRoutes.map(({ route, routeIndex, walkSeconds }, displayIndex) => {
                     const leg = route.legs?.[0];
                     if (!leg) return '';
                     const steps = leg.steps || [];
                     const transitSteps = steps.filter(step => step.travel_mode === google.maps.TravelMode.TRANSIT);
-                    const walkSeconds = steps.filter(step => step.travel_mode === google.maps.TravelMode.WALKING)
-                        .reduce((total, step) => total + Number(step.duration?.value || 0), 0);
                     const routeSteps = steps.map(googleTransitStepLabel).join('<span>&rsaquo;</span>');
                     const board = transitSteps[0]?.transit?.departure_stop?.name;
                     const exit = transitSteps[transitSteps.length - 1]?.transit?.arrival_stop?.name;
-                    return `<article class="journey-card modern ${routeIndex === 0 ? 'selected' : ''}" data-google-transit-index="${routeIndex}">
+                    return `<article class="journey-card modern ${displayIndex === 0 ? 'selected' : ''}" data-google-transit-index="${routeIndex}">
                         <div class="journey-option-top">
                             <div class="journey-option-head"><div class="journey-total">${escapeHtml(leg.duration?.text || '')}</div><div class="journey-main-time">${escapeHtml(leg.departure_time?.text || '')} &ndash; ${escapeHtml(leg.arrival_time?.text || '')}</div></div>
                             <div class="journey-steps">${routeSteps}</div>
@@ -3210,7 +3266,15 @@
                         <button class="route-action" data-google-transit-show="${routeIndex}">Show journey</button>
                     </article>`;
                 }).join('');
-                openTransitPanel('Public transport options', 'MRT, LRT, Monorail, KTM and buses', html);
+                openTransitPanel('Public transport options', transitJourneyPriority === 'less-walking' ? 'Prioritising less walking' : 'Prioritising arrival time', priorityControl + cards);
+                document.querySelectorAll('[data-transit-priority]').forEach(button => button.addEventListener('click', () => {
+                    const priority = button.dataset.transitPriority;
+                    if (priority === transitJourneyPriority) return;
+                    transitJourneyPriority = priority;
+                    localStorage.setItem('maribus-transit-priority', priority);
+                    openTransitPanel('Updating journey options', '', '<p class="panel-message">Applying your journey priority…</p>');
+                    tryGoogleTransitJourney();
+                }));
                 document.querySelectorAll('[data-google-transit-index]').forEach(card => card.addEventListener('click', () => {
                     document.querySelectorAll('.journey-card.modern').forEach(item => item.classList.remove('selected'));
                     card.classList.add('selected');
@@ -3220,7 +3284,7 @@
                     event.stopPropagation();
                     renderGoogleTransitRoute(response, Number(button.dataset.googleTransitShow));
                 }));
-                renderGoogleTransitRoute(response, 0);
+                renderGoogleTransitRoute(response, rankedRoutes[0].routeIndex);
                 resolve(true);
             }));
         }
