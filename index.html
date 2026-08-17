@@ -866,6 +866,17 @@
         .google-flow-copy strong,.google-flow-copy span { display:block; }
         .google-flow-copy strong { font-size:12px; }
         .google-flow-copy span { margin-top:3px; color:var(--text-muted); font-size:11px; line-height:1.35; }
+        .start-guidance-button { width:100%; margin:0 0 10px; padding:10px 12px; border:0; border-radius:11px; background:#2563eb; color:#fff; font:inherit; font-size:12px; font-weight:850; cursor:pointer; }
+        .guided-journey-card { padding:12px; border:1px solid rgba(37,99,235,.28); border-radius:15px; background:rgba(37,99,235,.05); }
+        .guided-stage-kicker { color:#2563eb; font-size:10px; font-weight:900; letter-spacing:.6px; text-transform:uppercase; }
+        .guided-stage-title { margin:4px 0 2px; color:var(--text-main); font-size:18px; line-height:1.18; font-weight:900; }
+        .guided-stage-meta { color:var(--text-muted); font-size:11px; line-height:1.4; }
+        .guided-stage-progress { height:5px; margin:11px 0; overflow:hidden; border-radius:999px; background:var(--border-color); }
+        .guided-stage-progress span { display:block; height:100%; border-radius:inherit; background:#2563eb; transition:width .3s; }
+        .guided-actions { display:grid; grid-template-columns:1fr 1fr; gap:7px; margin-top:10px; }
+        .guided-action { min-height:36px; padding:8px; border:1px solid var(--border-color); border-radius:10px; background:var(--sheet-bg); color:var(--text-main); font:inherit; font-size:11px; font-weight:850; cursor:pointer; }
+        .guided-action.primary { border-color:#2563eb; background:#2563eb; color:#fff; }
+        .guided-action.danger { color:#dc2626; }
         .journey-live-progress { margin-top:9px; padding:9px 10px 8px; border-radius:10px; background:var(--input-bg); }
         .journey-progress-track { position:relative; height:6px; margin:8px 7px 7px; border-radius:999px; background:#dbe2ea; }
         .journey-progress-fill { position:absolute; inset:0 auto 0 0; width:0; border-radius:inherit; background:#16a34a; transition:width .45s ease; }
@@ -994,6 +1005,7 @@
                 display:none;
             }
             #bottom-sheet.detail-mode .panel-close { display:none; }
+            #bottom-sheet.detail-mode .panel-heading:has(#panel-title:empty) { display:none; }
             #bottom-sheet.detail-mode:not(.sheet-half):not(.sheet-expanded) .panel-heading:has(#panel-title:not(:empty)) {
                 position:sticky;
                 top:0;
@@ -1467,6 +1479,10 @@
                 return [];
             }
         })());
+        let guidedJourney = null;
+        let guidedJourneyWatchId = null;
+        let guidedJourneyLastPosition = null;
+        let guidedJourneyMarker = null;
 
         function paddedVisibleBusBounds() {
             const bounds = map.native?.getBounds?.();
@@ -2047,6 +2063,7 @@
             sheet.style.height = '';
             const resumeButton = document.getElementById('resume-journey-button');
             if (forceClose) {
+                stopGuidedJourney(true);
                 journeySelection.from = null;
                 journeySelection.to = null;
                 autoPlanAfterLocation = false;
@@ -2055,6 +2072,7 @@
                 activeJourneyRouteNames.clear();
                 window.__mariBusJourneyOptions = [];
                 window.__mariBusJourneyEndpoints = null;
+                window.__mariBusGoogleTransitResponse = null;
                 ['journey-from', 'journey-to'].forEach(id => {
                     const input = document.getElementById(id);
                     if (input) input.value = '';
@@ -3542,9 +3560,165 @@
             return `<div class="live-journey-status"><span class="live-dot"></span><span>No approaching live ${escapeHtml(routeName)} bus can be estimated</span></div>`;
         }
 
-        function googleJourneyFlowHtml(route) {
+        function googleStepPoint(location) {
+            if (!location) return null;
+            const lat = typeof location.lat === 'function' ? location.lat() : Number(location.lat);
+            const lng = typeof location.lng === 'function' ? location.lng() : Number(location.lng);
+            return Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
+        }
+
+        function guidedDistanceMetres(from, to) {
+            if (!from || !to) return Number.POSITIVE_INFINITY;
+            const radians = degrees => degrees * Math.PI / 180;
+            const dLat = radians(to.lat - from.lat);
+            const dLng = radians(to.lng - from.lng);
+            const a = Math.sin(dLat / 2) ** 2 + Math.cos(radians(from.lat)) * Math.cos(radians(to.lat)) * Math.sin(dLng / 2) ** 2;
+            return 6371000 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        }
+
+        function guidedBearing(from, to) {
+            const radians = degrees => degrees * Math.PI / 180;
+            const degrees = value => value * 180 / Math.PI;
+            const dLng = radians(to.lng - from.lng);
+            const y = Math.sin(dLng) * Math.cos(radians(to.lat));
+            const x = Math.cos(radians(from.lat)) * Math.sin(radians(to.lat)) - Math.sin(radians(from.lat)) * Math.cos(radians(to.lat)) * Math.cos(dLng);
+            return (degrees(Math.atan2(y, x)) + 360) % 360;
+        }
+
+        function guidedStageDetails() {
+            const step = guidedJourney?.steps?.[guidedJourney.stageIndex];
+            if (!step) return null;
+            if (step.travel_mode === google.maps.TravelMode.WALKING) {
+                const nextTransit = guidedJourney.steps.slice(guidedJourney.stageIndex + 1).find(item => item.travel_mode === google.maps.TravelMode.TRANSIT);
+                const finalStage = !nextTransit;
+                return {
+                    kind:'walk', kicker:finalStage ? 'Final walk' : 'Walk to station',
+                    title:finalStage ? `Walk to ${guidedJourney.destinationName}` : `Walk to ${nextTransit?.transit?.departure_stop?.name || 'boarding station'}`,
+                    meta:`${step.duration?.text || ''}${step.distance?.text ? ` · ${step.distance.text}` : ''}${step.instructions ? ` · ${plainGoogleInstruction(step.instructions)}` : ''}`,
+                    action:finalStage ? 'Finish journey' : "I've arrived",
+                };
+            }
+            const line = step.transit?.line || {};
+            const routeName = line.short_name || line.name || 'service';
+            if (!guidedJourney.boardedStages.has(guidedJourney.stageIndex)) {
+                return { kind:'wait', kicker:'Wait for service', title:`Board ${routeName} at ${step.transit?.departure_stop?.name || 'the station'}`, meta:`${step.transit?.departure_time?.text ? `Scheduled ${step.transit.departure_time.text}` : 'Check the live arrival information'}${step.transit?.headsign ? ` · towards ${step.transit.headsign}` : ''}`, action:"I'm on this service" };
+            }
+            return { kind:'ride', kicker:'On board', title:`Next: ${step.transit?.arrival_stop?.name || 'exit station'}`, meta:`${routeName}${step.transit?.num_stops ? ` · ${step.transit.num_stops} stops` : ''}${step.transit?.arrival_time?.text ? ` · arrive ${step.transit.arrival_time.text}` : ''}`, action:'Get off / Continue' };
+        }
+
+        function renderGuidedJourney() {
+            if (!guidedJourney) return;
+            const details = guidedStageDetails();
+            if (!details) {
+                showMenuNotice('Journey complete');
+                closeTransitPanel(true);
+                return;
+            }
+            const progress = Math.round(((guidedJourney.stageIndex + (details.kind === 'ride' ? .5 : 0)) / guidedJourney.steps.length) * 100);
+            document.getElementById('panel-title').textContent = details.kicker;
+            document.getElementById('panel-subtitle').textContent = `Stage ${guidedJourney.stageIndex + 1} of ${guidedJourney.steps.length}`;
+            document.getElementById('panel-content').innerHTML = `<div class="guided-journey-card">
+                <div class="guided-stage-kicker">${escapeHtml(details.kicker)}</div>
+                <div class="guided-stage-title">${escapeHtml(details.title)}</div>
+                <div class="guided-stage-meta">${escapeHtml(details.meta)}</div>
+                <div class="guided-stage-progress"><span style="width:${Math.max(4, progress)}%"></span></div>
+                <div class="guided-actions">
+                    <button class="guided-action" type="button" onclick="recenterGuidedJourney()">Recenter</button>
+                    <button class="guided-action primary" type="button" onclick="advanceGuidedJourney()">${escapeHtml(details.action)}</button>
+                    <button class="guided-action danger" type="button" onclick="endGuidedJourney()">End trip</button>
+                </div>
+            </div>`;
+        }
+
+        function updateGuidedJourneyPosition(position) {
+            if (!guidedJourney) return;
+            const next = { lat:Number(position.coords.latitude), lng:Number(position.coords.longitude) };
+            if (!Number.isFinite(next.lat) || !Number.isFinite(next.lng)) return;
+            let heading = map.native.getHeading?.() || 0;
+            if (guidedJourneyLastPosition && guidedDistanceMetres(guidedJourneyLastPosition, next) > 5) {
+                heading = guidedBearing(guidedJourneyLastPosition, next);
+                map.native.setHeading(heading);
+            }
+            guidedJourneyLastPosition = next;
+            if (!guidedJourneyMarker) {
+                guidedJourneyMarker = new google.maps.Marker({ map:map.native, zIndex:3000, title:'Your journey position' });
+            }
+            guidedJourneyMarker.setPosition(next);
+            guidedJourneyMarker.setIcon({
+                path:google.maps.SymbolPath.FORWARD_CLOSED_ARROW,
+                rotation:heading, scale:6, fillColor:'#2563eb', fillOpacity:1,
+                strokeColor:'#ffffff', strokeWeight:2,
+            });
+            map.native.setCenter(next);
+            if ((map.native.getZoom() || 0) < 17) map.native.setZoom(17);
+            map.native.setTilt(45);
+            const step = guidedJourney.steps[guidedJourney.stageIndex];
+            if (step?.travel_mode === google.maps.TravelMode.WALKING && guidedDistanceMetres(next, googleStepPoint(step.end_location)) < 45) {
+                guidedJourney.stageIndex += 1;
+                renderGuidedJourney();
+            }
+        }
+
+        function startGuidedJourney(routeIndex) {
+            const response = window.__mariBusGoogleTransitResponse;
+            const route = response?.routes?.[Number(routeIndex)];
+            const steps = route?.legs?.[0]?.steps || [];
+            if (!steps.length) {
+                showMenuNotice('Guided journey is unavailable for this route');
+                return;
+            }
+            stopGuidedJourney(false);
+            guidedJourney = { routeIndex:Number(routeIndex), steps, stageIndex:0, boardedStages:new Set(), destinationName:journeySelection.to?.place?.name || 'your destination' };
+            renderGoogleTransitRoute(response, Number(routeIndex));
+            openRouteTransitPanel('Journey guidance', '', '');
+            renderGuidedJourney();
+            if (!navigator.geolocation) {
+                showMenuNotice('Location tracking is unavailable');
+                return;
+            }
+            guidedJourneyWatchId = navigator.geolocation.watchPosition(updateGuidedJourneyPosition, error => {
+                console.warn('Journey guidance location unavailable', error);
+                showMenuNotice('Allow precise location for journey guidance');
+            }, { enableHighAccuracy:true, maximumAge:3000, timeout:15000 });
+        }
+
+        function advanceGuidedJourney() {
+            if (!guidedJourney) return;
+            const step = guidedJourney.steps[guidedJourney.stageIndex];
+            if (step?.travel_mode === google.maps.TravelMode.TRANSIT && !guidedJourney.boardedStages.has(guidedJourney.stageIndex)) {
+                guidedJourney.boardedStages.add(guidedJourney.stageIndex);
+            } else {
+                guidedJourney.stageIndex += 1;
+            }
+            renderGuidedJourney();
+        }
+
+        function recenterGuidedJourney() {
+            if (guidedJourneyLastPosition) updateGuidedJourneyPosition({ coords:{ latitude:guidedJourneyLastPosition.lat, longitude:guidedJourneyLastPosition.lng } });
+            else showMenuNotice('Waiting for your location…');
+        }
+
+        function stopGuidedJourney(resetCamera = true) {
+            if (guidedJourneyWatchId !== null) navigator.geolocation?.clearWatch?.(guidedJourneyWatchId);
+            guidedJourneyWatchId = null;
+            guidedJourney = null;
+            guidedJourneyLastPosition = null;
+            guidedJourneyMarker?.setMap(null);
+            guidedJourneyMarker = null;
+            if (resetCamera) {
+                map.native.setHeading(0);
+                map.native.setTilt(0);
+            }
+        }
+
+        function endGuidedJourney() {
+            stopGuidedJourney(true);
+            closeTransitPanel(true);
+        }
+
+        function googleJourneyFlowHtml(route, routeIndex) {
             const steps = route.legs?.[0]?.steps || [];
-            return `<div class="google-journey-flow">${steps.map(step => {
+            return `<button class="start-guidance-button" type="button" onclick="startGuidedJourney(${Number(routeIndex)})">Start journey guidance</button><div class="google-journey-flow">${steps.map(step => {
                 if (step.travel_mode === google.maps.TravelMode.WALKING) {
                     return `<div class="google-flow-step"><span class="google-flow-icon">${iconSvg('walk')}</span><div class="google-flow-copy"><strong>Walk ${escapeHtml(step.duration?.text || '')}</strong><span>${escapeHtml(plainGoogleInstruction(step.instructions))}${step.distance?.text ? ` · ${escapeHtml(step.distance.text)}` : ''}</span></div></div>`;
                 }
@@ -3564,7 +3738,7 @@
             if (!route) return;
             renderGoogleTransitRoute(response, routeIndex);
             const leg = route.legs?.[0];
-            openRouteTransitPanel('Journey details', `${leg?.departure_time?.text || ''} – ${leg?.arrival_time?.text || ''}`, googleJourneyFlowHtml(route));
+            openRouteTransitPanel('Journey details', `${leg?.departure_time?.text || ''} – ${leg?.arrival_time?.text || ''}`, googleJourneyFlowHtml(route, routeIndex));
             journeyDetailBackAction = () => tryGoogleTransitJourney(true);
             const closeButton = document.querySelector('#transit-panel .panel-close');
             closeButton.innerHTML = '&#8592;';
@@ -3683,6 +3857,7 @@
                     </article>`;
                 }).join('');
                 window.__mariBusJourneyOptions = response.routes.map(googleTransitRouteForSaving);
+                window.__mariBusGoogleTransitResponse = response;
                 window.__mariBusJourneyEndpoints = {
                     from:{ name:fromPlace.name, lat:fromPlace.lat, lng:fromPlace.lng },
                     to:{ name:toPlace.name, lat:toPlace.lat, lng:toPlace.lng },
@@ -3858,7 +4033,8 @@
             toggleTheme, locateMe, searchBus, selectAgencyOption, toggleAgencyDropdown,
             closeTransitPanel, resumeTransitPanel, showRoute, toggleJourneyPlanner, showMapSearch, planJourney,
             swapJourneyPoints, useCurrentLocationForJourney, toggleSidebar, showMenuNotice, shareMariBus,
-            startBusTracking, stopBusTracking, backTransitPanel, toggleDetailSheetSize
+            startBusTracking, stopBusTracking, backTransitPanel, toggleDetailSheetSize,
+            startGuidedJourney, advanceGuidedJourney, recenterGuidedJourney, endGuidedJourney
         });
         initializeJourneyPlanner();
         restoreSavedJourneyFromUrl();
