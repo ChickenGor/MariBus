@@ -320,6 +320,7 @@
             flex:0 0 auto;
         }
         .sheet-swipe-hint { display:none; }
+        .sheet-detail-controls { display:none; }
 
         .sheet-header {
             display: flex;
@@ -847,7 +848,12 @@
         .route-action.icon-only { width:42px; min-width:42px; display:grid; place-items:center; padding:7px !important; }
         .route-action.icon-only .ui-icon { width:18px; height:18px; }
         .save-route-action { background:transparent !important; color:var(--text-main); border:1px solid var(--border) !important; }
-        .save-route-action.saved { color:#15803d; border-color:rgba(22,163,74,.35) !important; background:rgba(22,163,74,.08) !important; }
+        .save-route-action.saved {
+            color:#fff; border-color:#16a34a !important; background:#16a34a !important;
+            box-shadow:0 3px 10px rgba(22,163,74,.24);
+        }
+        .save-route-action.saved .ui-icon,
+        .map-tool-button.saved .ui-icon { fill:currentColor; stroke:currentColor; }
         .live-journey-status { display:flex; align-items:center; gap:7px; margin-top:8px; padding:7px 9px; border-radius:9px; background:var(--input-bg); color:var(--text-muted); font-size:11px; }
         .live-journey-status.live { color:#15803d; background:rgba(22,163,74,.1); font-weight:750; }
         .live-dot { width:7px; height:7px; flex:0 0 7px; border-radius:50%; background:#94a3b8; }
@@ -950,24 +956,27 @@
             #bottom-sheet.detail-mode.sheet-expanded #transit-panel.open { flex:1 1 auto; }
             #bottom-sheet.detail-mode.sheet-dragging { transition:none; user-select:none; }
             #bottom-sheet.detail-mode > .drag-handle {
-                display:block;
-                width:48px;
-                height:5px;
-                margin:0 auto 3px;
-                cursor:grab;
-                touch-action:none;
+                display:none;
             }
-            #bottom-sheet.detail-mode:not(.sheet-half):not(.sheet-expanded) .sheet-swipe-hint {
-                display:block;
-                margin:-1px 0 1px;
-                color:var(--text-muted);
-                font-size:9px;
-                font-weight:700;
-                letter-spacing:.15px;
-                text-align:center;
-                padding:2px 0 5px;
-                cursor:grab;
-                touch-action:none;
+            #bottom-sheet.detail-mode .sheet-swipe-hint { display:none; }
+            #bottom-sheet.detail-mode .sheet-detail-controls {
+                display:grid;
+                grid-template-columns:36px 1fr 36px;
+                align-items:center;
+                gap:8px;
+                min-height:34px;
+                flex:0 0 auto;
+            }
+            .sheet-control-button {
+                height:32px; border:0; border-radius:10px; background:transparent;
+                color:var(--text-main); display:grid; place-items:center; cursor:pointer;
+            }
+            .sheet-control-button:active { background:var(--input-bg); transform:scale(.96); }
+            .sheet-control-button .ui-icon { width:19px; height:19px; }
+            #sheet-size-toggle {
+                width:max-content; max-width:100%; justify-self:center; padding:0 13px;
+                color:#2563eb; background:var(--input-bg); font:inherit; font-size:10px;
+                font-weight:850; white-space:nowrap;
             }
             #bottom-sheet.detail-mode.sheet-dragging > .drag-handle { cursor:grabbing; }
             #bottom-sheet.detail-mode:not(.sheet-half):not(.sheet-expanded) .journey-card.modern {
@@ -982,12 +991,9 @@
                 height:0;
             }
             #bottom-sheet.detail-mode:not(.sheet-half):not(.sheet-expanded) .panel-close {
-                position:absolute;
-                top:10px;
-                right:14px;
-                z-index:6;
-                padding:2px 6px;
+                display:none;
             }
+            #bottom-sheet.detail-mode .panel-close { display:none; }
             #bottom-sheet.detail-mode:not(.sheet-half):not(.sheet-expanded) .panel-heading:has(#panel-title:not(:empty)) {
                 position:sticky;
                 top:0;
@@ -1127,6 +1133,15 @@
     <div id="bottom-sheet">
         <div class="drag-handle"></div>
         <div class="sheet-swipe-hint" aria-hidden="true">Swipe up for more</div>
+        <div class="sheet-detail-controls" aria-label="Journey panel controls">
+            <button class="sheet-control-button" type="button" onclick="backTransitPanel()" aria-label="Back">
+                <svg class="ui-icon" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"></path></svg>
+            </button>
+            <button class="sheet-control-button" id="sheet-size-toggle" type="button" onclick="toggleDetailSheetSize()" aria-expanded="false">Show more</button>
+            <button class="sheet-control-button" type="button" onclick="closeTransitPanel(true)" aria-label="Close journey panel">
+                <svg class="ui-icon" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"></path></svg>
+            </button>
+        </div>
         <div class="sheet-header">
             <h2>Active Service</h2>
             <div class="status-badge">
@@ -1878,12 +1893,37 @@
                 sheet.style.height = '';
             }
             if (!preserveSheetState) sheet.scrollTop = 0;
+            updateDetailSheetToggle();
+        }
+
+        function updateDetailSheetToggle() {
+            const sheet = document.getElementById('bottom-sheet');
+            const button = document.getElementById('sheet-size-toggle');
+            if (!sheet || !button) return;
+            const expanded = sheet.classList.contains('sheet-half') || sheet.classList.contains('sheet-expanded');
+            button.textContent = expanded ? 'Minimize' : 'Show more';
+            button.setAttribute('aria-expanded', String(expanded));
+        }
+
+        function toggleDetailSheetSize() {
+            const sheet = document.getElementById('bottom-sheet');
+            if (!sheet.classList.contains('detail-mode') || window.innerWidth >= 768) return;
+            const expanded = sheet.classList.contains('sheet-half') || sheet.classList.contains('sheet-expanded');
+            sheet.classList.remove('sheet-half', 'sheet-expanded');
+            if (!expanded) sheet.classList.add('sheet-expanded');
+            sheet.style.height = '';
+            updateDetailSheetToggle();
+        }
+
+        function backTransitPanel() {
+            closeTransitPanel(false);
         }
 
         function openRouteTransitPanel(title, subtitle, html) {
             openTransitPanel(title, subtitle, html);
             if (window.innerWidth < 768) {
                 document.getElementById('bottom-sheet').classList.add('sheet-half');
+                updateDetailSheetToggle();
             }
         }
 
@@ -1912,6 +1952,7 @@
                 if (nearest.name === 'half') sheet.classList.add('sheet-half');
                 if (nearest.name === 'expanded') sheet.classList.add('sheet-expanded');
                 sheet.style.height = '';
+                updateDetailSheetToggle();
             };
 
             const startDrag = event => {
@@ -1951,6 +1992,7 @@
                 if (window.innerWidth >= 768 || !sheet.classList.contains('detail-mode')) return;
                 sheet.classList.remove('sheet-expanded');
                 sheet.classList.add('sheet-half');
+                updateDetailSheetToggle();
             });
         }
 
@@ -1966,6 +2008,7 @@
             </div>`);
             if (window.innerWidth < 768) {
                 document.getElementById('bottom-sheet').classList.add('sheet-half');
+                updateDetailSheetToggle();
             }
         }
 
@@ -1986,8 +2029,8 @@
             return `<svg class="${className}" viewBox="0 0 24 24">${paths[name] || ''}</svg>`;
         }
 
-        function closeTransitPanel() {
-            if (journeyDetailBackAction) {
+        function closeTransitPanel(forceClose = false) {
+            if (!forceClose && journeyDetailBackAction) {
                 const goBack = journeyDetailBackAction;
                 journeyDetailBackAction = null;
                 const closeButton = document.querySelector('#transit-panel .panel-close');
@@ -1996,12 +2039,47 @@
                 goBack();
                 return;
             }
-            document.getElementById('transit-panel').classList.remove('open');
+            journeyDetailBackAction = null;
+            const panel = document.getElementById('transit-panel');
+            panel.classList.remove('open');
             const sheet = document.getElementById('bottom-sheet');
             sheet.classList.remove('detail-mode', 'sheet-half', 'sheet-expanded', 'sheet-dragging');
             sheet.style.height = '';
             const resumeButton = document.getElementById('resume-journey-button');
-            const canResumeJourney = Boolean(journeySelection.from?.place && journeySelection.to?.place && document.getElementById('panel-content').children.length);
+            if (forceClose) {
+                journeySelection.from = null;
+                journeySelection.to = null;
+                autoPlanAfterLocation = false;
+                currentJourneyOptions = [];
+                activeTrackedJourneyIndex = 0;
+                activeJourneyRouteNames.clear();
+                window.__mariBusJourneyOptions = [];
+                window.__mariBusJourneyEndpoints = null;
+                ['journey-from', 'journey-to'].forEach(id => {
+                    const input = document.getElementById(id);
+                    if (input) input.value = '';
+                });
+                ['journey-from-match', 'journey-to-match'].forEach(id => {
+                    const match = document.getElementById(id);
+                    if (match) match.textContent = '';
+                });
+                const headerSearch = document.getElementById('header-journey-search');
+                headerSearch.classList.remove('expanded');
+                document.getElementById('top-bar').classList.remove('search-focused');
+                document.getElementById('destination-prefix').innerHTML = iconSvg('search');
+                if (headerSearch.contains(document.activeElement)) document.activeElement.blur();
+                const mapSaveButton = document.getElementById('map-save-route');
+                mapSaveButton?.classList.remove('saved');
+                mapSaveButton?.removeAttribute('aria-pressed');
+                document.getElementById('panel-content').innerHTML = '';
+                journeyPlaceLayer.clearLayers();
+                activeRouteLayer.clearLayers();
+                routeDirectionsRenderers.forEach(renderer => renderer.setMap(null));
+                routeDirectionsRenderers = [];
+                if (liveJourneyTrackingTimer) clearInterval(liveJourneyTrackingTimer);
+                liveJourneyTrackingTimer = null;
+            }
+            const canResumeJourney = !forceClose && Boolean(journeySelection.from?.place && journeySelection.to?.place && document.getElementById('panel-content').children.length);
             resumeButton.classList.toggle('visible', canResumeJourney);
             if (canResumeJourney) {
                 document.getElementById('resume-journey-label').textContent = `${journeySelection.from.place.name} → ${journeySelection.to.place.name}`;
@@ -2834,7 +2912,27 @@
                 showMenuNotice('Choose an A to B journey first');
                 return;
             }
-            window.saveMariBusJourney?.(index, button);
+            requestJourneySave(index, button);
+        }
+
+        function requestJourneySave(index, button) {
+            if (typeof window.saveMariBusJourney === 'function') {
+                window.saveMariBusJourney(index, button);
+                return;
+            }
+            showMenuNotice('Preparing route saving…');
+            let completed = false;
+            window.addEventListener('maribus-route-saver-ready', () => {
+                completed = true;
+                if (button?.isConnected && typeof window.saveMariBusJourney === 'function') {
+                    window.saveMariBusJourney(index, button);
+                }
+            }, { once:true });
+            setTimeout(() => {
+                if (!completed && typeof window.saveMariBusJourney !== 'function') {
+                    showMenuNotice('Route saving is temporarily unavailable');
+                }
+            }, 2500);
         }
 
         function updateJourneyPlaceMarkers() {
@@ -3118,7 +3216,7 @@
                 }));
                 document.querySelectorAll('[data-save-route]').forEach(button => button.addEventListener('click', event => {
                     event.stopPropagation();
-                    window.saveMariBusJourney?.(button.dataset.saveRoute, button);
+                    requestJourneySave(button.dataset.saveRoute, button);
                 }));
                 const firstJourney = result.data[0];
                 activeTrackedJourneyIndex = 0;
@@ -3639,7 +3737,7 @@
                 }));
                 document.querySelectorAll('[data-google-transit-save]').forEach(button => button.addEventListener('click', event => {
                     event.stopPropagation();
-                    window.saveMariBusJourney?.(button.dataset.googleTransitSave, button);
+                    requestJourneySave(button.dataset.googleTransitSave, button);
                 }));
                 renderGoogleTransitRoute(response, rankedRoutes[0].routeIndex);
                 resolve(true);
