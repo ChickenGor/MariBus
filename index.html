@@ -920,12 +920,28 @@
         #guided-map-back { position:absolute; top:max(10px, env(safe-area-inset-top)); left:12px; z-index:2100; width:42px; height:42px; display:none; place-items:center; border:0; border-radius:50%; background:color-mix(in srgb, var(--sheet-bg) 94%, transparent); color:var(--text-main); box-shadow:0 3px 14px var(--shadow-color); cursor:pointer; }
         #guided-map-back .ui-icon { width:21px; height:21px; }
         #guided-live-status { position:absolute; top:max(10px, env(safe-area-inset-top)); left:62px; right:12px; z-index:2090; min-height:58px; display:none; align-items:center; gap:11px; padding:9px 13px; box-sizing:border-box; overflow:hidden; border:1px solid rgba(255,255,255,.12); border-radius:16px; background:rgba(5,7,11,.94); color:#fff; box-shadow:0 5px 20px rgba(0,0,0,.34); backdrop-filter:blur(14px); }
+        #guided-live-status.onboard { min-height:126px; align-items:flex-start; }
         .guided-live-icon { width:36px; height:36px; flex:0 0 36px; display:grid; place-items:center; border-radius:11px; background:#16a34a; color:#fff; }
         .guided-live-icon .ui-icon { width:19px; height:19px; }
         .guided-live-copy { min-width:0; flex:1; }
         .guided-live-copy strong,.guided-live-copy small { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
         .guided-live-copy strong { color:#fff; font-size:14px; }
         .guided-live-copy small { margin-top:2px; color:#cbd5e1; font-size:11px; }
+        .guided-live-body { min-width:0; flex:1; }
+        .guided-stop-progress { display:none; margin-top:10px; }
+        #guided-live-status.onboard .guided-stop-progress { display:block; }
+        .guided-stop-track { position:relative; height:5px; margin:14px 7px 9px; border-radius:999px; background:#334155; }
+        .guided-stop-fill { position:absolute; inset:0 auto 0 0; width:50%; border-radius:inherit; background:#38bdf8; box-shadow:0 0 10px rgba(56,189,248,.45); transition:width .45s ease; }
+        .guided-stop-node { position:absolute; top:50%; width:9px; height:9px; border:2px solid #cbd5e1; border-radius:50%; background:#111827; transform:translate(-50%,-50%); }
+        .guided-stop-node.previous { left:0; }
+        .guided-stop-node.current { left:50%; width:15px; height:15px; border-color:#fff; box-shadow:0 0 0 2px rgba(56,189,248,.35); }
+        .guided-stop-node.next { left:100%; }
+        .guided-stop-bus { position:absolute; z-index:2; top:50%; left:75%; width:22px; height:17px; display:grid; place-items:center; border:2px solid #fff; border-radius:6px; background:#2563eb; color:#fff; transform:translate(-50%,-50%); transition:left .45s ease; }
+        .guided-stop-bus .ui-icon { width:12px; height:12px; }
+        .guided-stop-labels { display:grid; grid-template-columns:1fr 1.15fr 1fr; gap:7px; color:#94a3b8; font-size:9px; font-weight:750; line-height:1.2; }
+        .guided-stop-labels span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .guided-stop-labels span:nth-child(2) { color:#fff; text-align:center; }
+        .guided-stop-labels span:last-child { text-align:right; }
         #guided-camera-controls { position:absolute; top:max(78px, calc(env(safe-area-inset-top) + 68px)); right:12px; z-index:2090; display:none; flex-direction:column; overflow:hidden; border:1px solid rgba(15,23,42,.1); border-radius:15px; background:color-mix(in srgb, var(--sheet-bg) 96%, transparent); box-shadow:0 4px 16px var(--shadow-color); }
         .guided-camera-button { width:44px; height:44px; display:grid; place-items:center; border:0; border-bottom:1px solid var(--border-color); background:transparent; color:var(--text-main); cursor:pointer; }
         .guided-camera-button:last-child { border-bottom:0; }
@@ -934,6 +950,7 @@
         body:has(#bottom-sheet.guided-mode) #guided-map-back { display:grid; }
         body:has(#bottom-sheet.guided-mode) #guided-live-status { display:flex; }
         body:has(#bottom-sheet.guided-mode) #guided-camera-controls { display:flex; }
+        body:has(#bottom-sheet.guided-mode) #guided-live-status.onboard + #guided-camera-controls { top:max(146px, calc(env(safe-area-inset-top) + 136px)); }
         .journey-live-progress { margin-top:9px; padding:9px 10px 8px; border-radius:10px; background:var(--input-bg); }
         .journey-progress-track { position:relative; height:6px; margin:8px 7px 7px; border-radius:999px; background:#dbe2ea; }
         .journey-progress-fill { position:absolute; inset:0 auto 0 0; width:0; border-radius:inherit; background:#16a34a; transition:width .45s ease; }
@@ -1236,7 +1253,17 @@
     </button>
     <div id="guided-live-status" role="status" aria-live="polite">
         <span class="guided-live-icon"><svg class="ui-icon" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="15" rx="3"></rect><path d="M7 7h10M7 12h.01M17 12h.01M7 21v-3M17 21v-3"></path></svg></span>
-        <span class="guided-live-copy"><strong id="guided-live-title">Checking approaching service…</strong><small id="guided-live-detail">Live vehicle information</small></span>
+        <div class="guided-live-body">
+            <span class="guided-live-copy"><strong id="guided-live-title">Checking approaching service…</strong><small id="guided-live-detail">Live vehicle information</small></span>
+            <div id="guided-stop-progress" class="guided-stop-progress" aria-label="Live bus stop progress">
+                <div class="guided-stop-track">
+                    <span id="guided-stop-fill" class="guided-stop-fill"></span>
+                    <span class="guided-stop-node previous"></span><span class="guided-stop-node current"></span><span class="guided-stop-node next"></span>
+                    <span id="guided-stop-bus" class="guided-stop-bus"><svg class="ui-icon" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="15" rx="3"></rect><path d="M7 7h10M7 12h.01M17 12h.01"></path></svg></span>
+                </div>
+                <div class="guided-stop-labels"><span id="guided-stop-previous">Previous</span><span id="guided-stop-current">Current</span><span id="guided-stop-next">Next</span></div>
+            </div>
+        </div>
     </div>
     <div id="guided-camera-controls" role="group" aria-label="Navigation camera">
         <button id="guided-head-north" class="guided-camera-button" type="button" onclick="headNorthGuidedJourney()" title="Head north" aria-label="Keep north at the top" aria-pressed="false">
@@ -1610,6 +1637,7 @@
         let guidedJourneyMarker = null;
         let guidedJourneyFollowMode = true;
         let guidedJourneyHeadingMode = 'route';
+        let guidedLiveStopRequest = null;
 
         function visibleBusBounds() {
             const bounds = map.native?.getBounds?.();
@@ -1873,6 +1901,7 @@
                 allLiveBusMarkers = newMarkers;
                 refreshVisibleBusMarkers();
                 refreshTrackedBus();
+                if (guidedJourney) updateGuidedLiveStatus();
             } catch (error) {
                 console.error("Error fetching buses:", error);
             } finally {
@@ -3777,14 +3806,82 @@
             return { routeName, station, closest:estimates[0] || null };
         }
 
+        async function loadGuidedLiveStops(vehicle) {
+            if (!guidedJourney || !vehicle?.routeId || !vehicle?.tripId) return;
+            const requestKey = `${vehicle.sourceAgency}:${vehicle.routeId}:${vehicle.tripId}`;
+            if (guidedJourney.liveStopKey === requestKey || guidedLiveStopRequest === requestKey) return;
+            guidedLiveStopRequest = requestKey;
+            try {
+                const params = new URLSearchParams({ agency:vehicle.sourceAgency, trip_id:vehicle.tripId });
+                const response = await fetch(`${API_BASE}/api/routes/${encodeURIComponent(vehicle.routeId)}?${params}`);
+                const result = await response.json();
+                if (!result.success || !Array.isArray(result.data?.stops)) throw new Error(result.error || 'Stops unavailable');
+                if (!guidedJourney || guidedLiveStopRequest !== requestKey) return;
+                guidedJourney.liveStopKey = requestKey;
+                guidedJourney.liveStops = result.data.stops.filter(stop => Number.isFinite(Number(stop.stop_lat)) && Number.isFinite(Number(stop.stop_lon)));
+                updateGuidedLiveStatus();
+            } catch (error) {
+                console.warn('Guided live stop sequence unavailable', error);
+            } finally {
+                if (guidedLiveStopRequest === requestKey) guidedLiveStopRequest = null;
+            }
+        }
+
+        function guidedOnboardStopProgress(vehicle) {
+            const stops = guidedJourney?.liveStops || [];
+            if (!vehicle || stops.length < 2) return null;
+            const vehiclePoint = { lat:vehicle.latitude, lng:vehicle.longitude };
+            let currentIndex = 0;
+            stops.forEach((stop, index) => {
+                if (distanceMetres(vehiclePoint, stop) < distanceMetres(vehiclePoint, stops[currentIndex])) currentIndex = index;
+            });
+            const previousIndex = Math.max(0, currentIndex - 1);
+            const nextIndex = Math.min(stops.length - 1, currentIndex + 1);
+            const currentDistance = distanceMetres(vehiclePoint, stops[currentIndex]);
+            const nextDistance = distanceMetres(vehiclePoint, stops[nextIndex]);
+            const segmentProgress = nextIndex === currentIndex ? 1 : Math.max(0, Math.min(1, currentDistance / Math.max(1, currentDistance + nextDistance)));
+            const exitName = guidedJourney.steps[guidedJourney.stageIndex]?.transit?.arrival_stop?.name || '';
+            const exitIndex = stops.findIndex(stop => String(stop.stop_name || '').trim().toLowerCase() === String(exitName).trim().toLowerCase());
+            return {
+                previous:stops[previousIndex]?.stop_name || 'Previous',
+                current:stops[currentIndex]?.stop_name || 'Current stop',
+                next:stops[nextIndex]?.stop_name || 'Next stop',
+                progress:50 + segmentProgress * 50,
+                stopsToExit:exitIndex >= 0 ? Math.max(0, exitIndex - currentIndex) : null,
+                exitName,
+            };
+        }
+
         function updateGuidedLiveStatus() {
             const estimate = guidedLiveBusEstimate();
+            const status = document.getElementById('guided-live-status');
             const title = document.getElementById('guided-live-title');
             const detail = document.getElementById('guided-live-detail');
-            if (!title || !detail || !estimate) return;
+            if (!status || !title || !detail || !estimate) return;
+            const currentStep = guidedJourney?.steps?.[guidedJourney.stageIndex];
+            const onboard = currentStep?.travel_mode === google.maps.TravelMode.TRANSIT && guidedJourney.boardedStages.has(guidedJourney.stageIndex);
+            status.classList.toggle('onboard', Boolean(onboard && estimate.closest));
             if (estimate.closest) {
-                title.textContent = `${estimate.routeName} · ${estimate.closest.vehicle.vehicleId}`;
-                detail.textContent = `About ${estimate.closest.minutes} min to ${estimate.station}`;
+                const vehicle = estimate.closest.vehicle;
+                title.textContent = `${estimate.routeName} · ${vehicle.vehicleId}`;
+                if (onboard) {
+                    loadGuidedLiveStops(vehicle);
+                    const progress = guidedOnboardStopProgress(vehicle);
+                    if (progress) {
+                        detail.textContent = progress.stopsToExit === 0
+                            ? `Get off at ${progress.exitName || progress.current}`
+                            : `${progress.stopsToExit ?? '—'} stop${progress.stopsToExit === 1 ? '' : 's'} to ${progress.exitName || 'your exit'}`;
+                        document.getElementById('guided-stop-previous').textContent = progress.previous;
+                        document.getElementById('guided-stop-current').textContent = progress.current;
+                        document.getElementById('guided-stop-next').textContent = progress.next;
+                        document.getElementById('guided-stop-fill').style.width = `${progress.progress}%`;
+                        document.getElementById('guided-stop-bus').style.left = `${progress.progress}%`;
+                    } else {
+                        detail.textContent = `On board · locating the next stop…`;
+                    }
+                } else {
+                    detail.textContent = `About ${estimate.closest.minutes} min to ${estimate.station}`;
+                }
             } else {
                 title.textContent = estimate.routeName;
                 detail.textContent = `No approaching live bus estimated for ${estimate.station}`;
@@ -3867,9 +3964,10 @@
                 return;
             }
             stopGuidedJourney(false);
-            guidedJourney = { routeIndex:Number(routeIndex), leg:route.legs?.[0] || null, steps, stageIndex:0, boardedStages:new Set(), destinationName:journeySelection.to?.place?.name || 'your destination' };
+            guidedJourney = { routeIndex:Number(routeIndex), leg:route.legs?.[0] || null, steps, stageIndex:0, boardedStages:new Set(), destinationName:journeySelection.to?.place?.name || 'your destination', liveStopKey:'', liveStops:[] };
             guidedJourneyFollowMode = true;
             guidedJourneyHeadingMode = 'route';
+            guidedLiveStopRequest = null;
             updateGuidedCameraControls();
             renderGoogleTransitRoute(response, Number(routeIndex));
             openTransitPanel('Journey guidance', '', '');
