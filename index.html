@@ -57,6 +57,14 @@
         body.dark-mode #map {
             background-color: #000000; 
         }
+
+        /* Cloud Map IDs ignore the JavaScript styles array. Apply the dark
+           treatment to Google's rendered map plane while leaving MariBus
+           controls and HTML vehicle labels at their original colours. */
+        #map.cloud-map-dark .gm-style > div:first-child {
+            filter:invert(92%) hue-rotate(180deg) brightness(72%) contrast(112%) saturate(82%);
+            transition:filter .3s ease;
+        }
         
         /* This perfectly inverts the Light map into a glowing OLED dark map! */
         body.dark-mode .leaflet-tile-pane {
@@ -292,6 +300,7 @@
         .map-tool-button:hover { color:#2563eb; background:var(--input-bg); }
         .map-tool-button:active { transform:scale(.94); }
         .map-tool-button.saved { color:#16a34a; background:rgba(22,163,74,.1); }
+        .map-tool-button.active { color:#059669; background:rgba(16,185,129,.13); }
         .map-tool-button .ui-icon { width:19px; height:19px; }
         .map-tool-divider { width:28px; height:1px; margin:3px auto; background:var(--border-color); }
         .map-view-button.active { color:#2563eb; background:#dbeafe; }
@@ -888,6 +897,25 @@
         .guided-action { min-height:36px; padding:8px; border:1px solid var(--border-color); border-radius:10px; background:var(--sheet-bg); color:var(--text-main); font:inherit; font-size:11px; font-weight:850; cursor:pointer; }
         .guided-action.primary { border-color:#2563eb; background:#2563eb; color:#fff; }
         .guided-action.danger { color:#dc2626; }
+        .guided-nav-card { overflow:hidden; border-radius:17px; background:var(--sheet-bg); }
+        .guided-nav-route { display:flex; align-items:center; gap:7px; min-height:38px; padding:4px 2px 7px; overflow:hidden; border-bottom:1px solid var(--border-color); }
+        .guided-nav-route-steps { min-width:0; flex:1; display:flex; align-items:center; gap:6px; overflow:hidden; white-space:nowrap; font-size:11px; }
+        .guided-nav-route-steps > * { flex:0 0 auto; }
+        .guided-nav-close { width:32px; height:32px; flex:0 0 32px; border:0; border-radius:50%; background:var(--input-bg); color:var(--text-main); font:600 22px/1 Manrope,sans-serif; cursor:pointer; }
+        .guided-nav-current { padding:9px 3px 7px; }
+        .guided-nav-current strong,.guided-nav-current small { display:block; }
+        .guided-nav-current strong { overflow:hidden; color:var(--text-main); font-size:14px; line-height:1.25; text-overflow:ellipsis; white-space:nowrap; }
+        .guided-nav-current small { margin-top:2px; overflow:hidden; color:var(--text-muted); font-size:10px; text-overflow:ellipsis; white-space:nowrap; }
+        .guided-nav-stage-action { width:100%; min-height:31px; margin:0 0 7px; border:0; border-radius:10px; background:#2563eb; color:#fff; font:800 10px Manrope,sans-serif; cursor:pointer; }
+        .guided-nav-footer { display:grid; grid-template-columns:auto auto 1fr; align-items:center; gap:8px; padding:8px 2px 2px; border-top:1px solid var(--border-color); }
+        .guided-nav-footer button { min-height:36px; padding:0 14px; border:0; border-radius:999px; font:850 11px Manrope,sans-serif; cursor:pointer; }
+        .guided-nav-end { background:#dc2626; color:#fff; }
+        .guided-nav-save { display:flex; align-items:center; gap:6px; background:#dff7fb; color:#0f6473; }
+        .guided-nav-save .ui-icon { width:15px; height:15px; }
+        .guided-nav-time { min-width:0; text-align:right; }
+        .guided-nav-time strong,.guided-nav-time small { display:block; }
+        .guided-nav-time strong { color:var(--text-main); font-size:17px; line-height:1.05; }
+        .guided-nav-time small { margin-top:2px; color:var(--text-muted); font-size:10px; }
         .journey-live-progress { margin-top:9px; padding:9px 10px 8px; border-radius:10px; background:var(--input-bg); }
         .journey-progress-track { position:relative; height:6px; margin:8px 7px 7px; border-radius:999px; background:#dbe2ea; }
         .journey-progress-fill { position:absolute; inset:0 auto 0 0; width:0; border-radius:inherit; background:#16a34a; transition:width .45s ease; }
@@ -1071,9 +1099,19 @@
                 width:auto; max-width:none;
             }
             body:has(#bottom-sheet.detail-mode) #header-journey-search {
-                top:76px; right:16px; bottom:auto; left:16px;
+                top:max(8px, env(safe-area-inset-top)); right:16px; bottom:auto; left:16px;
             }
+            #bottom-sheet.guided-mode:not(.sheet-half):not(.sheet-expanded) {
+                max-height:226px;
+                padding:6px 16px max(7px, env(safe-area-inset-bottom));
+            }
+            #bottom-sheet.guided-mode .sheet-detail-controls { display:none; }
+            #bottom-sheet.guided-mode:not(.sheet-half):not(.sheet-expanded) .panel-heading { display:none; }
+            #bottom-sheet.guided-mode #transit-panel.open { overflow:hidden; }
+            #bottom-sheet.guided-mode #panel-content { padding:0; overflow:hidden; }
             body:has(#bottom-sheet.detail-mode) #map-view-toggle { bottom:292px; }
+            body:has(#bottom-sheet.guided-mode) #header-journey-search { display:none; }
+            body:has(#bottom-sheet.guided-mode) #map-view-toggle { bottom:242px; }
             body:not(:has(#bottom-sheet.detail-mode)) #map-view-toggle { bottom:84px; }
             .planner-controls { flex-wrap:wrap; }
             .planner-controls input { flex-basis:40%; }
@@ -1178,11 +1216,14 @@
     <div id="map-view-toggle" role="group" aria-label="Map view">
         <button class="map-view-button active" type="button" data-map-view="2d" aria-pressed="true">2D</button>
         <button class="map-view-button" type="button" data-map-view="3d" aria-pressed="false">3D</button>
+        <button id="map-live-vehicles" class="map-tool-button" type="button" onclick="toggleLiveVehicles()" title="Show live vehicles" aria-label="Show live vehicles" aria-pressed="false">
+            <svg class="ui-icon" viewBox="0 0 24 24"><path d="M5 16V6c0-2 2-3 7-3s7 1 7 3v10M5 11h14M8 19h8M7 16h.01M17 16h.01M7 19v2M17 19v2"></path></svg>
+        </button>
         <span class="map-tool-divider" aria-hidden="true"></span>
         <button id="map-save-route" class="map-tool-button" type="button" onclick="saveCurrentJourneyFromMap(this)" title="Save route" aria-label="Save current route">
             <svg class="ui-icon" viewBox="0 0 24 24"><path d="M6 4h12v17l-6-4-6 4z"></path></svg>
         </button>
-        <button id="map-current-location" class="map-tool-button" type="button" onclick="locateMe()" title="Current location" aria-label="Show current location">
+        <button id="map-current-location" class="map-tool-button" type="button" onclick="recenterMapPosition()" title="Current location" aria-label="Show current location">
             <svg class="ui-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M12 2v3M12 19v3M2 12h3M19 12h3"></path><circle cx="12" cy="12" r="7"></circle></svg>
         </button>
     </div>
@@ -1376,7 +1417,11 @@
         ];
         const GOOGLE_MAP_ID_ENABLED = Boolean(window.MARIBUS_CONFIG?.google_maps_map_id);
         window.__mariBusSetMapTheme = enabled => {
-            if (!GOOGLE_MAP_ID_ENABLED) map.native.setOptions({ styles:enabled ? GOOGLE_DARK_MAP_STYLES : GOOGLE_LIGHT_MAP_STYLES });
+            const mapElement = document.getElementById('map');
+            mapElement.classList.toggle('cloud-map-dark', Boolean(enabled && GOOGLE_MAP_ID_ENABLED));
+            if (!GOOGLE_MAP_ID_ENABLED) {
+                map.native.setOptions({ styles:enabled ? GOOGLE_DARK_MAP_STYLES : GOOGLE_LIGHT_MAP_STYLES });
+            }
         };
         window.__mariBusSetMapTheme(document.body.classList.contains('dark-mode'));
 
@@ -1492,6 +1537,7 @@
         let busMarkersDict = {};
         let busLiveDataDict = {};
         let allLiveBusMarkers = [];
+        let liveVehicleLayerEnabled = false;
         let visibleBusRefreshTimer = null;
         let trackedBusId = null;
         let routeMarkersDict = {};
@@ -1528,33 +1574,42 @@
         let guidedJourneyWatchId = null;
         let guidedJourneyLastPosition = null;
         let guidedJourneyMarker = null;
+        let guidedJourneyFollowMode = true;
 
-        function paddedVisibleBusBounds() {
+        function visibleBusBounds() {
             const bounds = map.native?.getBounds?.();
             if (!bounds) return null;
-            const northEast = bounds.getNorthEast();
-            const southWest = bounds.getSouthWest();
-            const latitudePadding = Math.max(.01, Math.abs(northEast.lat() - southWest.lat()) * .2);
-            const longitudePadding = Math.max(.01, Math.abs(northEast.lng() - southWest.lng()) * .2);
-            return new google.maps.LatLngBounds(
-                { lat:southWest.lat() - latitudePadding, lng:southWest.lng() - longitudePadding },
-                { lat:northEast.lat() + latitudePadding, lng:northEast.lng() + longitudePadding },
-            );
+            return bounds;
         }
 
         function refreshVisibleBusMarkers() {
             if (journeyMapFocused || !allLiveBusMarkers.length) return;
-            const bounds = paddedVisibleBusBounds();
+            markersGroup.clearLayers();
+            if (!liveVehicleLayerEnabled) return;
+            const bounds = visibleBusBounds();
             const visibleMarkers = bounds
                 ? allLiveBusMarkers.filter(marker => bounds.contains(marker.point || marker.getLatLng()?.native))
                 : allLiveBusMarkers;
-            markersGroup.clearLayers();
             markersGroup.addLayers(visibleMarkers);
+        }
+
+        function toggleLiveVehicles(forceEnabled) {
+            liveVehicleLayerEnabled = typeof forceEnabled === 'boolean' ? forceEnabled : !liveVehicleLayerEnabled;
+            const button = document.getElementById('map-live-vehicles');
+            button?.classList.toggle('active', liveVehicleLayerEnabled);
+            button?.setAttribute('aria-pressed', String(liveVehicleLayerEnabled));
+            button?.setAttribute('aria-label', liveVehicleLayerEnabled ? 'Hide live vehicles' : 'Show live vehicles');
+            button?.setAttribute('title', liveVehicleLayerEnabled ? 'Hide live vehicles' : 'Show live vehicles');
+            if (!journeyMapFocused) refreshVisibleBusMarkers();
+            showMenuNotice(liveVehicleLayerEnabled ? 'Live vehicles shown in this map area' : 'Live vehicles hidden');
         }
 
         map.native?.addListener?.('idle', () => {
             if (visibleBusRefreshTimer) clearTimeout(visibleBusRefreshTimer);
             visibleBusRefreshTimer = setTimeout(refreshVisibleBusMarkers, 100);
+        });
+        map.native?.addListener?.('dragstart', () => {
+            if (guidedJourney) guidedJourneyFollowMode = false;
         });
 
         const agencyLocations = {
@@ -3672,18 +3727,25 @@
                 closeTransitPanel(true);
                 return;
             }
-            const progress = Math.round(((guidedJourney.stageIndex + (details.kind === 'ride' ? .5 : 0)) / guidedJourney.steps.length) * 100);
             document.getElementById('panel-title').textContent = details.kicker;
             document.getElementById('panel-subtitle').textContent = `Stage ${guidedJourney.stageIndex + 1} of ${guidedJourney.steps.length}`;
-            document.getElementById('panel-content').innerHTML = `<div class="guided-journey-card">
-                <div class="guided-stage-kicker">${escapeHtml(details.kicker)}</div>
-                <div class="guided-stage-title">${escapeHtml(details.title)}</div>
-                <div class="guided-stage-meta">${escapeHtml(details.meta)}</div>
-                <div class="guided-stage-progress"><span style="width:${Math.max(4, progress)}%"></span></div>
-                <div class="guided-actions">
-                    <button class="guided-action" type="button" onclick="recenterGuidedJourney()">Recenter</button>
-                    <button class="guided-action primary" type="button" onclick="advanceGuidedJourney()">${escapeHtml(details.action)}</button>
-                    <button class="guided-action danger" type="button" onclick="endGuidedJourney()">End trip</button>
+            const routeSteps = guidedJourney.steps.map(googleTransitStepLabel).join('<span>&rsaquo;</span>');
+            const leg = guidedJourney.leg;
+            const arrivalTime = leg?.arrival_time?.text || '';
+            const arrivalDate = leg?.arrival_time?.value;
+            const remainingMinutes = arrivalDate?.getTime
+                ? Math.max(1, Math.ceil((arrivalDate.getTime() - Date.now()) / 60000))
+                : null;
+            const remainingText = remainingMinutes ? `${remainingMinutes} min` : (leg?.duration?.text || 'In progress');
+            const needsStageAction = details.kind !== 'walk';
+            document.getElementById('panel-content').innerHTML = `<div class="guided-nav-card">
+                <div class="guided-nav-route"><div class="guided-nav-route-steps">${routeSteps}</div><button class="guided-nav-close" type="button" onclick="endGuidedJourney()" aria-label="End navigation">&times;</button></div>
+                <div class="guided-nav-current"><strong>${escapeHtml(details.title)}</strong><small>${escapeHtml(details.meta)}</small></div>
+                ${needsStageAction ? `<button class="guided-nav-stage-action" type="button" onclick="advanceGuidedJourney()">${escapeHtml(details.action)}</button>` : ''}
+                <div class="guided-nav-footer">
+                    <button class="guided-nav-end" type="button" onclick="endGuidedJourney()">End</button>
+                    <button class="guided-nav-save" type="button" onclick="saveCurrentJourneyFromMap(this)">${iconSvg('bookmark')}<span>Save</span></button>
+                    <div class="guided-nav-time"><strong>${escapeHtml(remainingText)}</strong><small>${escapeHtml(arrivalTime)}</small></div>
                 </div>
             </div>`;
         }
@@ -3707,9 +3769,7 @@
                 rotation:heading, scale:6, fillColor:'#2563eb', fillOpacity:1,
                 strokeColor:'#ffffff', strokeWeight:2,
             });
-            map.native.setCenter(next);
-            if ((map.native.getZoom() || 0) < 17) map.native.setZoom(17);
-            map.native.setTilt(45);
+            if (guidedJourneyFollowMode) centerGuidedJourneyCamera(next, heading);
             const step = guidedJourney.steps[guidedJourney.stageIndex];
             if (step?.travel_mode === google.maps.TravelMode.WALKING && guidedDistanceMetres(next, googleStepPoint(step.end_location)) < 45) {
                 guidedJourney.stageIndex += 1;
@@ -3726,18 +3786,24 @@
                 return;
             }
             stopGuidedJourney(false);
-            guidedJourney = { routeIndex:Number(routeIndex), steps, stageIndex:0, boardedStages:new Set(), destinationName:journeySelection.to?.place?.name || 'your destination' };
+            guidedJourney = { routeIndex:Number(routeIndex), leg:route.legs?.[0] || null, steps, stageIndex:0, boardedStages:new Set(), destinationName:journeySelection.to?.place?.name || 'your destination' };
+            guidedJourneyFollowMode = true;
             renderGoogleTransitRoute(response, Number(routeIndex));
-            openRouteTransitPanel('Journey guidance', '', '');
+            openTransitPanel('Journey guidance', '', '');
+            document.getElementById('bottom-sheet').classList.add('guided-mode');
             renderGuidedJourney();
             if (!navigator.geolocation) {
                 showMenuNotice('Location tracking is unavailable');
                 return;
             }
+            const locationOptions = { enableHighAccuracy:true, maximumAge:3000, timeout:15000 };
+            navigator.geolocation.getCurrentPosition(updateGuidedJourneyPosition, error => {
+                console.warn('Initial journey location unavailable', error);
+            }, locationOptions);
             guidedJourneyWatchId = navigator.geolocation.watchPosition(updateGuidedJourneyPosition, error => {
                 console.warn('Journey guidance location unavailable', error);
                 showMenuNotice('Allow precise location for journey guidance');
-            }, { enableHighAccuracy:true, maximumAge:3000, timeout:15000 });
+            }, locationOptions);
         }
 
         function advanceGuidedJourney() {
@@ -3751,9 +3817,30 @@
             renderGuidedJourney();
         }
 
+        function centerGuidedJourneyCamera(position = guidedJourneyLastPosition, heading = map.native.getHeading?.() || 0) {
+            if (!position) return false;
+            map.native.setCenter(position);
+            map.native.setZoom(Math.max(17, map.native.getZoom() || 0));
+            map.native.setHeading(Number.isFinite(heading) ? heading : 0);
+            map.native.setTilt(45);
+            return true;
+        }
+
         function recenterGuidedJourney() {
-            if (guidedJourneyLastPosition) updateGuidedJourneyPosition({ coords:{ latitude:guidedJourneyLastPosition.lat, longitude:guidedJourneyLastPosition.lng } });
-            else showMenuNotice('Waiting for your location…');
+            guidedJourneyFollowMode = true;
+            if (!centerGuidedJourneyCamera()) {
+                showMenuNotice('Waiting for your location…');
+                return;
+            }
+            showMenuNotice('Following your location');
+        }
+
+        function recenterMapPosition() {
+            if (guidedJourney) {
+                recenterGuidedJourney();
+                return;
+            }
+            locateMe();
         }
 
         function stopGuidedJourney(resetCamera = true) {
@@ -3761,8 +3848,10 @@
             guidedJourneyWatchId = null;
             guidedJourney = null;
             guidedJourneyLastPosition = null;
+            guidedJourneyFollowMode = true;
             guidedJourneyMarker?.setMap(null);
             guidedJourneyMarker = null;
+            document.getElementById('bottom-sheet')?.classList.remove('guided-mode');
             if (resetCamera) {
                 map.native.setHeading(0);
                 map.native.setTilt(0);
@@ -4098,7 +4187,7 @@
             swapJourneyPoints, useCurrentLocationForJourney, toggleSidebar, showMenuNotice, shareMariBus,
             startBusTracking, stopBusTracking, backTransitPanel, toggleDetailSheetSize,
             startGuidedJourney, advanceGuidedJourney, recenterGuidedJourney, endGuidedJourney,
-            selectSidebarRegion
+            selectSidebarRegion, toggleLiveVehicles, recenterMapPosition
         });
         initializeJourneyPlanner();
         restoreSavedJourneyFromUrl();
