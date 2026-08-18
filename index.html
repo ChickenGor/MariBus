@@ -295,6 +295,7 @@
             border-radius:12px;
             color:var(--muted-color);
             background:transparent;
+            text-decoration:none;
             cursor:pointer;
         }
         .map-tool-button:hover { color:#2563eb; background:var(--input-bg); }
@@ -916,6 +917,17 @@
         .guided-nav-time strong,.guided-nav-time small { display:block; }
         .guided-nav-time strong { color:var(--text-main); font-size:17px; line-height:1.05; }
         .guided-nav-time small { margin-top:2px; color:var(--text-muted); font-size:10px; }
+        #guided-map-back { position:absolute; top:max(10px, env(safe-area-inset-top)); left:12px; z-index:2100; width:42px; height:42px; display:none; place-items:center; border:0; border-radius:50%; background:color-mix(in srgb, var(--sheet-bg) 94%, transparent); color:var(--text-main); box-shadow:0 3px 14px var(--shadow-color); cursor:pointer; }
+        #guided-map-back .ui-icon { width:21px; height:21px; }
+        #guided-live-status { position:absolute; top:max(10px, env(safe-area-inset-top)); left:62px; right:12px; z-index:2090; min-height:42px; display:none; align-items:center; gap:9px; padding:6px 11px; box-sizing:border-box; overflow:hidden; border:1px solid color-mix(in srgb, #16a34a 30%, var(--border-color)); border-radius:14px; background:color-mix(in srgb, var(--sheet-bg) 94%, transparent); color:var(--text-main); box-shadow:0 3px 14px var(--shadow-color); backdrop-filter:blur(12px); }
+        .guided-live-icon { width:28px; height:28px; flex:0 0 28px; display:grid; place-items:center; border-radius:9px; background:#16a34a; color:#fff; }
+        .guided-live-icon .ui-icon { width:15px; height:15px; }
+        .guided-live-copy { min-width:0; flex:1; }
+        .guided-live-copy strong,.guided-live-copy small { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .guided-live-copy strong { font-size:11px; }
+        .guided-live-copy small { margin-top:1px; color:var(--text-muted); font-size:9px; }
+        body:has(#bottom-sheet.guided-mode) #guided-map-back { display:grid; }
+        body:has(#bottom-sheet.guided-mode) #guided-live-status { display:flex; }
         .journey-live-progress { margin-top:9px; padding:9px 10px 8px; border-radius:10px; background:var(--input-bg); }
         .journey-progress-track { position:relative; height:6px; margin:8px 7px 7px; border-radius:999px; background:#dbe2ea; }
         .journey-progress-fill { position:absolute; inset:0 auto 0 0; width:0; border-radius:inherit; background:#16a34a; transition:width .45s ease; }
@@ -1213,6 +1225,14 @@
         <button id="stop-bus-tracking" type="button" onclick="stopBusTracking()">Stop</button>
     </div>
 
+    <button id="guided-map-back" type="button" onclick="backFromGuidedJourney()" aria-label="Back to journey details">
+        <svg class="ui-icon" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"></path></svg>
+    </button>
+    <div id="guided-live-status" role="status" aria-live="polite">
+        <span class="guided-live-icon"><svg class="ui-icon" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="15" rx="3"></rect><path d="M7 7h10M7 12h.01M17 12h.01M7 21v-3M17 21v-3"></path></svg></span>
+        <span class="guided-live-copy"><strong id="guided-live-title">Checking approaching service…</strong><small id="guided-live-detail">Live vehicle information</small></span>
+    </div>
+
     <div id="map-view-toggle" role="group" aria-label="Map view">
         <button class="map-view-button active" type="button" data-map-view="2d" aria-pressed="true">2D</button>
         <button class="map-view-button" type="button" data-map-view="3d" aria-pressed="false">3D</button>
@@ -1220,9 +1240,9 @@
             <svg class="ui-icon" viewBox="0 0 24 24"><path d="M5 16V6c0-2 2-3 7-3s7 1 7 3v10M5 11h14M8 19h8M7 16h.01M17 16h.01M7 19v2M17 19v2"></path></svg>
         </button>
         <span class="map-tool-divider" aria-hidden="true"></span>
-        <button id="map-save-route" class="map-tool-button" type="button" onclick="saveCurrentJourneyFromMap(this)" title="Save route" aria-label="Save current route">
+        <a id="map-save-route" class="map-tool-button" href="/saved-routes" title="Saved routes" aria-label="Open saved routes">
             <svg class="ui-icon" viewBox="0 0 24 24"><path d="M6 4h12v17l-6-4-6 4z"></path></svg>
-        </button>
+        </a>
         <button id="map-current-location" class="map-tool-button" type="button" onclick="recenterMapPosition()" title="Current location" aria-label="Show current location">
             <svg class="ui-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M12 2v3M12 19v3M2 12h3M19 12h3"></path><circle cx="12" cy="12" r="7"></circle></svg>
         </button>
@@ -3719,6 +3739,40 @@
             return { kind:'ride', kicker:'On board', title:`Next: ${step.transit?.arrival_stop?.name || 'exit station'}`, meta:`${routeName}${step.transit?.num_stops ? ` · ${step.transit.num_stops} stops` : ''}${step.transit?.arrival_time?.text ? ` · arrive ${step.transit.arrival_time.text}` : ''}`, action:'Get off / Continue' };
         }
 
+        function guidedLiveBusEstimate() {
+            if (!guidedJourney) return null;
+            const transitStep = guidedJourney.steps.slice(guidedJourney.stageIndex).find(step => step.travel_mode === google.maps.TravelMode.TRANSIT);
+            const routeName = String(transitStep?.transit?.line?.short_name || '').trim().toUpperCase();
+            const location = transitStep?.transit?.departure_stop?.location;
+            const station = transitStep?.transit?.departure_stop?.name || 'boarding station';
+            const boardPoint = googleStepPoint(location);
+            if (!routeName || !boardPoint) return { routeName:routeName || 'Bus', station };
+            const estimates = Object.values(busLiveDataDict)
+                .filter(vehicle => String(vehicle.routeShortName || '').trim().toUpperCase() === routeName)
+                .map(vehicle => {
+                    const distance = distanceMetres({ lat:vehicle.latitude, lng:vehicle.longitude }, boardPoint);
+                    const speedMetresPerSecond = Math.max(4.5, Number(vehicle.speedKmh || 22) / 3.6);
+                    return { vehicle, distance, minutes:Math.max(1, Math.ceil((distance * 1.3) / speedMetresPerSecond / 60)) };
+                })
+                .filter(item => Number.isFinite(item.distance) && item.distance < 60000)
+                .sort((a, b) => a.minutes - b.minutes);
+            return { routeName, station, closest:estimates[0] || null };
+        }
+
+        function updateGuidedLiveStatus() {
+            const estimate = guidedLiveBusEstimate();
+            const title = document.getElementById('guided-live-title');
+            const detail = document.getElementById('guided-live-detail');
+            if (!title || !detail || !estimate) return;
+            if (estimate.closest) {
+                title.textContent = `${estimate.routeName} · ${estimate.closest.vehicle.vehicleId}`;
+                detail.textContent = `About ${estimate.closest.minutes} min to ${estimate.station}`;
+            } else {
+                title.textContent = estimate.routeName;
+                detail.textContent = `No approaching live bus estimated for ${estimate.station}`;
+            }
+        }
+
         function renderGuidedJourney() {
             if (!guidedJourney) return;
             const details = guidedStageDetails();
@@ -3748,6 +3802,14 @@
                     <div class="guided-nav-time"><strong>${escapeHtml(remainingText)}</strong><small>${escapeHtml(arrivalTime)}</small></div>
                 </div>
             </div>`;
+            updateGuidedLiveStatus();
+        }
+
+        function guidedRouteHeading(position) {
+            const step = guidedJourney?.steps?.[guidedJourney.stageIndex];
+            const path = Array.from(step?.path || []).map(googleStepPoint).filter(Boolean);
+            const ahead = path.find(point => guidedDistanceMetres(position, point) > 20) || googleStepPoint(step?.end_location);
+            return ahead ? guidedBearing(position, ahead) : (map.native.getHeading?.() || 0);
         }
 
         function updateGuidedJourneyPosition(position) {
@@ -3758,6 +3820,8 @@
             if (guidedJourneyLastPosition && guidedDistanceMetres(guidedJourneyLastPosition, next) > 5) {
                 heading = guidedBearing(guidedJourneyLastPosition, next);
                 map.native.setHeading(heading);
+            } else if (!guidedJourneyLastPosition) {
+                heading = guidedRouteHeading(next);
             }
             guidedJourneyLastPosition = next;
             if (!guidedJourneyMarker) {
@@ -3819,10 +3883,17 @@
 
         function centerGuidedJourneyCamera(position = guidedJourneyLastPosition, heading = map.native.getHeading?.() || 0) {
             if (!position) return false;
-            map.native.setCenter(position);
-            map.native.setZoom(Math.max(17, map.native.getZoom() || 0));
-            map.native.setHeading(Number.isFinite(heading) ? heading : 0);
-            map.native.setTilt(45);
+            const cameraHeading = Number.isFinite(heading) ? heading : 0;
+            const distanceRadians = 65 / 6371000;
+            const latitude = position.lat * Math.PI / 180;
+            const longitude = position.lng * Math.PI / 180;
+            const bearing = cameraHeading * Math.PI / 180;
+            const cameraLatitude = Math.asin(Math.sin(latitude) * Math.cos(distanceRadians) + Math.cos(latitude) * Math.sin(distanceRadians) * Math.cos(bearing));
+            const cameraLongitude = longitude + Math.atan2(Math.sin(bearing) * Math.sin(distanceRadians) * Math.cos(latitude), Math.cos(distanceRadians) - Math.sin(latitude) * Math.sin(cameraLatitude));
+            map.native.setCenter({ lat:cameraLatitude * 180 / Math.PI, lng:cameraLongitude * 180 / Math.PI });
+            map.native.setZoom(Math.max(18, map.native.getZoom() || 0));
+            map.native.setHeading(cameraHeading);
+            map.native.setTilt(55);
             return true;
         }
 
@@ -3841,6 +3912,17 @@
                 return;
             }
             locateMe();
+        }
+
+        function backFromGuidedJourney() {
+            const routeIndex = guidedJourney?.routeIndex;
+            stopGuidedJourney(true);
+            const response = window.__mariBusGoogleTransitResponse;
+            if (Number.isInteger(routeIndex) && response?.routes?.[routeIndex]) {
+                showGoogleTransitJourneyDetails(response, routeIndex);
+                return;
+            }
+            closeTransitPanel(true);
         }
 
         function stopGuidedJourney(resetCamera = true) {
@@ -4187,7 +4269,7 @@
             swapJourneyPoints, useCurrentLocationForJourney, toggleSidebar, showMenuNotice, shareMariBus,
             startBusTracking, stopBusTracking, backTransitPanel, toggleDetailSheetSize,
             startGuidedJourney, advanceGuidedJourney, recenterGuidedJourney, endGuidedJourney,
-            selectSidebarRegion, toggleLiveVehicles, recenterMapPosition
+            selectSidebarRegion, toggleLiveVehicles, recenterMapPosition, backFromGuidedJourney
         });
         initializeJourneyPlanner();
         restoreSavedJourneyFromUrl();
