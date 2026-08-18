@@ -34,6 +34,12 @@ try{
       ? `Active until ${end.toLocaleDateString('en-MY',{day:'numeric',month:'short',year:'numeric'})}`
       :'Save up to 3 routes';
   });
-  document.querySelector('#sidebar-profile-button').addEventListener('click',event=>{details.hidden=!details.hidden;event.currentTarget.setAttribute('aria-expanded',String(!details.hidden));});
+  document.querySelector('#sidebar-profile-button').addEventListener('click',event=>{
+    details.hidden=!details.hidden;
+    event.currentTarget.setAttribute('aria-expanded',String(!details.hidden));
+    if(!details.hidden){
+      requestAnimationFrame(()=>details.scrollIntoView({behavior:'smooth',block:'nearest'}));
+    }
+  });
   document.querySelector('#profile-logout').addEventListener('click',async()=>{await signOut(auth);details.hidden=true;});
 }catch(error){root.dataset.authUnavailable='true';signedOut.hidden=false;signedIn.hidden=true;updateAdVisibility(false);}
