@@ -85,7 +85,12 @@
         flyTo(point, zoom) { return this.setView(point, zoom); }
         fitBounds(bounds, options) { const padding = Array.isArray(options?.padding) ? Math.max(...options.padding) : options?.padding || 40; this.native.fitBounds(bounds.native || bounds, padding); if (options?.maxZoom) google.maps.event.addListenerOnce(this.native, 'idle', () => { if (this.native.getZoom() > options.maxZoom) this.native.setZoom(options.maxZoom); }); }
         flyToBounds(bounds, options) { this.fitBounds(bounds, options); }
-        on(event, handler) { this.locationHandlers[event] = handler; return this; }
+        on(event, handler) {
+            if (event === 'locationfound' || event === 'locationerror') this.locationHandlers[event] = handler;
+            else this.native.addListener(event === 'zoomend' ? 'zoom_changed' : event, handler);
+            return this;
+        }
+        getZoom() { return this.native.getZoom(); }
         locate(options) {
             if (!navigator.geolocation) return this.locationHandlers.locationerror?.({ message:'Geolocation unavailable' });
             navigator.geolocation.getCurrentPosition(position => {
@@ -105,22 +110,34 @@
             this.clickHandlers = [];
         }
         addTo(target) { if (target instanceof LayerGroup) { target.addLayer(this); return this; } this.attach(target.native || target); return this; }
-        attach(nativeMap) {
-            if (this.native) { this.native.setMap(nativeMap); return; }
+        nativeIcon() {
             const text = this.options.icon?.text || '';
-            const isStop = this.options.icon?.kind === 'stop';
-            const isEndpoint = this.options.icon?.kind === 'endpoint';
+            const kind = this.options.icon?.kind;
             const markerColor = this.options.icon?.color || '#2563eb';
+            if (kind === 'stop') {
+                return { path:google.maps.SymbolPath.CIRCLE, scale:this.options.icon?.scale || 5, fillColor:'#ffffff', fillOpacity:1, strokeColor:markerColor || '#475569', strokeWeight:this.options.icon?.strokeWeight || 1.5 };
+            }
+            if (kind === 'route-live') {
+                const selected = Boolean(this.options.icon?.selected);
+                const size = selected ? 40 : 34;
+                const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size + 12}" height="${size + 12}" viewBox="0 0 ${size + 12} ${size + 12}">${selected ? `<circle cx="${(size + 12) / 2}" cy="${(size + 12) / 2}" r="${(size + 10) / 2}" fill="#f93999" fill-opacity=".18"/>` : ''}<rect x="6" y="6" width="${size}" height="${size}" rx="${Math.round(size * .32)}" fill="#f93999" stroke="white" stroke-width="2.5"/><rect x="${size * .31}" y="${size * .28}" width="${size * .5}" height="${size * .26}" rx="2" fill="none" stroke="white" stroke-width="2"/><path d="M${size * .31} ${size * .68}h${size * .5}M${size * .38} ${size * .79}h.01M${size * .74} ${size * .79}h.01" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round"/></svg>`;
+                return { url:`data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`, scaledSize:new google.maps.Size(size + 12,size + 12), anchor:new google.maps.Point((size + 12) / 2,(size + 12) / 2) };
+            }
             const pillWidth = Math.max(46, Math.min(104, text.length * 8 + 22));
             const pillSvg = text ? `<svg xmlns="http://www.w3.org/2000/svg" width="${pillWidth}" height="34" viewBox="0 0 ${pillWidth} 34"><rect x="1" y="1" width="${pillWidth - 2}" height="32" rx="16" fill="${markerColor}" stroke="white" stroke-width="2"/><text x="50%" y="22" text-anchor="middle" font-family="Manrope,Arial,sans-serif" font-size="12" font-weight="800" fill="white">${String(text).replace(/[&<>"']/g, '')}</text></svg>` : '';
-            const endpointSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="38" height="46" viewBox="0 0 38 46"><path d="M19 2C9.6 2 2 9.5 2 18.8 2 31 19 44 19 44s17-13 17-25.2C36 9.5 28.4 2 19 2Z" fill="${markerColor}" stroke="white" stroke-width="3"/><circle cx="19" cy="18" r="10" fill="white" fill-opacity=".16"/><text x="19" y="23" text-anchor="middle" font-family="Manrope,Arial,sans-serif" font-size="14" font-weight="900" fill="white">${String(text).replace(/[&<>"']/g, '')}</text></svg>`;
+            if (kind === 'endpoint') {
+                const endpointSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="38" height="46" viewBox="0 0 38 46"><path d="M19 2C9.6 2 2 9.5 2 18.8 2 31 19 44 19 44s17-13 17-25.2C36 9.5 28.4 2 19 2Z" fill="${markerColor}" stroke="white" stroke-width="3"/><circle cx="19" cy="18" r="10" fill="white" fill-opacity=".16"/><text x="19" y="23" text-anchor="middle" font-family="Manrope,Arial,sans-serif" font-size="14" font-weight="900" fill="white">${String(text).replace(/[&<>"']/g, '')}</text></svg>`;
+                return { url:`data:image/svg+xml;charset=UTF-8,${encodeURIComponent(endpointSvg)}`, scaledSize:new google.maps.Size(38,46), anchor:new google.maps.Point(19,44) };
+            }
+            return text ? { url:`data:image/svg+xml;charset=UTF-8,${encodeURIComponent(pillSvg)}`, scaledSize:new google.maps.Size(pillWidth,34), anchor:new google.maps.Point(pillWidth / 2,17) } : undefined;
+        }
+        attach(nativeMap) {
+            if (this.native) { this.native.setMap(nativeMap); return; }
             this.native = new google.maps.Marker({
                 map:nativeMap, position:this.point,
-                icon: isStop ? { path:google.maps.SymbolPath.CIRCLE, scale:5, fillColor:'#ffffff', fillOpacity:1, strokeColor:'#475569', strokeWeight:1.5 }
-                    : isEndpoint ? { url:`data:image/svg+xml;charset=UTF-8,${encodeURIComponent(endpointSvg)}`, scaledSize:new google.maps.Size(38, 46), anchor:new google.maps.Point(19, 44) }
-                    : text ? { url:`data:image/svg+xml;charset=UTF-8,${encodeURIComponent(pillSvg)}`, scaledSize:new google.maps.Size(pillWidth, 34), anchor:new google.maps.Point(pillWidth / 2, 17) }
-                    : undefined,
+                icon:this.nativeIcon(),
                 title:this.options.title || '',
+                zIndex:Number(this.options.zIndexOffset || 0) || undefined,
             });
             this.native.addListener('click', () => { this.openPopup(); this.clickHandlers.forEach(handler => handler()); });
         }
@@ -128,6 +145,9 @@
         bindTooltip(text) { this.options.title = String(text).replace(/<[^>]*>/g, ''); if (this.native) this.native.setTitle(this.options.title); return this; }
         openPopup() { if (!this.native || !this.popupHtml) return; window.__mariBusInfoWindow.setContent(this.popupHtml); window.__mariBusInfoWindow.open({ map:this.native.getMap(), anchor:this.native }); }
         getLatLng() { return new LatLngWrapper(this.native ? this.native.getPosition() : this.point); }
+        setLatLng(point) { this.point={lat:Number(point[0] ?? point.lat),lng:Number(point[1] ?? point.lng)}; this.native?.setPosition(this.point); return this; }
+        setIcon(icon) { this.options.icon=icon; if (this.native) this.native.setIcon(this.nativeIcon()); return this; }
+        setZIndexOffset(value) { this.options.zIndexOffset=Number(value)||0; this.native?.setZIndex(this.options.zIndexOffset); return this; }
         on(event, handler) { if (event === 'click') this.clickHandlers.push(handler); return this; }
         remove() { if (this.native) this.native.setMap(null); }
     }
@@ -148,6 +168,8 @@
         addTo(map) { this.map=map; this.items.forEach(item => item.attach ? item.attach(map.native) : item.addTo(map)); return this; }
         addLayer(item) { this.items.push(item); if (this.map) item.attach ? item.attach(this.map.native) : item.addTo(this.map); return this; }
         addLayers(items) { items.forEach(item => this.addLayer(item)); }
+        hasLayer(item) { return this.items.includes(item); }
+        removeLayer(item) { const index=this.items.indexOf(item); if(index>=0)this.items.splice(index,1); item?.remove?.(); return this; }
         clearLayers() { this.items.forEach(item => item.remove()); this.items=[]; }
         remove() { this.clearLayers(); }
         zoomToShowLayer(marker, callback) {
@@ -224,7 +246,9 @@
                 : html.includes('mybas-pill') ? '#f93999'
                 : html.includes('rapid-pill') ? '#f60404'
                 : undefined);
-            return { text:textFromIconHtml(html), kind:html.includes('journey-endpoint-marker') ? 'endpoint' : html.includes('stop-marker') ? 'stop' : 'vehicle', color };
+            const stopScale = html.includes('route-stop-clear') ? 7 : html.includes('route-stop-major') ? 5 : 3;
+            return { text:textFromIconHtml(html), kind:html.includes('journey-endpoint-marker') ? 'endpoint' : html.includes('route-browse-live-marker') ? 'route-live' : html.includes('stop-marker') ? 'stop' : 'vehicle', color,
+                scale:stopScale, strokeWeight:html.includes('route-stop-subtle') ? 1 : 1.8, selected:html.includes('route-browse-live-marker selected') };
         },
         marker:(point, options) => new MarkerWrapper(point, options),
         circleMarker:(point, options) => new CircleWrapper(point, options),

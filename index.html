@@ -793,7 +793,11 @@
         .tracking-bus-copy strong { font-size:13px; }
         .tracking-bus-copy small { margin-top:2px; color:var(--text-muted); font-size:10px; }
         #stop-bus-tracking { flex:0 0 auto; border:0; border-radius:11px; padding:8px 10px; background:var(--input-bg); color:var(--text-main); font:800 10px/1 Manrope,sans-serif; cursor:pointer; }
-        .stop-marker { width:14px; height:14px; border-radius:50%; background:#fff; border:4px solid #2563eb; box-shadow:0 2px 7px rgba(15,23,42,.35); }
+        .stop-marker { box-sizing:border-box; width:14px; height:14px; border-radius:50%; background:#fff; border:3px solid #2563eb; box-shadow:0 1px 5px rgba(15,23,42,.28); transition:width .18s,height .18s,border-width .18s,opacity .18s; }
+        .stop-marker.route-stop-subtle { width:7px; height:7px; border-width:1px; box-shadow:0 0 0 1px rgba(15,23,42,.28); opacity:.84; }
+        .stop-marker.route-stop-major { width:11px; height:11px; border-width:2px; }
+        .stop-marker.route-stop-clear { width:16px; height:16px; border-width:3px; cursor:pointer; }
+        .route-stop-hit { width:44px; height:44px; display:grid; place-items:center; }
         .panel-message { color:var(--text-muted); font-size:13px; padding:8px 0; }
         .route-loader-panel { min-height:170px; display:flex; align-items:center; justify-content:center; padding:12px 0 30px; }
         #wifi-loader { --front-color:#f93999; --back-color:#d8dbea; --text-color:var(--text-main); width:64px; height:64px; border-radius:50px; position:relative; display:flex; justify-content:center; align-items:center; }
@@ -963,20 +967,48 @@
         .journey-progress-labels span:last-child { text-align:right; }
         .journey-progress-message { color:var(--text-muted); font-size:10px; line-height:1.35; }
         .journey-live-progress.live .journey-progress-message { color:#15803d; font-weight:750; }
-        .route-live-list { display:grid; gap:10px; margin-bottom:12px; }
-        .route-live-bus { padding:8px 4px 7px; color:var(--text-main); }
-        .route-live-bus-head { display:flex; justify-content:space-between; align-items:center; gap:10px; padding:0 2px; color:var(--text-muted); font-size:10px; font-weight:800; }
-        .route-live-bus-head strong { color:var(--route-live-color); }
-        .route-live-eta { padding:4px 7px; border-radius:999px; background:color-mix(in srgb, var(--route-live-color) 10%, transparent); color:var(--route-live-color); white-space:nowrap; }
-        .route-live-bus-track { position:relative; height:5px; margin:17px 12px 8px; border-radius:999px; background:#dbe2ea; }
+        .route-live-list { display:grid; gap:8px; margin-bottom:12px; scroll-margin-top:64px; }
+        .route-live-bus { padding:12px; color:var(--text-main); border:1px solid var(--border-color); border-radius:14px; background:var(--sheet-bg); cursor:pointer; scroll-margin-top:68px; transition:border-color .18s,box-shadow .18s,transform .18s; }
+        .route-live-bus:hover { border-color:color-mix(in srgb,var(--route-live-color) 45%,var(--border-color)); }
+        .route-live-bus.selected { border-color:var(--route-live-color); box-shadow:0 0 0 3px color-mix(in srgb,var(--route-live-color) 13%,transparent); }
+        .route-live-primary { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
+        .route-live-next { min-width:0; }
+        .route-live-next small,.route-live-next strong { display:block; }
+        .route-live-next small { color:var(--text-muted); font-size:10px; font-weight:800; }
+        .route-live-next strong { margin-top:2px; overflow:hidden; color:var(--text-main); font-size:14px; line-height:1.25; text-overflow:ellipsis; white-space:nowrap; }
+        .route-live-eta { flex:0 0 auto; padding:5px 8px; border-radius:999px; background:color-mix(in srgb, var(--route-live-color) 12%, transparent); color:var(--route-live-color); font-size:11px; font-weight:900; white-space:nowrap; }
+        .route-live-meta { margin-top:7px; color:var(--text-muted); font-size:10px; line-height:1.4; }
+        .route-live-meta strong { color:var(--route-live-color); }
+        .route-live-freshness { margin-top:2px; color:var(--text-muted); font-size:9px; }
+        .route-live-freshness.stale { color:#b45309; }
+        .route-live-bus-track { position:relative; height:5px; margin:18px 10px 8px; border-radius:999px; background:#dbe2ea; }
         .route-live-bus-fill { height:100%; border-radius:inherit; background:var(--route-live-color); }
-        .route-live-bus-marker { position:absolute; top:50%; width:22px; height:22px; display:grid; place-items:center; border:2px solid #fff; border-radius:50%; background:var(--route-live-color); color:#fff; box-shadow:0 1px 4px rgba(15,23,42,.25); transform:translate(-50%,-50%); }
+        .route-live-bus-marker { position:absolute; top:50%; width:23px; height:19px; display:grid; place-items:center; border:2px solid #fff; border-radius:7px; background:var(--route-live-color); color:#fff; box-shadow:0 1px 4px rgba(15,23,42,.25); transform:translate(-50%,-50%); }
         .route-live-bus-marker svg { width:12px; height:12px; }
         .route-live-stop-marker { position:absolute; top:50%; right:0; width:15px; height:15px; border:3px solid #fff; border-radius:50%; background:#94a3b8; box-shadow:0 0 0 2px #94a3b8; transform:translate(50%,-50%); }
         .route-live-segment { display:flex; justify-content:space-between; gap:12px; padding:0 2px; color:var(--text-muted); font-size:9px; }
         .route-live-segment span:last-child { text-align:right; }
-        .route-live-bus-next { padding:7px 2px 0; color:var(--text-muted); font-size:10px; }
-        .route-live-bus-next strong { display:block; margin-top:2px; color:var(--text-main); font-size:12px; }
+        .route-browse-live-hit { width:44px; height:44px; display:grid; place-items:center; }
+        .route-browse-live-marker { width:32px; height:32px; display:grid; place-items:center; border:2px solid #fff; border-radius:11px; background:#f93999; color:#fff; box-shadow:0 3px 9px rgba(15,23,42,.28); transition:transform .18s,box-shadow .18s; }
+        .route-browse-live-marker .ui-icon { width:17px; height:17px; }
+        .route-browse-live-marker.selected { transform:scale(1.14); box-shadow:0 0 0 5px rgba(249,57,153,.22),0 5px 14px rgba(15,23,42,.34); }
+        .route-live-empty,.route-live-error { padding:12px; border:1px solid var(--border-color); border-radius:12px; color:var(--text-muted); font-size:11px; background:var(--input-bg); }
+        .route-live-error button { margin-left:5px; border:0; background:transparent; color:#2563eb; font:inherit; font-weight:850; cursor:pointer; }
+        .route-stop-info { margin-bottom:10px; padding:12px; border:1px solid color-mix(in srgb,#2563eb 26%,var(--border-color)); border-radius:14px; background:color-mix(in srgb,#2563eb 5%,var(--sheet-bg)); }
+        .route-stop-info-head { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; }
+        .route-stop-info h4 { margin:0; font-size:15px; }
+        .route-stop-info p { margin:3px 0 0; color:var(--text-muted); font-size:10px; }
+        .route-stop-info-close { width:44px; height:44px; margin:-8px -8px 0 0; border:0; border-radius:50%; background:transparent; color:var(--text-main); font-size:20px; cursor:pointer; }
+        .route-stop-arrival { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:8px 0; border-top:1px solid var(--border-color); font-size:11px; }
+        .route-stop-arrival:first-of-type { margin-top:8px; }
+        .route-stop-arrival strong { color:var(--route-live-color,#f93999); }
+        .route-stop-info-actions { display:grid; grid-template-columns:1fr 1fr; gap:7px; margin-top:8px; }
+        .route-stop-info-actions button { min-height:44px; border:0; border-radius:10px; background:#2563eb; color:#fff; font:800 10px Manrope,sans-serif; cursor:pointer; }
+        .route-stop-info-actions button:first-child { background:var(--input-bg); color:var(--text-main); }
+        .route-header-live { display:inline-flex; align-items:center; gap:5px; }
+        .route-header-live::before { content:""; width:7px; height:7px; border-radius:50%; background:#16a34a; box-shadow:0 0 0 3px rgba(22,163,74,.12); }
+        .route-updated { margin-left:5px; color:var(--text-muted); font-size:9px; }
+        .route-stop-list { display:grid; }
         .extra-stops { margin:8px 0; border:1px solid var(--border-color); border-radius:10px; overflow:hidden; }
         .extra-stops summary { padding:10px 12px; cursor:pointer; color:var(--text-muted); font-size:12px; font-weight:750; background:var(--input-bg); }
         .extra-stops .stop-row { padding-left:12px; padding-right:12px; opacity:.78; }
@@ -1099,6 +1131,8 @@
             #bottom-sheet.detail-mode:not(.sheet-half):not(.sheet-expanded) .journey-card.modern.selected {
                 border-color:rgba(37,99,235,.45);
             }
+            #bottom-sheet.route-browse-mode:not(.sheet-half):not(.sheet-expanded) #panel-content { display:none; }
+            #bottom-sheet.route-browse-mode.sheet-half .route-stop-list { display:none; }
             #bottom-sheet.detail-mode:not(.sheet-half):not(.sheet-expanded) .journey-card.modern .journey-board,
             #bottom-sheet.detail-mode:not(.sheet-half):not(.sheet-expanded) .journey-card.modern .journey-fare,
             #bottom-sheet.detail-mode:not(.sheet-half):not(.sheet-expanded) .journey-card.modern .journey-live-progress,
@@ -1611,6 +1645,14 @@
         let routeDirectionsRenderers = [];
         let liveJourneyTrackingTimer = null;
         let routeBrowseTimer = null;
+        let routeBrowseFreshnessTimer = null;
+        let routeBrowseUpdatedAt = 0;
+        let routeBrowseStopMarkers = [];
+        let routeBrowseVehicles = [];
+        let routeBrowseVehicleMarkers = new Map();
+        let selectedRouteBrowseVehicleId = '';
+        let routeBrowseContext = null;
+        let routeStopZoomTimer = null;
         let activeTrackedJourneyIndex = 0;
         let activeJourneyRouteNames = new Set();
         let currentJourneyOptions = [];
@@ -2081,6 +2123,7 @@
             document.getElementById('panel-content').innerHTML = html;
             document.getElementById('transit-panel').classList.add('open');
             const sheet = document.getElementById('bottom-sheet');
+            sheet.classList.remove('route-browse-mode');
             document.getElementById('resume-journey-button').classList.remove('visible');
             sheet.classList.add('detail-mode');
             if (!preserveSheetState && window.innerWidth < 768 && !sheet.classList.contains('sheet-dragging')) {
@@ -2239,7 +2282,7 @@
             const panel = document.getElementById('transit-panel');
             panel.classList.remove('open');
             const sheet = document.getElementById('bottom-sheet');
-            sheet.classList.remove('detail-mode', 'sheet-half', 'sheet-expanded', 'sheet-dragging');
+            sheet.classList.remove('detail-mode', 'sheet-half', 'sheet-expanded', 'sheet-dragging', 'route-browse-mode');
             sheet.style.height = '';
             const resumeButton = document.getElementById('resume-journey-button');
             if (forceClose) {
@@ -2285,6 +2328,13 @@
             journeyLiveVehicleLayer.clearLayers();
             if (routeBrowseTimer) clearInterval(routeBrowseTimer);
             routeBrowseTimer = null;
+            if (routeBrowseFreshnessTimer) clearInterval(routeBrowseFreshnessTimer);
+            routeBrowseFreshnessTimer = null;
+            routeBrowseContext = null;
+            routeBrowseStopMarkers = [];
+            routeBrowseVehicles = [];
+            routeBrowseVehicleMarkers.clear();
+            selectedRouteBrowseVehicleId = '';
             if (canResumeJourney) {
                 journeyMapFocused = true;
                 showRelatedJourneyBuses();
@@ -2351,6 +2401,40 @@
                 .bindTooltip(escapeHtml(stop.stop_name), { direction:'top' });
             marker.on('click', () => showStopArrivals(stop));
             return marker;
+        }
+
+        function readableStopName(value) {
+            const text = String(value || '').trim();
+            if (!text || text !== text.toUpperCase()) return text;
+            return text.toLowerCase().replace(/\b([a-z])/g, match => match.toUpperCase())
+                .replace(/\b(Smk|Sjkc|Ktm|Mrt|Lrt|Uitm|Utar|Kl)\b/g, value => value.toUpperCase());
+        }
+
+        function routeStopIcon(color, level = 'subtle') {
+            return L.divIcon({
+                html:`<div class="route-stop-hit"><div class="stop-marker route-stop-${level}" style="border-color:${color}"></div></div>`,
+                className:'', iconSize:[44,44], iconAnchor:[22,22],
+            });
+        }
+
+        function updateRouteStopVisibility() {
+            if (!routeBrowseStopMarkers.length) return;
+            const zoom = Number(map.getZoom?.() ?? map.native?.getZoom?.() ?? 14);
+            routeBrowseStopMarkers.forEach(entry => {
+                const shouldShow = zoom >= 12 || entry.major;
+                const visible = activeRouteLayer.hasLayer(entry.marker);
+                if (shouldShow && !visible) entry.marker.addTo(activeRouteLayer);
+                if (!shouldShow && visible) activeRouteLayer.removeLayer(entry.marker);
+                if (!shouldShow) return;
+                const level = zoom >= 15 ? 'clear' : zoom >= 12 ? 'subtle' : 'major';
+                entry.marker.setIcon(routeStopIcon(entry.color, entry.major && zoom < 15 ? 'major' : level));
+                entry.marker.setZIndexOffset?.(100 + entry.index);
+            });
+        }
+
+        function scheduleRouteStopVisibility() {
+            if (routeStopZoomTimer) clearTimeout(routeStopZoomTimer);
+            routeStopZoomTimer = setTimeout(updateRouteStopVisibility, 90);
         }
 
         async function loadNearbyStops(lat, lng) {
@@ -2420,11 +2504,128 @@
             }
         }
 
+        function routeLiveMarkerIcon(selected = false) {
+            return L.divIcon({
+                html:`<div class="route-browse-live-hit"><div class="route-browse-live-marker${selected ? ' selected' : ''}">${iconSvg('bus')}</div></div>`,
+                className:'', iconSize:[44,44], iconAnchor:[22,22],
+            });
+        }
+
+        function routeVehicleId(vehicle, fallback = 'Bus') {
+            return String(vehicle?.vehicle?.id || vehicle?.vehicle?.label || vehicle?.trip?.tripId || fallback);
+        }
+
+        function routeFreshnessText(timestamp) {
+            const value = Number(timestamp);
+            const milliseconds = value > 1e12 ? value : value > 0 ? value * 1000 : routeBrowseUpdatedAt;
+            const seconds = Math.max(0, Math.floor((Date.now() - milliseconds) / 1000));
+            if (seconds < 10) return { text:'Updated just now', stale:false };
+            if (seconds < 60) return { text:`Updated ${seconds} sec ago`, stale:false };
+            if (seconds < 90) return { text:'Updated 1 min ago', stale:false };
+            return { text:'Location may be outdated', stale:true };
+        }
+
+        function updateRouteFreshnessLabels() {
+            document.querySelectorAll('[data-live-timestamp]').forEach(element => {
+                const freshness = routeFreshnessText(element.dataset.liveTimestamp);
+                element.textContent = freshness.text;
+                element.classList.toggle('stale', freshness.stale);
+            });
+            const header = document.getElementById('route-updated-status');
+            if (header && routeBrowseUpdatedAt) header.textContent = routeFreshnessText(routeBrowseUpdatedAt).text;
+        }
+
+        function renderRouteHeaderStatus(stopCount, liveCount) {
+            const subtitle = document.getElementById('panel-subtitle');
+            if (!subtitle) return;
+            subtitle.dataset.stopCount = `${stopCount} stops`;
+            subtitle.innerHTML = liveCount
+                ? `${stopCount} stops · <span class="route-header-live">${liveCount} bus${liveCount === 1 ? '' : 'es'} live</span><span id="route-updated-status" class="route-updated">Updated just now</span>`
+                : `${stopCount} stops · Live tracking unavailable`;
+        }
+
+        function selectRouteBrowseVehicle(vehicleId, options = {}) {
+            if (!vehicleId || !routeBrowseVehicleMarkers.has(vehicleId)) return;
+            selectedRouteBrowseVehicleId = vehicleId;
+            routeBrowseVehicleMarkers.forEach((marker, id) => {
+                marker.setIcon(routeLiveMarkerIcon(id === vehicleId));
+                marker.setZIndexOffset?.(id === vehicleId ? 2200 : 1500);
+            });
+            document.querySelectorAll('.route-live-bus').forEach(card => card.classList.toggle('selected', card.dataset.vehicleId === vehicleId));
+            const selected = routeBrowseVehicles.find(item => item.vehicleId === vehicleId);
+            if (selected && options.center !== false) {
+                const isMobile = window.innerWidth < 768;
+                const target = [selected.point.lat - (isMobile ? 0.0022 : 0), selected.point.lng];
+                map.flyTo(target, Math.max(15, map.getZoom?.() || 15), { animate:true, duration:.55 });
+            }
+            if (options.scroll !== false) {
+                const sheet = document.getElementById('bottom-sheet');
+                if (window.innerWidth < 768) {
+                    sheet.classList.add('sheet-half');
+                    sheet.classList.remove('sheet-expanded');
+                    updateDetailSheetToggle();
+                }
+                requestAnimationFrame(() => document.querySelector(`.route-live-bus[data-vehicle-id="${CSS.escape(vehicleId)}"]`)?.scrollIntoView({ behavior:'smooth', block:'nearest' }));
+            }
+        }
+
+        function routeLiveBusCard(item, markerColor) {
+            const vehicleName = item.vehicleId;
+            const previousName = readableStopName(item.stops[item.nearestIndex]?.stop_name || 'Previous stop');
+            const nextName = readableStopName(item.nextStop?.stop_name || 'End of route');
+            const freshness = routeFreshnessText(item.timestamp);
+            return `<article class="route-live-bus${selectedRouteBrowseVehicleId === vehicleName ? ' selected' : ''}" data-vehicle-id="${escapeHtml(vehicleName)}" tabindex="0" role="button" style="--route-live-color:${markerColor}">
+                <div class="route-live-primary"><div class="route-live-next"><small>Next stop</small><strong>${escapeHtml(nextName)}</strong></div><span class="route-live-eta">~${item.etaMinutes} min</span></div>
+                <div class="route-live-meta">Bus <strong>${escapeHtml(vehicleName)}</strong> · Live<br>Currently near ${escapeHtml(previousName)}</div>
+                <div class="route-live-freshness${freshness.stale ? ' stale' : ''}" data-live-timestamp="${escapeHtml(item.timestamp || '')}">${freshness.text}</div>
+                <div class="route-live-bus-track" aria-label="Bus progress from ${escapeHtml(previousName)} to ${escapeHtml(nextName)}">
+                    <div class="route-live-bus-fill" style="width:${item.progress}%"></div>
+                    <span class="route-live-bus-marker" style="left:${item.progress}%">${iconSvg('bus')}</span><span class="route-live-stop-marker"></span>
+                </div>
+                <div class="route-live-segment"><span>Previous stop<br>${escapeHtml(previousName)}</span><span>Next stop<br>${escapeHtml(nextName)}</span></div>
+            </article>`;
+        }
+
+        function bindRouteLiveCards() {
+            document.querySelectorAll('.route-live-bus').forEach(card => {
+                const select = () => selectRouteBrowseVehicle(card.dataset.vehicleId, { center:true, scroll:false });
+                card.addEventListener('click', select);
+                card.addEventListener('keydown', event => {
+                    if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); select(); }
+                });
+            });
+        }
+
+        function closeRouteStopInfo() {
+            document.getElementById('route-stop-info')?.remove();
+        }
+
+        function showRouteStopInfo(stop, stopIndex) {
+            if (!routeBrowseContext) return;
+            const serving = routeBrowseVehicles.filter(item => item.nearestIndex <= stopIndex).map(item => {
+                const distance = routeDistanceBetween(item.stops, Math.min(item.nextIndex, stopIndex), stopIndex, item.point);
+                const speed = Number(item.vehicle.position?.speed) >= 2 ? Number(item.vehicle.position.speed) : 7;
+                return { ...item, stopEta:Math.max(1, Math.ceil((distance * 1.18) / speed / 60)) };
+            }).sort((a,b) => a.stopEta - b.stopEta);
+            closeRouteStopInfo();
+            const box = document.createElement('section');
+            box.id = 'route-stop-info';
+            box.className = 'route-stop-info';
+            box.style.setProperty('--route-live-color', routeBrowseContext.color);
+            box.innerHTML = `<div class="route-stop-info-head"><div><h4>${escapeHtml(readableStopName(stop.stop_name))}</h4><p>${escapeHtml(routeBrowseContext.routeLabel)} toward ${escapeHtml(readableStopName(routeBrowseContext.headsign || 'destination'))}</p></div><button class="route-stop-info-close" type="button" onclick="closeRouteStopInfo()" aria-label="Close stop details">&times;</button></div>
+                ${serving.length ? serving.slice(0,4).map(item => `<div class="route-stop-arrival"><span>Bus <strong>${escapeHtml(item.vehicleId)}</strong> · Live</span><b>~${item.stopEta} min</b></div>`).join('') : '<p>No approaching live bus can currently be estimated for this stop.</p>'}
+                <div class="route-stop-info-actions"><button type="button" onclick="map.flyTo([${Number(stop.stop_lat)},${Number(stop.stop_lon)}],17)">View stop</button><button type="button" onclick="window.open('https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${stop.stop_lat},${stop.stop_lon}`)}','_blank')">Directions here</button></div>`;
+            document.getElementById('panel-content')?.prepend(box);
+            if (window.innerWidth < 768) document.getElementById('bottom-sheet').classList.add('sheet-half');
+            box.scrollIntoView({ behavior:'smooth', block:'nearest' });
+        }
+
         async function updateBrowsedRouteVehicles(routeId, publicCode, agency, directionId, stops) {
             try {
                 const response = await fetch(`${API_BASE}/api/live-buses?agency=${encodeURIComponent(agency)}`);
                 const result = await response.json();
-                if (!result.success) return;
+                if (!result.success) throw new Error(result.error || 'Live feed unavailable');
+                routeBrowseUpdatedAt = Number(result.feed_timestamp) ? Number(result.feed_timestamp) * 1000 : Date.now();
                 const acceptedCodes = new Set([routeId, publicCode].filter(Boolean).map(value => String(value).toUpperCase()));
                 const routeVehicles = result.data.filter(vehicle => vehicle.position && acceptedCodes.has(String(vehicle.trip?.routeId || '').toUpperCase()));
                 const resolvedVehicles = await Promise.all(routeVehicles.map(async vehicle => {
@@ -2452,22 +2653,30 @@
                     const liveSpeed = Number(vehicle.position.speed);
                     const estimatedSpeed = liveSpeed >= 2 ? liveSpeed : 7;
                     const etaMinutes = nextIndex === nearestIndex ? 0 : Math.max(1, Math.ceil((remainingDistance * 1.18) / estimatedSpeed / 60));
-                    return { vehicle, point, nearestIndex, nextIndex, nextStop, progress, etaMinutes };
+                    return { vehicle, point, nearestIndex, nextIndex, nextStop, progress, etaMinutes, stops,
+                        vehicleId:routeVehicleId(vehicle, publicCode), timestamp:vehicle.timestamp || result.feed_timestamp || '' };
                 }));
                 const vehicles = resolvedVehicles.filter(Boolean);
-                journeyLiveVehicleLayer.clearLayers();
+                routeBrowseVehicles = vehicles;
                 const markerColor = safeRouteColor('', agency);
+                const currentVehicleIds = new Set(vehicles.map(item => item.vehicleId));
+                routeBrowseVehicleMarkers.forEach((marker, vehicleId) => {
+                    if (currentVehicleIds.has(vehicleId)) return;
+                    journeyLiveVehicleLayer.removeLayer(marker);
+                    routeBrowseVehicleMarkers.delete(vehicleId);
+                });
                 vehicles.forEach(item => {
-                    const vehicle = item.vehicle;
-                    const label = compactRouteLabel(vehicle.trip?.routeId, vehicle.route_info?.short_name || publicCode);
-                    const icon = L.divIcon({
-                        html:`<div class="marker-wrapper"><div class="route-pill" style="background-color:${markerColor}">${escapeHtml(label)}</div></div>`,
-                        className:'', iconSize:null,
-                    });
-                    L.marker([item.point.lat, item.point.lng], {
-                        icon, title:`Live ${label}`,
-                    }).bindPopup(`<div class="custom-popup"><strong>${escapeHtml(label)} live bus</strong><div>${item.etaMinutes} min to ${escapeHtml(item.nextStop?.stop_name || 'end of route')}</div></div>`)
-                        .addTo(journeyLiveVehicleLayer);
+                    const existing = routeBrowseVehicleMarkers.get(item.vehicleId);
+                    if (existing) {
+                        existing.setLatLng([item.point.lat, item.point.lng]);
+                        existing.setIcon(routeLiveMarkerIcon(item.vehicleId === selectedRouteBrowseVehicleId));
+                        existing.setZIndexOffset?.(item.vehicleId === selectedRouteBrowseVehicleId ? 2200 : 1500);
+                        return;
+                    }
+                    const marker = L.marker([item.point.lat, item.point.lng], { icon:routeLiveMarkerIcon(item.vehicleId === selectedRouteBrowseVehicleId), title:`Live ${publicCode} bus`, zIndexOffset:1500 });
+                    marker.on('click', () => selectRouteBrowseVehicle(item.vehicleId, { center:false, scroll:true }));
+                    marker.addTo(journeyLiveVehicleLayer);
+                    routeBrowseVehicleMarkers.set(item.vehicleId, marker);
                 });
                 let liveList = document.getElementById('route-live-list');
                 if (!liveList) {
@@ -2476,28 +2685,29 @@
                     liveList.className = 'route-live-list';
                     document.getElementById('panel-content')?.prepend(liveList);
                 }
-                if (liveList) liveList.innerHTML = vehicles.length ? vehicles.map(item => {
-                    const vehicleName = item.vehicle.vehicle?.id || publicCode;
-                    return `<div class="route-live-bus" style="--route-live-color:${markerColor}">
-                        <div class="route-live-bus-head"><strong>${escapeHtml(vehicleName)}</strong><span class="route-live-eta">~${item.etaMinutes} min</span></div>
-                        <div class="route-live-bus-track">
-                            <div class="route-live-bus-fill" style="width:${item.progress}%"></div>
-                            <span class="route-live-bus-marker" style="left:${item.progress}%">${iconSvg('bus')}</span>
-                            <span class="route-live-stop-marker"></span>
-                        </div>
-                        <div class="route-live-segment"><span>${escapeHtml(stops[item.nearestIndex]?.stop_name || 'Previous stop')}</span><span>${escapeHtml(item.nextStop?.stop_name || 'End of route')}</span></div>
-                        <div class="route-live-bus-next">Next station<strong>${escapeHtml(item.nextStop?.stop_name || 'End of route')}</strong></div>
-                    </div>`;
-                }).join('') : '<p class="panel-message">No live buses currently matched to this direction.</p>';
-                const subtitle = document.getElementById('panel-subtitle');
-                if (subtitle && document.getElementById('transit-panel').classList.contains('open')) {
-                    const stopCount = subtitle.dataset.stopCount || subtitle.textContent.split(' • ')[0];
-                    subtitle.dataset.stopCount = stopCount;
-                    subtitle.textContent = `${stopCount} • ${vehicles.length} live bus${vehicles.length === 1 ? '' : 'es'}`;
-                }
+                if (selectedRouteBrowseVehicleId && !routeBrowseVehicleMarkers.has(selectedRouteBrowseVehicleId)) selectedRouteBrowseVehicleId = '';
+                if (liveList) liveList.innerHTML = vehicles.length
+                    ? vehicles.sort((a,b) => a.etaMinutes - b.etaMinutes).map(item => routeLiveBusCard(item, markerColor)).join('')
+                    : `<div class="route-live-empty">No live ${escapeHtml(publicCode)} buses currently available. The route and stops are still shown.</div>`;
+                bindRouteLiveCards();
+                renderRouteHeaderStatus(stops.length, vehicles.length);
+                updateRouteFreshnessLabels();
             } catch (error) {
                 console.warn('Route live vehicles unavailable', error);
+                routeBrowseVehicles = [];
+                routeBrowseVehicleMarkers.clear();
+                journeyLiveVehicleLayer.clearLayers();
+                const liveList = document.getElementById('route-live-list');
+                if (liveList) liveList.innerHTML = `<div class="route-live-error">Live bus data temporarily unavailable.<button type="button" onclick="retryBrowsedRouteVehicles()">Retry</button></div>`;
+                renderRouteHeaderStatus(stops.length, 0);
             }
+        }
+
+        function retryBrowsedRouteVehicles() {
+            if (!routeBrowseContext) return;
+            const context = routeBrowseContext;
+            document.getElementById('route-live-list').innerHTML = '<p class="panel-message">Checking live bus locations…</p>';
+            updateBrowsedRouteVehicles(context.routeId, context.publicCode, context.agency, context.directionId, context.stops);
         }
 
         async function showRoute(routeId, agencyOverride = null, directionId = null, tripId = null, publicCode = null) {
@@ -2506,6 +2716,11 @@
             liveJourneyTrackingTimer = null;
             if (routeBrowseTimer) clearInterval(routeBrowseTimer);
             routeBrowseTimer = null;
+            if (routeBrowseFreshnessTimer) clearInterval(routeBrowseFreshnessTimer);
+            routeBrowseFreshnessTimer = null;
+            selectedRouteBrowseVehicleId = '';
+            routeBrowseStopMarkers = [];
+            routeBrowseVehicleMarkers.clear();
             openRouteTransitPanel('Route', routeId, '<p class="panel-message">Loading route…</p>');
             try {
                 const params = new URLSearchParams({ agency });
@@ -2531,21 +2746,37 @@
                     const line = drawOutlinedRoute(coordinates, brandColor);
                     map.fitBounds(line.getBounds(), { padding:[45,45] });
                 }
-                data.stops.forEach(stop => {
+                data.stops.forEach((stop, index) => {
                     const displayStop = data.geometry_source === 'verified-override'
                         ? projectStopOntoRoute(stop, coordinates) : stop;
-                    createStopMarker(displayStop, brandColor).addTo(activeRouteLayer);
+                    const major = index === 0 || index === data.stops.length - 1 || index % 10 === 0;
+                    const marker = L.marker([Number(displayStop.stop_lat), Number(displayStop.stop_lon)], {
+                        icon:routeStopIcon(brandColor, major ? 'major' : 'subtle'), title:readableStopName(stop.stop_name), zIndexOffset:100 + index,
+                    }).bindTooltip(escapeHtml(readableStopName(stop.stop_name)), { direction:'top' });
+                    marker.on('click', () => showRouteStopInfo(stop, index));
+                    marker.addTo(activeRouteLayer);
+                    routeBrowseStopMarkers.push({ marker, index, major, color:brandColor });
                 });
                 const routeLabel = compactRouteLabel(data.route.route_id, publicCode || data.route.route_short_name || data.route.route_long_name);
                 const title = `${routeLabel} ${data.trip.trip_headsign || ''}`.trim();
                 const geometryLabel = data.geometry_source === 'verified-override'
                     ? (roadMatched ? 'verified • road matched' : 'verified route') : 'official stops';
-                openRouteTransitPanel(title, `${data.stops.length} stops • ${geometryLabel}`, `<div id="route-live-list" class="route-live-list"><p class="panel-message">Checking live bus locations…</p></div>` + data.stops.map((stop, index) => `
-                    <div class="stop-row"><strong>${index + 1}</strong><span class="stop-name">${escapeHtml(stop.stop_name)}</span></div>
-                `).join(''));
+                openRouteTransitPanel(title, `${data.stops.length} stops • ${geometryLabel}`, `<div id="route-live-list" class="route-live-list"><p class="panel-message">Checking live bus locations…</p></div><div class="route-stop-list">` + data.stops.map((stop, index) => `
+                    <button class="stop-row" type="button" data-route-stop-index="${index}" style="width:100%;border-left:0;border-right:0;border-bottom:0;background:transparent;color:inherit;text-align:left;cursor:pointer"><strong>${index + 1}</strong><span class="stop-name">${escapeHtml(readableStopName(stop.stop_name))}</span></button>
+                `).join('') + '</div>');
+                document.getElementById('bottom-sheet').classList.add('route-browse-mode');
+                routeBrowseContext = { routeId, publicCode:publicCode || routeLabel, agency, directionId:data.trip.direction_id, stops:data.stops, color:brandColor, routeLabel, headsign:data.trip.trip_headsign || '' };
+                document.querySelectorAll('[data-route-stop-index]').forEach(button => button.addEventListener('click', () => {
+                    const index = Number(button.dataset.routeStopIndex);
+                    const stop = data.stops[index];
+                    showRouteStopInfo(stop, index);
+                    map.flyTo([Number(stop.stop_lat), Number(stop.stop_lon)], Math.max(15, map.getZoom?.() || 15), { animate:true, duration:.45 });
+                }));
+                updateRouteStopVisibility();
                 await updateBrowsedRouteVehicles(routeId, publicCode || routeLabel, agency, data.trip.direction_id, data.stops);
                 if (routeBrowseTimer) clearInterval(routeBrowseTimer);
                 routeBrowseTimer = setInterval(() => updateBrowsedRouteVehicles(routeId, publicCode || routeLabel, agency, data.trip.direction_id, data.stops), 30000);
+                routeBrowseFreshnessTimer = setInterval(updateRouteFreshnessLabels, 5000);
             } catch (error) {
                 openRouteTransitPanel('Route unavailable', routeId, '<p class="panel-message">Route geometry is not available yet. Rebuild the GTFS database and try again.</p>');
             }
@@ -2558,6 +2789,8 @@
         async function searchRouteCode(code) {
             if (routeBrowseTimer) clearInterval(routeBrowseTimer);
             routeBrowseTimer = null;
+            if (routeBrowseFreshnessTimer) clearInterval(routeBrowseFreshnessTimer);
+            routeBrowseFreshnessTimer = null;
             const selectedAgency = document.getElementById('agency-select').value;
             const agencies = agenciesForSelection(selectedAgency);
             openTransitPanel('Finding route', code, '<p class="panel-message">Checking route directions…</p>');
@@ -4412,6 +4645,8 @@
             selectSidebarRegion, toggleLiveVehicles, recenterMapPosition, backFromGuidedJourney,
             headNorthGuidedJourney
         });
+
+        map.on('zoomend', scheduleRouteStopVisibility);
         initializeJourneyPlanner();
         restoreSavedJourneyFromUrl();
         initializeBottomSheetDrag();
