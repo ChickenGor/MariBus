@@ -940,6 +940,16 @@
         .guided-nav-current strong,.guided-nav-current small { display:block; }
         .guided-nav-current strong { overflow:hidden; color:var(--text-main); font-size:14px; line-height:1.25; text-overflow:ellipsis; white-space:nowrap; }
         .guided-nav-current small { margin-top:2px; overflow:hidden; color:var(--text-muted); font-size:10px; text-overflow:ellipsis; white-space:nowrap; }
+        .leave-now-advice { margin:2px 2px 9px; padding:10px 11px; border:1px solid #bfdbfe; border-radius:12px; background:#eff6ff; color:#1e3a8a; }
+        .leave-now-advice.likely,.leave-now-advice.plenty { border-color:#bbf7d0; background:#f0fdf4; color:#166534; }
+        .leave-now-advice.miss { border-color:#fed7aa; background:#fff7ed; color:#9a3412; }
+        body.dark-mode .leave-now-advice { background:color-mix(in srgb,currentColor 10%,var(--sheet-bg)); }
+        .leave-now-advice strong,.leave-now-advice span,.leave-now-advice small { display:block; }
+        .leave-now-advice strong { font-size:12px; }
+        .leave-now-advice span { margin-top:3px; font-size:10px; line-height:1.35; }
+        .leave-now-advice small { margin-top:5px; opacity:.78; font-size:8px; font-weight:750; }
+        .get-off-setting { display:flex; align-items:center; justify-content:space-between; gap:10px; margin:0 2px 9px; padding:8px 10px; border-radius:10px; background:var(--input-bg); color:var(--text-muted); font-size:9px; font-weight:800; }
+        .get-off-setting select { min-height:32px; border:1px solid var(--border-color); border-radius:8px; background:var(--sheet-bg); color:var(--text-main); font:750 9px Manrope,sans-serif; }
         .guided-nav-stage-action { width:100%; min-height:31px; margin:0 0 7px; border:0; border-radius:10px; background:#2563eb; color:#fff; font:800 10px Manrope,sans-serif; cursor:pointer; }
         .guided-nav-footer { display:grid; grid-template-columns:auto auto 1fr; align-items:center; gap:8px; padding:8px 2px 2px; border-top:1px solid var(--border-color); }
         .guided-nav-footer button { min-height:36px; padding:0 14px; border:0; border-radius:999px; font:850 11px Manrope,sans-serif; cursor:pointer; }
@@ -1714,6 +1724,18 @@
             APPROACHING_DESTINATION:'APPROACHING_DESTINATION', GET_OFF_NOW:'GET_OFF_NOW',
             WALKING_TO_DESTINATION:'WALKING_TO_DESTINATION', ARRIVED:'ARRIVED',
         });
+        const journeyAlertManager = {
+            notify(key, title, body) {
+                if (!guidedJourney || guidedJourney.alerted.has(key)) return false;
+                guidedJourney.alerted.add(key);
+                showMenuNotice(`${title}: ${body}`);
+                navigator.vibrate?.([220, 100, 220]);
+                if ('Notification' in window && Notification.permission === 'granted') {
+                    try { new Notification(title, { body, tag:`maribus-${key}`, renotify:false }); } catch (_) {}
+                }
+                return true;
+            },
+        };
         let guidedJourneyWatchId = null;
         let guidedJourneyLastPosition = null;
         let guidedJourneyMarker = null;
@@ -1966,7 +1988,8 @@
                             tripId:vehicle.route_info?.trip_id || vehicle.trip?.tripId || '',
                             latitude:Number(vehicle.position.latitude),
                             longitude:Number(vehicle.position.longitude),
-                            speedKmh:vehicle.position.speed > 0 ? Math.round(vehicle.position.speed * 3.6) : null
+                            speedKmh:vehicle.position.speed > 0 ? Math.round(vehicle.position.speed * 3.6) : null,
+                            timestamp:vehicle.timestamp || result.feed_timestamp || null
                         };
 
                         if (routeShortName && routeShortName !== "Bus" && routeShortName !== "KTM") {
@@ -4149,6 +4172,56 @@
             return (degrees(Math.atan2(y, x)) + 360) % 360;
         }
 
+        function leaveNowAdvice({ walkingSeconds, busMinutes, nextBusMinutes, source = 'scheduled', isStale = false, safetyBufferSeconds = 120 }) {
+            const walkMinutes = Math.max(1, Math.ceil(Number(walkingSeconds || 0) / 60));
+            if (!Number.isFinite(Number(busMinutes)) || isStale) {
+                return { tone:'unknown', title:'Check before leaving', detail:`Walking takes approximately ${walkMinutes} min. Reliable live arrival information is not currently available.`, meta:'Use the published departure time as a guide.' };
+            }
+            const arrivalMinutes = Math.max(0, Math.ceil(Number(busMinutes)));
+            const marginSeconds = arrivalMinutes * 60 - Number(walkingSeconds || 0) - safetyBufferSeconds;
+            const sourceText = source === 'live' ? 'Live vehicle estimate' : 'Scheduled departure';
+            if (marginSeconds >= 5 * 60) return { tone:'plenty', title:'Plenty of time', detail:`The bus is expected in ~${arrivalMinutes} min and the walk takes about ${walkMinutes} min.`, meta:`${sourceText} · includes a ${Math.ceil(safetyBufferSeconds / 60)} min safety buffer` };
+            if (marginSeconds >= 0) return { tone:'likely', title:'Leave now · likely to catch', detail:`The bus is expected in ~${arrivalMinutes} min. Walking takes approximately ${walkMinutes} min.`, meta:`${sourceText} · this is an estimate, not a guarantee` };
+            if (Number.isFinite(Number(nextBusMinutes)) && Number(nextBusMinutes) * 60 - Number(walkingSeconds || 0) >= safetyBufferSeconds) {
+                return { tone:'miss', title:'You may miss this bus', detail:`The nearest bus is expected in ~${arrivalMinutes} min. The next is estimated in ~${Math.ceil(nextBusMinutes)} min.`, meta:`Walk: ${walkMinutes} min · no need to rush unsafely` };
+            }
+            return { tone:'miss', title:'You may miss this bus', detail:`The bus is expected in ~${arrivalMinutes} min while the walk takes about ${walkMinutes} min.`, meta:`${sourceText} · allow time to reach the correct boarding point` };
+        }
+
+        function guidedLeaveNowAdvice(step, nextTransit) {
+            if (!step || !nextTransit) return null;
+            const live = guidedLiveBusEstimate();
+            if (live?.closest) {
+                const freshness = routeFreshnessText(live.closest.vehicle.timestamp);
+                return leaveNowAdvice({ walkingSeconds:Number(step.duration?.value || 0), busMinutes:live.closest.minutes, nextBusMinutes:live.next?.minutes, source:'live', isStale:freshness.stale });
+            }
+            const scheduledDate = nextTransit.transit?.departure_time?.value;
+            const scheduledMinutes = scheduledDate?.getTime ? Math.max(0, (scheduledDate.getTime() - Date.now()) / 60000) : NaN;
+            return leaveNowAdvice({ walkingSeconds:Number(step.duration?.value || 0), busMinutes:scheduledMinutes, source:'scheduled' });
+        }
+
+        function getOffAlertPreference() {
+            try {
+                const saved = JSON.parse(localStorage.getItem('maribus-get-off-alert') || 'null');
+                if (saved?.mode === 'minutes' && Number(saved.value) === 5) return saved;
+                if (saved?.mode === 'stops' && [1,2].includes(Number(saved.value))) return { mode:'stops', value:Number(saved.value) };
+            } catch (_) {}
+            return { mode:'stops', value:1 };
+        }
+
+        function setGetOffAlertPreference(value) {
+            const preference = value === 'minutes-5' ? { mode:'minutes', value:5 } : { mode:'stops', value:value === 'stops-2' ? 2 : 1 };
+            localStorage.setItem('maribus-get-off-alert', JSON.stringify(preference));
+            showMenuNotice(preference.mode === 'minutes' ? 'Get-off alert set for 5 minutes before' : `Get-off alert set for ${preference.value} stop${preference.value === 1 ? '' : 's'} before`);
+        }
+
+        function shouldSendGetOffAlert(progress) {
+            const preference = getOffAlertPreference();
+            if (preference.mode === 'stops') return Number.isFinite(progress.stopsToExit) && progress.stopsToExit <= preference.value;
+            const arrival = guidedJourney?.steps?.[guidedJourney.stageIndex]?.transit?.arrival_time?.value;
+            return arrival?.getTime && arrival.getTime() - Date.now() <= preference.value * 60000;
+        }
+
         function setGuidedJourneyState(nextState) {
             if (!guidedJourney || !Object.values(GUIDED_JOURNEY_STATE).includes(nextState)) return false;
             if (guidedJourney.state === nextState) return false;
@@ -4190,6 +4263,7 @@
                     title:finalStage ? `Walk to ${guidedJourney.destinationName}` : `Walk to ${nextTransit?.transit?.departure_stop?.name || 'boarding station'}`,
                     meta:`${step.duration?.text || ''}${step.distance?.text ? ` · ${step.distance.text}` : ''}${step.instructions ? ` · ${plainGoogleInstruction(step.instructions)}` : ''}`,
                     action:finalStage ? 'Finish journey' : "I've arrived",
+                    advice:finalStage ? null : guidedLeaveNowAdvice(step, nextTransit),
                 };
             }
             const line = step.transit?.line || {};
@@ -4220,7 +4294,7 @@
                 })
                 .filter(item => Number.isFinite(item.distance) && item.distance < 60000)
                 .sort((a, b) => a.minutes - b.minutes);
-            return { routeName, station, closest:estimates[0] || null };
+            return { routeName, station, closest:estimates[0] || null, next:estimates[1] || null };
         }
 
         async function loadGuidedLiveStops(vehicle) {
@@ -4289,6 +4363,10 @@
                         else if (progress.stopsToExit === 1) setGuidedJourneyState(GUIDED_JOURNEY_STATE.APPROACHING_DESTINATION);
                         if (progress.stopsToExit === 0) document.getElementById('panel-title').textContent = 'Get off now';
                         else if (progress.stopsToExit === 1) document.getElementById('panel-title').textContent = 'Your stop is next';
+                        if (shouldSendGetOffAlert(progress)) {
+                            const alertTitle = progress.stopsToExit === 0 ? 'Get off now' : 'Your stop is approaching';
+                            journeyAlertManager.notify(`get-off-${guidedJourney.stageIndex}`, alertTitle, `Prepare to get off at ${progress.exitName || progress.next}.`);
+                        }
                         detail.textContent = progress.stopsToExit === 0
                             ? `Get off at ${progress.exitName || progress.current}`
                             : `${progress.stopsToExit ?? '—'} stop${progress.stopsToExit === 1 ? '' : 's'} to ${progress.exitName || 'your exit'}`;
@@ -4304,6 +4382,7 @@
                     if (estimate.closest.minutes <= 2) {
                         setGuidedJourneyState(GUIDED_JOURNEY_STATE.BUS_APPROACHING);
                         document.getElementById('panel-title').textContent = 'Bus approaching';
+                        journeyAlertManager.notify(`approaching-${guidedJourney.stageIndex}`, `${estimate.routeName} is approaching`, `Your bus is approximately ${estimate.closest.minutes} minute${estimate.closest.minutes === 1 ? '' : 's'} away. Prepare to board at ${estimate.station}.`);
                     }
                     detail.textContent = `About ${estimate.closest.minutes} min to ${estimate.station}`;
                 }
@@ -4334,9 +4413,13 @@
                 : null;
             const remainingText = remainingMinutes ? `${remainingMinutes} min` : (leg?.duration?.text || 'In progress');
             const needsStageAction = details.kind !== 'walk';
+            const alertPreference = getOffAlertPreference();
+            const alertValue = alertPreference.mode === 'minutes' ? 'minutes-5' : `stops-${alertPreference.value}`;
             document.getElementById('panel-content').innerHTML = `<div class="guided-nav-card">
                 <div class="guided-nav-route"><div class="guided-nav-route-steps">${routeSteps}</div><button class="guided-nav-close" type="button" onclick="endGuidedJourney()" aria-label="End navigation">&times;</button></div>
                 <div class="guided-nav-current"><strong>${escapeHtml(details.title)}</strong><small>${escapeHtml(details.meta)}</small></div>
+                ${details.advice ? `<div class="leave-now-advice ${escapeHtml(details.advice.tone)}"><strong>${escapeHtml(details.advice.title)}</strong><span>${escapeHtml(details.advice.detail)}</span><small>${escapeHtml(details.advice.meta)}</small></div>` : ''}
+                ${details.kind === 'ride' ? `<label class="get-off-setting"><span>Get-off alert</span><select onchange="setGetOffAlertPreference(this.value)" aria-label="Get-off alert timing"><option value="stops-1"${alertValue === 'stops-1' ? ' selected' : ''}>1 stop before</option><option value="stops-2"${alertValue === 'stops-2' ? ' selected' : ''}>2 stops before</option><option value="minutes-5"${alertValue === 'minutes-5' ? ' selected' : ''}>5 minutes before</option></select></label>` : ''}
                 ${needsStageAction ? `<button class="guided-nav-stage-action" type="button" onclick="advanceGuidedJourney()">${escapeHtml(details.action)}</button>` : ''}
                 <div class="guided-nav-footer">
                     <button class="guided-nav-end" type="button" onclick="endGuidedJourney()">End</button>
@@ -4391,7 +4474,7 @@
                 return;
             }
             stopGuidedJourney(false);
-            guidedJourney = { routeIndex:Number(routeIndex), leg:route.legs?.[0] || null, steps, stageIndex:0, state:null, stateChangedAt:Date.now(), boardedStageIndex:null, destinationName:journeySelection.to?.place?.name || 'your destination', liveStopKey:'', liveStops:[] };
+            guidedJourney = { routeIndex:Number(routeIndex), leg:route.legs?.[0] || null, steps, stageIndex:0, state:null, stateChangedAt:Date.now(), boardedStageIndex:null, alerted:new Set(), destinationName:journeySelection.to?.place?.name || 'your destination', liveStopKey:'', liveStops:[] };
             guidedJourneyFollowMode = true;
             guidedJourneyHeadingMode = 'route';
             guidedLiveStopRequest = null;
@@ -4853,7 +4936,7 @@
             startBusTracking, stopBusTracking, backTransitPanel, toggleDetailSheetSize,
             startGuidedJourney, advanceGuidedJourney, recenterGuidedJourney, endGuidedJourney,
             selectSidebarRegion, toggleLiveVehicles, recenterMapPosition, backFromGuidedJourney,
-            headNorthGuidedJourney
+            headNorthGuidedJourney, setGetOffAlertPreference
         });
 
         map.on('zoomend', scheduleRouteStopVisibility);
