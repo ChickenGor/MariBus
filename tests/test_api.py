@@ -110,6 +110,15 @@ class MariBusApiTests(unittest.TestCase):
         self.assertEqual(response.headers["X-Frame-Options"], "SAMEORIGIN")
         self.assertIn("geolocation=(self)", response.headers["Permissions-Policy"])
 
+    def test_live_feed_metadata_reports_provenance_and_staleness(self):
+        with patch.object(maribus, "LIVE_STALE_SECONDS", 90):
+            fresh = maribus.live_feed_metadata(970, 1000)
+            stale = maribus.live_feed_metadata(900, 1000)
+        self.assertEqual(fresh["source"], "gtfs-realtime-vehicle-positions")
+        self.assertEqual(fresh["age_seconds"], 30)
+        self.assertFalse(fresh["is_stale"])
+        self.assertTrue(stale["is_stale"])
+
     def test_feedback_rate_limit_returns_retry_after(self):
         maribus._rate_limit_buckets.clear()
         with patch.dict(os.environ, {"RESEND_API_KEY": "", "FEEDBACK_TO_EMAIL": ""}):

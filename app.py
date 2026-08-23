@@ -30,6 +30,7 @@ PACKAGED_DATABASE_PATH = os.path.join(os.path.dirname(__file__), "gtfs_static.db
 PACKAGED_DATABASE_DIRECTORY = os.path.join(os.path.dirname(__file__), "gtfs_agencies")
 ROUTE_OVERRIDES_PATH = os.getenv("ROUTE_OVERRIDES_PATH", os.path.join(os.path.dirname(__file__), "route_overrides"))
 LIVE_CACHE_SECONDS = int(os.getenv("LIVE_CACHE_SECONDS", "20"))
+LIVE_STALE_SECONDS = int(os.getenv("LIVE_STALE_SECONDS", "90"))
 ROUTING_VERSION = "nearby-transfer-v3"
 
 API_URLS = {
@@ -496,6 +497,24 @@ def route_info(route_map, trip_id, route_id):
     }
 
 
+def live_feed_metadata(feed_timestamp, received_at=None):
+    """Describe realtime provenance without implying that static data is live."""
+    received_at = int(received_at or time.time())
+    try:
+        source_timestamp = int(feed_timestamp) if feed_timestamp else None
+    except (TypeError, ValueError):
+        source_timestamp = None
+    age_seconds = max(0, received_at - source_timestamp) if source_timestamp else None
+    return {
+        "source": "gtfs-realtime-vehicle-positions",
+        "received_at": received_at,
+        "source_timestamp": source_timestamp,
+        "age_seconds": age_seconds,
+        "stale_after_seconds": LIVE_STALE_SECONDS,
+        "is_stale": age_seconds is not None and age_seconds >= LIVE_STALE_SECONDS,
+    }
+
+
 @app.get("/api/health")
 def health():
     packaged_agencies = [
@@ -656,7 +675,13 @@ def get_live_buses():
         for vehicle, (trip_id, route_id) in zip(vehicles, pairs):
             vehicle["route_info"] = route_info(route_map, trip_id, route_id)
 
-        payload = {"success": True, "data": vehicles, "feed_timestamp": feed.header.timestamp or None}
+        feed_timestamp = feed.header.timestamp or None
+        payload = {
+            "success": True,
+            "data": vehicles,
+            "feed_timestamp": feed_timestamp,
+            "live_metadata": live_feed_metadata(feed_timestamp, now),
+        }
         with _cache_lock:
             _live_cache[agency] = (now, payload)
         return jsonify(payload)

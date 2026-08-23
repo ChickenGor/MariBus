@@ -779,6 +779,22 @@
         .panel-subtitle:empty { display:none; }
         .panel-close { margin-left:auto; border:0; background:transparent; color:inherit; font-size:22px; line-height:24px; cursor:pointer; }
         .arrival-row, .stop-row { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:11px 0; border-top:1px solid rgba(148,163,184,.22); }
+        .smart-stop-section { margin-top:12px; }
+        .smart-stop-section h4 { margin:0 0 5px; color:var(--text-muted); font-size:10px; font-weight:900; letter-spacing:.55px; text-transform:uppercase; }
+        .smart-stop-arrival { display:grid; grid-template-columns:auto minmax(0,1fr) auto; align-items:center; gap:9px; min-height:48px; border-top:1px solid rgba(148,163,184,.22); }
+        .smart-stop-route { min-width:42px; color:#fff; padding:4px 7px; border-radius:7px; background:#2563eb; font-size:11px; font-weight:900; text-align:center; }
+        .smart-stop-destination { min-width:0; }
+        .smart-stop-destination strong,.smart-stop-destination small { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .smart-stop-destination strong { font-size:11px; }
+        .smart-stop-destination small { margin-top:2px; color:var(--text-muted); font-size:9px; }
+        .smart-stop-time { text-align:right; }
+        .smart-stop-time strong,.smart-stop-time small { display:block; }
+        .smart-stop-time strong { font-size:13px; }
+        .smart-stop-time small { margin-top:2px; color:#16803c; font-size:8px; font-weight:900; letter-spacing:.35px; }
+        .smart-stop-actions { display:grid; grid-template-columns:1fr 1fr; gap:7px; margin-top:12px; }
+        .smart-stop-actions button { min-height:44px; border:0; border-radius:10px; background:var(--input-bg); color:var(--text-main); font:800 10px Manrope,sans-serif; cursor:pointer; }
+        .smart-stop-actions button:last-child { background:#2563eb; color:#fff; }
+        .smart-stop-note { margin:8px 0 0; color:var(--text-muted); font-size:9px; line-height:1.4; }
         .arrival-route { font-weight:800; min-width:48px; }
         .arrival-destination, .stop-name { flex:1; font-size:13px; }
         .arrival-minutes { font-weight:800; color:#2563eb; white-space:nowrap; }
@@ -971,6 +987,8 @@
         .route-live-bus { padding:12px; color:var(--text-main); border:1px solid var(--border-color); border-radius:14px; background:var(--sheet-bg); cursor:pointer; scroll-margin-top:68px; transition:border-color .18s,box-shadow .18s,transform .18s; }
         .route-live-bus:hover { border-color:color-mix(in srgb,var(--route-live-color) 45%,var(--border-color)); }
         .route-live-bus.selected { border-color:var(--route-live-color); box-shadow:0 0 0 3px color-mix(in srgb,var(--route-live-color) 13%,transparent); }
+        .route-live-source { color:#16803c; font-size:10px; font-weight:900; letter-spacing:.5px; }
+        body.dark-mode .route-live-source { color:#4ade80; }
         .route-live-primary { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
         .route-live-next { min-width:0; }
         .route-live-next small,.route-live-next strong { display:block; }
@@ -1647,9 +1665,11 @@
         let routeBrowseTimer = null;
         let routeBrowseFreshnessTimer = null;
         let routeBrowseUpdatedAt = 0;
+        let routeBrowseStaleSeconds = 90;
         let routeBrowseStopMarkers = [];
         let routeBrowseVehicles = [];
         let routeBrowseVehicleMarkers = new Map();
+        const smartStopCache = new Map();
         let selectedRouteBrowseVehicleId = '';
         let routeBrowseContext = null;
         let routeStopZoomTimer = null;
@@ -2486,21 +2506,72 @@
             }
         }
 
+        async function smartStopLiveEstimates(stop, agency, arrivals) {
+            const cacheKey = `${agency}:${stop.stop_id}`;
+            const cached = smartStopCache.get(cacheKey);
+            if (cached && Date.now() - cached.savedAt < 20000) return cached.items;
+            const liveResponse = await fetch(`${API_BASE}/api/live-buses?agency=${encodeURIComponent(agency)}`);
+            const liveResult = await liveResponse.json();
+            if (!liveResult.success || liveResult.live_metadata?.is_stale) return [];
+            const servedRoutes = new Set(arrivals.map(item => String(item.route_id || '').toUpperCase()).filter(Boolean));
+            const candidates = liveResult.data.filter(vehicle => vehicle.position
+                && servedRoutes.has(String(vehicle.trip?.routeId || '').toUpperCase())
+                && !routeFreshnessText(vehicle.timestamp || liveResult.feed_timestamp).stale).slice(0, 16);
+            const items = (await Promise.all(candidates.map(async vehicle => {
+                try {
+                    const routeId = vehicle.trip?.routeId;
+                    const params = new URLSearchParams({ agency, trip_id:vehicle.trip?.tripId || '' });
+                    const response = await fetch(`${API_BASE}/api/routes/${encodeURIComponent(routeId)}?${params}`);
+                    const result = await response.json();
+                    const stops = result.success ? result.data?.stops || [] : [];
+                    const targetIndex = stops.findIndex(item => String(item.stop_id) === String(stop.stop_id));
+                    if (targetIndex < 0) return null;
+                    const point = { lat:Number(vehicle.position.latitude), lng:Number(vehicle.position.longitude) };
+                    let nearestIndex = 0;
+                    stops.forEach((item, index) => {
+                        if (distanceMetres(point, item) < distanceMetres(point, stops[nearestIndex])) nearestIndex = index;
+                    });
+                    if (targetIndex < nearestIndex) return null;
+                    const distance = routeDistanceBetween(stops, nearestIndex, targetIndex, point);
+                    const liveSpeed = Number(vehicle.position.speed);
+                    const speed = liveSpeed >= 2 ? liveSpeed : 7;
+                    return {
+                        routeId, routeName:vehicle.route_info?.short_name || routeId,
+                        destination:vehicle.route_info?.headsign || vehicle.route_info?.destination || '',
+                        vehicleId:routeVehicleId(vehicle), minutes:Math.max(1, Math.ceil((distance * 1.18) / speed / 60)),
+                        timestamp:vehicle.timestamp || liveResult.feed_timestamp,
+                    };
+                } catch (_) { return null; }
+            }))).filter(Boolean).sort((a,b) => a.minutes - b.minutes);
+            smartStopCache.set(cacheKey, { savedAt:Date.now(), items });
+            return items;
+        }
+
+        function smartStopHtml(stop, agency, arrivals, liveItems) {
+            const liveHtml = liveItems.length ? `<section class="smart-stop-section"><h4>Live arrivals</h4>${liveItems.slice(0,6).map(item => `
+                <div class="smart-stop-arrival"><span class="smart-stop-route">${escapeHtml(item.routeName)}</span><span class="smart-stop-destination"><strong>${escapeHtml(readableStopName(item.destination) || 'Bus service')}</strong><small>Bus ${escapeHtml(item.vehicleId)}</small></span><span class="smart-stop-time"><strong>~${item.minutes} min</strong><small>● LIVE ESTIMATE</small></span></div>`).join('')}</section>` : '';
+            const scheduledHtml = arrivals.length ? `<section class="smart-stop-section"><h4>Scheduled</h4>${arrivals.slice(0,8).map(arrival => `
+                <div class="smart-stop-arrival"><span class="smart-stop-route">${escapeHtml(arrival.route_short_name || 'Route')}</span><span class="smart-stop-destination"><strong>${escapeHtml(readableStopName(arrival.trip_headsign || arrival.route_long_name))}</strong><small>Timetable</small></span><span class="smart-stop-time"><strong>${arrival.minutes === 0 ? 'Due' : `${arrival.minutes} min`}</strong><small style="color:var(--text-muted)">SCHEDULED</small></span></div>`).join('')}</section>` : '<p class="panel-message">No upcoming scheduled services found.</p>';
+            const firstRoute = arrivals[0];
+            const encodedRoute = encodeURIComponent(firstRoute?.route_id || '').replace(/'/g, '%27');
+            const encodedAgency = encodeURIComponent(agency).replace(/'/g, '%27');
+            const encodedDirection = encodeURIComponent(String(firstRoute?.direction_id ?? '')).replace(/'/g, '%27');
+            return `${liveHtml}${scheduledHtml}${liveItems.length ? '<p class="smart-stop-note">Live estimates are calculated from the latest vehicle position and are not operator-issued arrival predictions.</p>' : ''}<div class="smart-stop-actions"><button type="button" onclick="window.open('https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${stop.stop_lat},${stop.stop_lon}`)}','_blank')">Directions here</button>${firstRoute ? `<button type="button" onclick="showRoute(decodeURIComponent('${encodedRoute}'),decodeURIComponent('${encodedAgency}'),decodeURIComponent('${encodedDirection}'))">View route</button>` : '<button type="button" disabled>View route</button>'}</div>`;
+        }
+
         async function showStopArrivals(stop) {
             const agency = stop.source_agency || document.getElementById('agency-select').value;
-            openTransitPanel(stop.stop_name, stop.stop_code ? `Stop ${stop.stop_code}` : 'Scheduled arrivals', '<p class="panel-message">Loading arrivals…</p>');
+            openTransitPanel(readableStopName(stop.stop_name), stop.stop_code ? `Stop ${stop.stop_code}` : 'Smart Stop', '<p class="panel-message">Checking live and scheduled arrivals…</p>');
             try {
                 const response = await fetch(`${API_BASE}/api/stops/${encodeURIComponent(stop.stop_id)}/arrivals?agency=${encodeURIComponent(agency)}`);
                 const result = await response.json();
-                const html = result.success && result.data.length ? result.data.map(arrival => `
-                    <div class="arrival-row">
-                        <span class="arrival-route">${escapeHtml(arrival.route_short_name || 'Route')}</span>
-                        <span class="arrival-destination">${escapeHtml(arrival.trip_headsign || arrival.route_long_name)}</span>
-                        <span class="arrival-minutes">${arrival.minutes === 0 ? 'Due' : `${arrival.minutes} min`}</span>
-                    </div>`).join('') : '<p class="panel-message">No upcoming scheduled services found.</p>';
-                openTransitPanel(stop.stop_name, result.notice || 'Upcoming arrivals', html);
+                if (!result.success) throw new Error(result.error || 'Arrivals unavailable');
+                let liveItems = [];
+                try { liveItems = await smartStopLiveEstimates(stop, agency, result.data); }
+                catch (error) { console.warn('Smart Stop live estimates unavailable', error); }
+                openTransitPanel(readableStopName(stop.stop_name), stop.stop_code ? `Stop ${stop.stop_code}` : 'Smart Stop', smartStopHtml(stop, agency, result.data, liveItems));
             } catch (error) {
-                openTransitPanel(stop.stop_name, '', '<p class="panel-message">Arrivals are temporarily unavailable.</p>');
+                openTransitPanel(readableStopName(stop.stop_name), '', '<p class="panel-message">Arrivals are temporarily unavailable. Please try again.</p>');
             }
         }
 
@@ -2521,7 +2592,7 @@
             const seconds = Math.max(0, Math.floor((Date.now() - milliseconds) / 1000));
             if (seconds < 10) return { text:'Updated just now', stale:false };
             if (seconds < 60) return { text:`Updated ${seconds} sec ago`, stale:false };
-            if (seconds < 90) return { text:'Updated 1 min ago', stale:false };
+            if (seconds < routeBrowseStaleSeconds) return { text:`Updated ${Math.max(1, Math.floor(seconds / 60))} min ago`, stale:false };
             return { text:'Location may be outdated', stale:true };
         }
 
@@ -2574,9 +2645,13 @@
             const previousName = readableStopName(item.stops[item.nearestIndex]?.stop_name || 'Previous stop');
             const nextName = readableStopName(item.nextStop?.stop_name || 'End of route');
             const freshness = routeFreshnessText(item.timestamp);
+            const direction = readableStopName(item.vehicle?.route_info?.headsign || item.vehicle?.route_info?.destination || '');
+            const distanceText = Number.isFinite(item.distanceToNextMetres)
+                ? `${item.distanceToNextMetres < 1000 ? `${Math.round(item.distanceToNextMetres)} m` : `${(item.distanceToNextMetres / 1000).toFixed(1)} km`} away`
+                : '';
             return `<article class="route-live-bus${selectedRouteBrowseVehicleId === vehicleName ? ' selected' : ''}" data-vehicle-id="${escapeHtml(vehicleName)}" tabindex="0" role="button" style="--route-live-color:${markerColor}">
                 <div class="route-live-primary"><div class="route-live-next"><small>Next stop</small><strong>${escapeHtml(nextName)}</strong></div><span class="route-live-eta">~${item.etaMinutes} min</span></div>
-                <div class="route-live-meta">Bus <strong>${escapeHtml(vehicleName)}</strong> · Live<br>Currently near ${escapeHtml(previousName)}</div>
+                <div class="route-live-meta"><span class="route-live-source">● LIVE</span> · Bus <strong>${escapeHtml(vehicleName)}</strong>${direction ? ` · toward ${escapeHtml(direction)}` : ''}<br>Currently near ${escapeHtml(previousName)}${distanceText ? ` · ${escapeHtml(distanceText)}` : ''}</div>
                 <div class="route-live-freshness${freshness.stale ? ' stale' : ''}" data-live-timestamp="${escapeHtml(item.timestamp || '')}">${freshness.text}</div>
                 <div class="route-live-bus-track" aria-label="Bus progress from ${escapeHtml(previousName)} to ${escapeHtml(nextName)}">
                     <div class="route-live-bus-fill" style="width:${item.progress}%"></div>
@@ -2625,6 +2700,7 @@
                 const response = await fetch(`${API_BASE}/api/live-buses?agency=${encodeURIComponent(agency)}`);
                 const result = await response.json();
                 if (!result.success) throw new Error(result.error || 'Live feed unavailable');
+                routeBrowseStaleSeconds = Math.max(30, Number(result.live_metadata?.stale_after_seconds) || 90);
                 routeBrowseUpdatedAt = Number(result.feed_timestamp) ? Number(result.feed_timestamp) * 1000 : Date.now();
                 const acceptedCodes = new Set([routeId, publicCode].filter(Boolean).map(value => String(value).toUpperCase()));
                 const routeVehicles = result.data.filter(vehicle => vehicle.position && acceptedCodes.has(String(vehicle.trip?.routeId || '').toUpperCase()));
@@ -2654,7 +2730,8 @@
                     const estimatedSpeed = liveSpeed >= 2 ? liveSpeed : 7;
                     const etaMinutes = nextIndex === nearestIndex ? 0 : Math.max(1, Math.ceil((remainingDistance * 1.18) / estimatedSpeed / 60));
                     return { vehicle, point, nearestIndex, nextIndex, nextStop, progress, etaMinutes, stops,
-                        vehicleId:routeVehicleId(vehicle, publicCode), timestamp:vehicle.timestamp || result.feed_timestamp || '' };
+                        vehicleId:routeVehicleId(vehicle, publicCode), timestamp:vehicle.timestamp || result.feed_timestamp || '',
+                        distanceToNextMetres:Math.max(0, remainingDistance) };
                 }));
                 const vehicles = resolvedVehicles.filter(Boolean);
                 routeBrowseVehicles = vehicles;
