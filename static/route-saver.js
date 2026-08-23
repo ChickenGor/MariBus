@@ -127,4 +127,42 @@ window.saveMariBusJourney = async function(index, button) {
   }
 };
 
+window.saveCurrentMariBusStop = async function(button) {
+  if (!button || button.disabled) return;
+  if (setupError || !auth || !db) return notify('Stop saving is temporarily unavailable');
+  if (auth.authStateReady) await auth.authStateReady();
+  const user = auth.currentUser;
+  if (!user) {
+    notify('Sign in to favourite this stop');
+    setTimeout(() => { location.href = '/sign-in?next=/'; }, 450);
+    return;
+  }
+  const context = window.__mariBusSmartStop;
+  if (!context?.stop?.stop_id || !context.agency) return notify('Open a bus stop before saving it');
+  const stableId = `${context.agency}:${context.stop.stop_id}`.split('').reduce((hash, character) => ((hash * 31) + character.charCodeAt(0)) >>> 0, 2166136261).toString(36);
+  const previousText = button.textContent;
+  button.disabled = true;
+  button.textContent = 'Saving…';
+  try {
+    await setDoc(doc(db, 'users', user.uid, 'savedStops', stableId), {
+      agency: context.agency,
+      stopId: String(context.stop.stop_id),
+      stopCode: String(context.stop.stop_code || ''),
+      stopName: String(context.stop.stop_name || 'Bus stop'),
+      latitude: Number(context.stop.stop_lat),
+      longitude: Number(context.stop.stop_lon),
+      createdAt: serverTimestamp(),
+    });
+    button.textContent = 'Favourited';
+    button.classList.add('saved');
+    button.setAttribute('aria-pressed', 'true');
+    notify('Stop added to favourites');
+  } catch (error) {
+    console.error('Could not save stop', error);
+    button.textContent = 'Could not save';
+    notify(error?.code === 'permission-denied' ? 'Publish the updated Firestore rules to save stops' : 'Could not favourite this stop');
+    setTimeout(() => { button.textContent = previousText; button.disabled = false; }, 1800);
+  }
+};
+
 window.dispatchEvent(new CustomEvent('maribus-route-saver-ready'));

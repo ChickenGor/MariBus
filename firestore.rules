@@ -53,6 +53,16 @@ service cloud.firestore {
         allow update: if false;
       }
 
+      match /savedStops/{stopId} {
+        allow read, delete: if signedInAs(userId);
+        allow create, update: if signedInAs(userId)
+          && request.resource.data.agency is string
+          && request.resource.data.stopId is string
+          && request.resource.data.stopName is string
+          && request.resource.data.latitude is number
+          && request.resource.data.longitude is number;
+      }
+
       match /notificationDevices/{deviceId} {
         allow read, delete: if signedInAs(userId);
         allow create, update: if signedInAs(userId)

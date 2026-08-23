@@ -791,10 +791,17 @@
         .smart-stop-time strong,.smart-stop-time small { display:block; }
         .smart-stop-time strong { font-size:13px; }
         .smart-stop-time small { margin-top:2px; color:#16803c; font-size:8px; font-weight:900; letter-spacing:.35px; }
-        .smart-stop-actions { display:grid; grid-template-columns:1fr 1fr; gap:7px; margin-top:12px; }
+        .smart-stop-actions { display:grid; grid-template-columns:repeat(3,1fr); gap:7px; margin-top:12px; }
         .smart-stop-actions button { min-height:44px; border:0; border-radius:10px; background:var(--input-bg); color:var(--text-main); font:800 10px Manrope,sans-serif; cursor:pointer; }
         .smart-stop-actions button:last-child { background:#2563eb; color:#fff; }
         .smart-stop-note { margin:8px 0 0; color:var(--text-muted); font-size:9px; line-height:1.4; }
+        .transit-service-alert { margin:0 0 9px; padding:10px 11px; border-left:4px solid #f59e0b; border-radius:9px; background:#fffbeb; color:#78350f; }
+        .transit-service-alert.disruption,.transit-service-alert.suspended,.transit-service-alert.closed { border-left-color:#dc2626; background:#fff1f2; color:#881337; }
+        body.dark-mode .transit-service-alert { background:color-mix(in srgb,currentColor 9%,var(--sheet-bg)); }
+        .transit-service-alert strong,.transit-service-alert span,.transit-service-alert small { display:block; }
+        .transit-service-alert strong { font-size:11px; }
+        .transit-service-alert span { margin-top:3px; font-size:9px; line-height:1.4; }
+        .transit-service-alert small { margin-bottom:3px; font-size:8px; font-weight:900; letter-spacing:.4px; text-transform:uppercase; }
         .nearby-stop-card { margin-top:9px; padding:11px 12px; border:1px solid var(--border-color); border-radius:13px; background:var(--sheet-bg); }
         .nearby-stop-head { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; }
         .nearby-stop-head strong { min-width:0; overflow:hidden; font-size:12px; text-overflow:ellipsis; white-space:nowrap; }
@@ -1508,6 +1515,7 @@
     </script>
     <script type="module" src="/static/sidebar-auth.js"></script>
     <script type="module" src="/static/route-saver.js"></script>
+    <script type="module" src="/static/public-config.js"></script>
     <script src="/static/google-maps-adapter.js"></script>
 
     <script>
@@ -1696,6 +1704,7 @@
         const nearbyDepartureCache = new Map();
         let selectedRouteBrowseVehicleId = '';
         let routeBrowseContext = null;
+        let smartStopRenderContext = null;
         let routeStopZoomTimer = null;
         let activeTrackedJourneyIndex = 0;
         let activeJourneyRouteNames = new Set();
@@ -2644,7 +2653,32 @@
             });
         }
 
+        function matchingServiceAlerts({ agency = '', routes = [], stopId = '' } = {}) {
+            const routeSet = new Set(routes.map(value => String(value || '').trim().toUpperCase()).filter(Boolean));
+            return (window.__mariBusServiceAlerts || []).filter(alert => {
+                if (alert.agency && String(alert.agency) !== String(agency)) return false;
+                const alertRoutes = [alert.route, ...(Array.isArray(alert.routes) ? alert.routes : [])].map(value => String(value || '').trim().toUpperCase()).filter(Boolean);
+                const alertStops = [alert.stopId, ...(Array.isArray(alert.stopIds) ? alert.stopIds : [])].map(String);
+                if (alertRoutes.length && !alertRoutes.some(route => routeSet.has(route))) return false;
+                if (alertStops.length && !alertStops.includes(String(stopId))) return false;
+                return true;
+            });
+        }
+
+        function serviceAlertsHtml(context) {
+            return matchingServiceAlerts(context).map(alert => `<article class="transit-service-alert ${escapeHtml(String(alert.severity || 'warning').toLowerCase())}"><small>${escapeHtml(alert.severity || 'Service update')}${alert.route ? ` · ${escapeHtml(alert.route)}` : ''}</small><strong>${escapeHtml(alert.title || 'Service update')}</strong><span>${escapeHtml(alert.message || '')}</span></article>`).join('');
+        }
+
+        function refreshVisibleServiceAlerts() {
+            const smartRoot = document.getElementById('smart-stop-service-alerts');
+            if (smartRoot && smartStopRenderContext) smartRoot.innerHTML = serviceAlertsHtml(smartStopRenderContext);
+            const routeRoot = document.getElementById('route-service-alerts');
+            if (routeRoot && routeBrowseContext) routeRoot.innerHTML = serviceAlertsHtml({ agency:routeBrowseContext.agency, routes:[routeBrowseContext.routeId, routeBrowseContext.publicCode] });
+        }
+        window.addEventListener('maribus-service-alerts-updated', refreshVisibleServiceAlerts);
+
         function smartStopHtml(stop, agency, arrivals, liveItems) {
+            smartStopRenderContext = { agency, stopId:stop.stop_id, routes:arrivals.flatMap(item => [item.route_id, item.route_short_name]) };
             const liveHtml = liveItems.length ? `<section class="smart-stop-section"><h4>Live arrivals</h4>${liveItems.slice(0,6).map(item => `
                 <div class="smart-stop-arrival"><span class="smart-stop-route">${escapeHtml(item.routeName)}</span><span class="smart-stop-destination"><strong>${escapeHtml(readableStopName(item.destination) || 'Bus service')}</strong><small>Bus ${escapeHtml(item.vehicleId)}</small></span><span class="smart-stop-time"><strong>~${item.minutes} min</strong><small>● LIVE ESTIMATE</small></span></div>`).join('')}</section>` : '';
             const scheduledHtml = arrivals.length ? `<section class="smart-stop-section"><h4>Scheduled</h4>${arrivals.slice(0,8).map(arrival => `
@@ -2653,11 +2687,12 @@
             const encodedRoute = encodeURIComponent(firstRoute?.route_id || '').replace(/'/g, '%27');
             const encodedAgency = encodeURIComponent(agency).replace(/'/g, '%27');
             const encodedDirection = encodeURIComponent(String(firstRoute?.direction_id ?? '')).replace(/'/g, '%27');
-            return `${liveHtml}${scheduledHtml}${liveItems.length ? '<p class="smart-stop-note">Live estimates are calculated from the latest vehicle position and are not operator-issued arrival predictions.</p>' : ''}<div class="smart-stop-actions"><button type="button" onclick="window.open('https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${stop.stop_lat},${stop.stop_lon}`)}','_blank')">Directions here</button>${firstRoute ? `<button type="button" onclick="showRoute(decodeURIComponent('${encodedRoute}'),decodeURIComponent('${encodedAgency}'),decodeURIComponent('${encodedDirection}'))">View route</button>` : '<button type="button" disabled>View route</button>'}</div>`;
+            return `<div id="smart-stop-service-alerts">${serviceAlertsHtml(smartStopRenderContext)}</div>${liveHtml}${scheduledHtml}${liveItems.length ? '<p class="smart-stop-note">Live estimates are calculated from the latest vehicle position and are not operator-issued arrival predictions.</p>' : ''}<div class="smart-stop-actions"><button type="button" onclick="window.open('https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${stop.stop_lat},${stop.stop_lon}`)}','_blank')">Directions</button><button type="button" onclick="saveCurrentMariBusStop(this)" aria-pressed="false">Favourite</button>${firstRoute ? `<button type="button" onclick="showRoute(decodeURIComponent('${encodedRoute}'),decodeURIComponent('${encodedAgency}'),decodeURIComponent('${encodedDirection}'))">View route</button>` : '<button type="button" disabled>View route</button>'}</div>`;
         }
 
         async function showStopArrivals(stop) {
             const agency = stop.source_agency || document.getElementById('agency-select').value;
+            window.__mariBusSmartStop = { stop, agency };
             openTransitPanel(readableStopName(stop.stop_name), stop.stop_code ? `Stop ${stop.stop_code}` : 'Smart Stop', '<p class="panel-message">Checking live and scheduled arrivals…</p>');
             try {
                 const response = await fetch(`${API_BASE}/api/stops/${encodeURIComponent(stop.stop_id)}/arrivals?agency=${encodeURIComponent(agency)}`);
@@ -2935,7 +2970,7 @@
                 const title = `${routeLabel} ${data.trip.trip_headsign || ''}`.trim();
                 const geometryLabel = data.geometry_source === 'verified-override'
                     ? (roadMatched ? 'verified • road matched' : 'verified route') : 'official stops';
-                openRouteTransitPanel(title, `${data.stops.length} stops • ${geometryLabel}`, `<div id="route-live-list" class="route-live-list"><p class="panel-message">Checking live bus locations…</p></div><div class="route-stop-list">` + data.stops.map((stop, index) => `
+                openRouteTransitPanel(title, `${data.stops.length} stops • ${geometryLabel}`, `<div id="route-service-alerts">${serviceAlertsHtml({ agency, routes:[routeId, routeLabel, publicCode] })}</div><div id="route-live-list" class="route-live-list"><p class="panel-message">Checking live bus locations…</p></div><div class="route-stop-list">` + data.stops.map((stop, index) => `
                     <button class="stop-row" type="button" data-route-stop-index="${index}" style="width:100%;border-left:0;border-right:0;border-bottom:0;background:transparent;color:inherit;text-align:left;cursor:pointer"><strong>${index + 1}</strong><span class="stop-name">${escapeHtml(readableStopName(stop.stop_name))}</span></button>
                 `).join('') + '</div>');
                 document.getElementById('bottom-sheet').classList.add('route-browse-mode');
@@ -3507,6 +3542,20 @@
             [fromMatch.textContent, toMatch.textContent] = [toMatch.textContent, fromMatch.textContent];
             updateJourneyPlaceMarkers();
             planJourney();
+        }
+
+        function restoreSavedStopFromUrl() {
+            const params = new URLSearchParams(location.search);
+            const stopId = params.get('stop');
+            const lat = Number(params.get('lat'));
+            const lng = Number(params.get('lng'));
+            if (!stopId || !Number.isFinite(lat) || !Number.isFinite(lng)) return;
+            const agency = params.get('agency') || document.getElementById('agency-select').value;
+            const stop = { stop_id:stopId, stop_name:params.get('name') || 'Favourite stop', stop_lat:lat, stop_lon:lng, source_agency:agency };
+            const marker = createStopMarker(stop).addTo(stopMarkersLayer);
+            map.setView([lat,lng],16);
+            marker.openTooltip?.();
+            showStopArrivals(stop);
         }
 
         function saveCurrentJourneyFromMap(button) {
@@ -4942,6 +4991,7 @@
         map.on('zoomend', scheduleRouteStopVisibility);
         initializeJourneyPlanner();
         restoreSavedJourneyFromUrl();
+        restoreSavedStopFromUrl();
         initializeBottomSheetDrag();
         fetchBuses();
         restoreCachedNearbyDepartures();
