@@ -795,6 +795,19 @@
         .smart-stop-actions button { min-height:44px; border:0; border-radius:10px; background:var(--input-bg); color:var(--text-main); font:800 10px Manrope,sans-serif; cursor:pointer; }
         .smart-stop-actions button:last-child { background:#2563eb; color:#fff; }
         .smart-stop-note { margin:8px 0 0; color:var(--text-muted); font-size:9px; line-height:1.4; }
+        .nearby-stop-card { margin-top:9px; padding:11px 12px; border:1px solid var(--border-color); border-radius:13px; background:var(--sheet-bg); }
+        .nearby-stop-head { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; }
+        .nearby-stop-head strong { min-width:0; overflow:hidden; font-size:12px; text-overflow:ellipsis; white-space:nowrap; }
+        .nearby-stop-head span { flex:0 0 auto; color:var(--text-muted); font-size:9px; }
+        .nearby-departure { display:grid; grid-template-columns:auto minmax(0,1fr) auto; align-items:center; gap:8px; min-height:39px; border-top:1px solid rgba(148,163,184,.2); }
+        .nearby-departure:first-of-type { margin-top:7px; }
+        .nearby-departure-route { min-width:36px; font-size:10px; font-weight:900; }
+        .nearby-departure-destination { overflow:hidden; color:var(--text-muted); font-size:9px; text-overflow:ellipsis; white-space:nowrap; }
+        .nearby-departure-time { text-align:right; }
+        .nearby-departure-time strong,.nearby-departure-time small { display:block; }
+        .nearby-departure-time strong { font-size:11px; }
+        .nearby-departure-time small { color:var(--text-muted); font-size:7px; font-weight:850; letter-spacing:.25px; }
+        .nearby-departure-time.live small { color:#16803c; }
         .arrival-route { font-weight:800; min-width:48px; }
         .arrival-destination, .stop-name { flex:1; font-size:13px; }
         .arrival-minutes { font-weight:800; color:#2563eb; white-space:nowrap; }
@@ -1670,6 +1683,7 @@
         let routeBrowseVehicles = [];
         let routeBrowseVehicleMarkers = new Map();
         const smartStopCache = new Map();
+        const nearbyDepartureCache = new Map();
         let selectedRouteBrowseVehicleId = '';
         let routeBrowseContext = null;
         let routeStopZoomTimer = null;
@@ -1694,6 +1708,12 @@
             }
         })());
         let guidedJourney = null;
+        const GUIDED_JOURNEY_STATE = Object.freeze({
+            WALKING_TO_STOP:'WALKING_TO_STOP', WAITING_FOR_BUS:'WAITING_FOR_BUS',
+            BUS_APPROACHING:'BUS_APPROACHING', BOARDING:'BOARDING', ON_BUS:'ON_BUS',
+            APPROACHING_DESTINATION:'APPROACHING_DESTINATION', GET_OFF_NOW:'GET_OFF_NOW',
+            WALKING_TO_DESTINATION:'WALKING_TO_DESTINATION', ARRIVED:'ARRIVED',
+        });
         let guidedJourneyWatchId = null;
         let guidedJourneyLastPosition = null;
         let guidedJourneyMarker = null;
@@ -2545,6 +2565,60 @@
             }))).filter(Boolean).sort((a,b) => a.minutes - b.minutes);
             smartStopCache.set(cacheKey, { savedAt:Date.now(), items });
             return items;
+        }
+
+        async function loadNearbyDepartures(lat, lng, options = {}) {
+            const agency = document.getElementById('agency-select').value;
+            const cacheKey = `${agency}:${Number(lat).toFixed(3)}:${Number(lng).toFixed(3)}`;
+            const cached = nearbyDepartureCache.get(cacheKey);
+            if (cached && Date.now() - cached.savedAt < 60000) {
+                openTransitPanel('Nearby departures', cached.subtitle, cached.html);
+                bindNearbyStopCards(cached.groups);
+                return;
+            }
+            if (!options.quiet) openTransitPanel('Nearby departures', 'Using your latest location', '<p class="panel-message">Finding nearby stops and departures…</p>');
+            try {
+                const stopResponse = await fetch(`${API_BASE}/api/stops?agency=${encodeURIComponent(agency)}&lat=${lat}&lng=${lng}&radius_km=2&limit=6`);
+                const stopResult = await stopResponse.json();
+                if (!stopResult.success) throw new Error(stopResult.error || 'Nearby stops unavailable');
+                const stops = stopResult.data.slice(0, 3).map(stop => ({ ...stop, source_agency:agency }));
+                if (!stops.length) {
+                    openTransitPanel('Nearby departures', '', '<p class="panel-message">No bus stops were found within 2 km of your location.</p>');
+                    return;
+                }
+                const groups = await Promise.all(stops.map(async stop => {
+                    const response = await fetch(`${API_BASE}/api/stops/${encodeURIComponent(stop.stop_id)}/arrivals?agency=${encodeURIComponent(agency)}&limit=6`);
+                    const result = await response.json();
+                    const scheduled = result.success ? result.data : [];
+                    let live = [];
+                    try { live = await smartStopLiveEstimates(stop, agency, scheduled); } catch (_) {}
+                    return { stop, scheduled, live };
+                }));
+                const html = groups.map(({ stop, scheduled, live }) => {
+                    const departures = live.length
+                        ? live.slice(0,2).map(item => ({ route:item.routeName, destination:item.destination, minutes:item.minutes, live:true }))
+                        : scheduled.slice(0,2).map(item => ({ route:item.route_short_name || 'Route', destination:item.trip_headsign || item.route_long_name, minutes:item.minutes, live:false }));
+                    return `<article class="nearby-stop-card" role="button" tabindex="0" data-nearby-stop="${escapeHtml(stop.stop_id)}"><div class="nearby-stop-head"><strong>${escapeHtml(readableStopName(stop.stop_name))}</strong><span>${Math.round(Number(stop.distance_m))} m away</span></div>${departures.length ? departures.map(item => `<div class="nearby-departure"><span class="nearby-departure-route">${escapeHtml(item.route)}</span><span class="nearby-departure-destination">${escapeHtml(readableStopName(item.destination))}</span><span class="nearby-departure-time${item.live ? ' live' : ''}"><strong>${item.minutes === 0 ? 'Due' : `${item.live ? '~' : ''}${item.minutes} min`}</strong><small>${item.live ? '● LIVE ESTIMATE' : 'SCHEDULED'}</small></span></div>`).join('') : '<p class="smart-stop-note">No upcoming departures found.</p>'}</article>`;
+                }).join('');
+                const subtitle = `${stops.length} nearest stop${stops.length === 1 ? '' : 's'} · updated just now`;
+                nearbyDepartureCache.set(cacheKey, { savedAt:Date.now(), subtitle, html, groups });
+                openTransitPanel('Nearby departures', subtitle, html);
+                bindNearbyStopCards(groups);
+            } catch (error) {
+                console.warn('Nearby departures unavailable', error);
+                openTransitPanel('Nearby departures unavailable', '', '<p class="panel-message">Check your connection and try your location again.</p>');
+            }
+        }
+
+        function bindNearbyStopCards(groups) {
+            document.querySelectorAll('[data-nearby-stop]').forEach((card, index) => {
+                if (!groups[index]) return;
+                const open = () => showStopArrivals(groups[index].stop);
+                card.addEventListener('click', open);
+                card.addEventListener('keydown', event => {
+                    if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); open(); }
+                });
+            });
         }
 
         function smartStopHtml(stop, agency, arrivals, liveItems) {
@@ -4075,6 +4149,36 @@
             return (degrees(Math.atan2(y, x)) + 360) % 360;
         }
 
+        function setGuidedJourneyState(nextState) {
+            if (!guidedJourney || !Object.values(GUIDED_JOURNEY_STATE).includes(nextState)) return false;
+            if (guidedJourney.state === nextState) return false;
+            guidedJourney.state = nextState;
+            guidedJourney.stateChangedAt = Date.now();
+            return true;
+        }
+
+        function syncGuidedJourneyState() {
+            if (!guidedJourney) return;
+            const step = guidedJourney.steps[guidedJourney.stageIndex];
+            if (!step) {
+                setGuidedJourneyState(GUIDED_JOURNEY_STATE.ARRIVED);
+                return;
+            }
+            if (step.travel_mode === google.maps.TravelMode.WALKING) {
+                const hasLaterTransit = guidedJourney.steps.slice(guidedJourney.stageIndex + 1)
+                    .some(item => item.travel_mode === google.maps.TravelMode.TRANSIT);
+                setGuidedJourneyState(hasLaterTransit ? GUIDED_JOURNEY_STATE.WALKING_TO_STOP : GUIDED_JOURNEY_STATE.WALKING_TO_DESTINATION);
+                return;
+            }
+            if (guidedJourney.boardedStageIndex === guidedJourney.stageIndex) {
+                if (![GUIDED_JOURNEY_STATE.APPROACHING_DESTINATION, GUIDED_JOURNEY_STATE.GET_OFF_NOW].includes(guidedJourney.state)) {
+                    setGuidedJourneyState(GUIDED_JOURNEY_STATE.ON_BUS);
+                }
+            } else if (![GUIDED_JOURNEY_STATE.BUS_APPROACHING, GUIDED_JOURNEY_STATE.BOARDING].includes(guidedJourney.state)) {
+                setGuidedJourneyState(GUIDED_JOURNEY_STATE.WAITING_FOR_BUS);
+            }
+        }
+
         function guidedStageDetails() {
             const step = guidedJourney?.steps?.[guidedJourney.stageIndex];
             if (!step) return null;
@@ -4090,10 +4194,13 @@
             }
             const line = step.transit?.line || {};
             const routeName = line.short_name || line.name || 'service';
-            if (!guidedJourney.boardedStages.has(guidedJourney.stageIndex)) {
-                return { kind:'wait', kicker:'Wait for service', title:`Board ${routeName} at ${step.transit?.departure_stop?.name || 'the station'}`, meta:`${step.transit?.departure_time?.text ? `Scheduled ${step.transit.departure_time.text}` : 'Check the live arrival information'}${step.transit?.headsign ? ` · towards ${step.transit.headsign}` : ''}`, action:"I'm on this service" };
+            if (guidedJourney.boardedStageIndex !== guidedJourney.stageIndex) {
+                const approaching = guidedJourney.state === GUIDED_JOURNEY_STATE.BUS_APPROACHING;
+                return { kind:'wait', kicker:approaching ? 'Bus approaching' : 'Wait for service', title:`Board ${routeName} at ${step.transit?.departure_stop?.name || 'the station'}`, meta:`${step.transit?.departure_time?.text ? `Scheduled ${step.transit.departure_time.text}` : 'Check the live arrival information'}${step.transit?.headsign ? ` · towards ${step.transit.headsign}` : ''}`, action:"I'm on this service" };
             }
-            return { kind:'ride', kicker:'On board', title:`Next: ${step.transit?.arrival_stop?.name || 'exit station'}`, meta:`${routeName}${step.transit?.num_stops ? ` · ${step.transit.num_stops} stops` : ''}${step.transit?.arrival_time?.text ? ` · arrive ${step.transit.arrival_time.text}` : ''}`, action:'Get off / Continue' };
+            const getOffNow = guidedJourney.state === GUIDED_JOURNEY_STATE.GET_OFF_NOW;
+            const approachingExit = guidedJourney.state === GUIDED_JOURNEY_STATE.APPROACHING_DESTINATION;
+            return { kind:'ride', kicker:getOffNow ? 'Get off now' : approachingExit ? 'Your stop is next' : 'On board', title:getOffNow ? `${step.transit?.arrival_stop?.name || 'Destination stop'}` : `Next: ${step.transit?.arrival_stop?.name || 'exit station'}`, meta:`${routeName}${step.transit?.num_stops ? ` · ${step.transit.num_stops} stops` : ''}${step.transit?.arrival_time?.text ? ` · arrive ${step.transit.arrival_time.text}` : ''}`, action:getOffNow ? 'I got off' : 'Get off / Continue' };
         }
 
         function guidedLiveBusEstimate() {
@@ -4169,7 +4276,7 @@
             const detail = document.getElementById('guided-live-detail');
             if (!status || !title || !detail || !estimate) return;
             const currentStep = guidedJourney?.steps?.[guidedJourney.stageIndex];
-            const onboard = currentStep?.travel_mode === google.maps.TravelMode.TRANSIT && guidedJourney.boardedStages.has(guidedJourney.stageIndex);
+            const onboard = currentStep?.travel_mode === google.maps.TravelMode.TRANSIT && guidedJourney.boardedStageIndex === guidedJourney.stageIndex;
             status.classList.toggle('onboard', Boolean(onboard && estimate.closest));
             if (estimate.closest) {
                 const vehicle = estimate.closest.vehicle;
@@ -4178,6 +4285,10 @@
                     loadGuidedLiveStops(vehicle);
                     const progress = guidedOnboardStopProgress(vehicle);
                     if (progress) {
+                        if (progress.stopsToExit === 0) setGuidedJourneyState(GUIDED_JOURNEY_STATE.GET_OFF_NOW);
+                        else if (progress.stopsToExit === 1) setGuidedJourneyState(GUIDED_JOURNEY_STATE.APPROACHING_DESTINATION);
+                        if (progress.stopsToExit === 0) document.getElementById('panel-title').textContent = 'Get off now';
+                        else if (progress.stopsToExit === 1) document.getElementById('panel-title').textContent = 'Your stop is next';
                         detail.textContent = progress.stopsToExit === 0
                             ? `Get off at ${progress.exitName || progress.current}`
                             : `${progress.stopsToExit ?? '—'} stop${progress.stopsToExit === 1 ? '' : 's'} to ${progress.exitName || 'your exit'}`;
@@ -4190,6 +4301,10 @@
                         detail.textContent = `On board · locating the next stop…`;
                     }
                 } else {
+                    if (estimate.closest.minutes <= 2) {
+                        setGuidedJourneyState(GUIDED_JOURNEY_STATE.BUS_APPROACHING);
+                        document.getElementById('panel-title').textContent = 'Bus approaching';
+                    }
                     detail.textContent = `About ${estimate.closest.minutes} min to ${estimate.station}`;
                 }
             } else {
@@ -4200,10 +4315,12 @@
 
         function renderGuidedJourney() {
             if (!guidedJourney) return;
+            syncGuidedJourneyState();
             const details = guidedStageDetails();
             if (!details) {
-                showMenuNotice('Journey complete');
-                closeTransitPanel(true);
+                document.getElementById('panel-title').textContent = "You've arrived";
+                document.getElementById('panel-subtitle').textContent = guidedJourney.destinationName;
+                document.getElementById('panel-content').innerHTML = `<div class="guided-nav-card"><div class="guided-nav-current"><strong>You've arrived</strong><small>${escapeHtml(guidedJourney.destinationName)}</small></div><button class="guided-nav-stage-action" type="button" onclick="endGuidedJourney()">Done</button></div>`;
                 return;
             }
             document.getElementById('panel-title').textContent = details.kicker;
@@ -4274,7 +4391,7 @@
                 return;
             }
             stopGuidedJourney(false);
-            guidedJourney = { routeIndex:Number(routeIndex), leg:route.legs?.[0] || null, steps, stageIndex:0, boardedStages:new Set(), destinationName:journeySelection.to?.place?.name || 'your destination', liveStopKey:'', liveStops:[] };
+            guidedJourney = { routeIndex:Number(routeIndex), leg:route.legs?.[0] || null, steps, stageIndex:0, state:null, stateChangedAt:Date.now(), boardedStageIndex:null, destinationName:journeySelection.to?.place?.name || 'your destination', liveStopKey:'', liveStops:[] };
             guidedJourneyFollowMode = true;
             guidedJourneyHeadingMode = 'route';
             guidedLiveStopRequest = null;
@@ -4300,10 +4417,14 @@
         function advanceGuidedJourney() {
             if (!guidedJourney) return;
             const step = guidedJourney.steps[guidedJourney.stageIndex];
-            if (step?.travel_mode === google.maps.TravelMode.TRANSIT && !guidedJourney.boardedStages.has(guidedJourney.stageIndex)) {
-                guidedJourney.boardedStages.add(guidedJourney.stageIndex);
+            if (step?.travel_mode === google.maps.TravelMode.TRANSIT && guidedJourney.boardedStageIndex !== guidedJourney.stageIndex) {
+                setGuidedJourneyState(GUIDED_JOURNEY_STATE.BOARDING);
+                guidedJourney.boardedStageIndex = guidedJourney.stageIndex;
+                setGuidedJourneyState(GUIDED_JOURNEY_STATE.ON_BUS);
             } else {
                 guidedJourney.stageIndex += 1;
+                guidedJourney.boardedStageIndex = null;
+                syncGuidedJourneyState();
             }
             renderGuidedJourney();
         }
@@ -4661,6 +4782,15 @@
             map.locate({ setView: true, maxZoom: 15 });
         }
 
+        function restoreCachedNearbyDepartures() {
+            try {
+                const saved = JSON.parse(localStorage.getItem('maribus-nearby-location') || 'null');
+                if (!saved || Date.now() - Number(saved.savedAt) > 10 * 60 * 1000) return;
+                if (!Number.isFinite(Number(saved.lat)) || !Number.isFinite(Number(saved.lng))) return;
+                loadNearbyDepartures(Number(saved.lat), Number(saved.lng), { quiet:true });
+            } catch (_) {}
+        }
+
         map.on('locationfound', function (e) {
             // 1. Draw or move the user's "You Are Here" GPS marker
             if (userLocationMarker) map.removeLayer(userLocationMarker);
@@ -4668,7 +4798,9 @@
                 radius: 8, color: 'white', weight: 3, fillColor: '#6366f1', fillOpacity: 1
             }).addTo(map).bindPopup("<b style='color:#111827;'>You are here</b>").openPopup();
 
-            loadNearbyStops(e.latlng.lat, e.latlng.lng);
+            try {
+                localStorage.setItem('maribus-nearby-location', JSON.stringify({ lat:e.latlng.lat, lng:e.latlng.lng, savedAt:Date.now() }));
+            } catch (_) {}
 
             // 2. AUTO-SWITCH AGENCY LOGIC
             let closestAgency = null;
@@ -4707,6 +4839,7 @@
                     }
                 }
             }
+            loadNearbyDepartures(e.latlng.lat, e.latlng.lng);
         });
 
         map.on('locationerror', function (e) {
@@ -4728,6 +4861,7 @@
         restoreSavedJourneyFromUrl();
         initializeBottomSheetDrag();
         fetchBuses();
+        restoreCachedNearbyDepartures();
         });
     </script>
     
