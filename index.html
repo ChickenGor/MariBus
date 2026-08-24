@@ -1370,7 +1370,50 @@
             body:has(#bottom-sheet.detail-mode) #header-journey-search { right:14px; left:14px; }
             #map-view-toggle { right:12px; border-radius:20px; }
             #bottom-sheet { padding-left:18px; padding-right:18px; border-radius:28px 28px 0 0; }
+
+            /* Mobile map home: compact destination dock inspired by modern map apps. */
+            #mobile-map-dock {
+                position:fixed; right:14px; bottom:max(14px,env(safe-area-inset-bottom)); left:14px; z-index:1950;
+                display:grid; grid-template-columns:minmax(0,1.15fr) minmax(0,.9fr) 54px; gap:10px;
+                min-height:126px; padding:10px; box-sizing:border-box; border:1px solid rgba(40,93,102,.11);
+                border-radius:26px; background:color-mix(in srgb,var(--sheet-bg) 95%,transparent);
+                box-shadow:0 16px 42px rgba(19,52,58,.22); backdrop-filter:blur(20px);
+                transition:opacity .2s ease,transform .25s cubic-bezier(.2,.8,.2,1);
+            }
+            .map-dock-action {
+                min-width:0; min-height:0; display:flex; flex-direction:column; align-items:flex-start;
+                justify-content:space-between; gap:12px; padding:15px 13px; box-sizing:border-box;
+                border:1px solid var(--border-color); border-radius:19px; background:var(--sheet-bg);
+                color:var(--text-main); font:inherit; font-size:11px; font-weight:800; line-height:1.15;
+                text-align:left; text-decoration:none; cursor:pointer; box-shadow:0 5px 16px rgba(19,52,58,.08);
+            }
+            .map-dock-action.primary {
+                border-color:transparent; color:#fff;
+                background:linear-gradient(145deg,var(--maribus-teal-deep),var(--maribus-teal));
+            }
+            .map-dock-action.primary::after {
+                content:"Plan your trip"; color:rgba(255,255,255,.7); font-size:8px; font-weight:650;
+            }
+            .map-dock-icon { width:24px; height:24px; display:grid; place-items:center; }
+            .map-dock-icon .ui-icon { width:22px; height:22px; }
+            .map-dock-rail { display:grid; grid-template-rows:1fr 1fr; gap:8px; }
+            .map-dock-rail .map-dock-action { min-height:0; align-items:center; justify-content:center; padding:0; border-radius:15px; }
+            .map-dock-rail .map-dock-action .ui-icon { width:19px; height:19px; }
+            #mobile-live-action.active { border-color:color-mix(in srgb,var(--maribus-live) 35%,var(--border-color)); color:var(--maribus-live); background:color-mix(in srgb,var(--maribus-live) 9%,var(--sheet-bg)); }
+            body:has(#bottom-sheet.detail-mode) #mobile-map-dock,
+            #top-bar.search-focused ~ #mobile-map-dock,
+            #top-bar:has(#header-journey-search.expanded) ~ #mobile-map-dock {
+                opacity:0; transform:translateY(24px); pointer-events:none;
+            }
+            body:not(:has(#bottom-sheet.detail-mode)) #header-journey-search:not(.expanded) { opacity:0; pointer-events:none; transform:translateY(18px); }
+            #top-bar.search-focused #header-journey-search,
+            #header-journey-search.expanded { opacity:1; pointer-events:auto; transform:none; }
+            body:not(:has(#bottom-sheet.detail-mode)) #map-view-toggle { bottom:164px; }
+            body:has(#bottom-sheet.detail-mode) #mobile-map-dock { display:none; }
         }
+
+        #mobile-map-dock { display:none; }
+        @media (max-width:767px) { #mobile-map-dock { display:grid; } }
 
         @media (min-width:900px) and (orientation:landscape) {
             #bottom-sheet,#bottom-sheet.detail-mode,#bottom-sheet.detail-mode.sheet-half,#bottom-sheet.detail-mode.sheet-expanded {
@@ -1483,6 +1526,25 @@
             <svg class="ui-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M12 2v3M12 19v3M2 12h3M19 12h3"></path><circle cx="12" cy="12" r="7"></circle></svg>
         </button>
     </div>
+
+    <nav id="mobile-map-dock" aria-label="Map shortcuts">
+        <button class="map-dock-action primary" type="button" onclick="openMobileJourneyPlanner()">
+            <span class="map-dock-icon"><svg class="ui-icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>
+            <span>Destination</span>
+        </button>
+        <button class="map-dock-action" type="button" onclick="locateMe()">
+            <span class="map-dock-icon"><svg class="ui-icon" viewBox="0 0 24 24"><path d="M5 16V6c0-2 2-3 7-3s7 1 7 3v10M5 11h14M8 19h8M7 16h.01M17 16h.01M7 19v2M17 19v2"></path></svg></span>
+            <span>Nearby stops</span>
+        </button>
+        <span class="map-dock-rail">
+            <a class="map-dock-action" href="/saved-routes" aria-label="Saved routes" title="Saved routes">
+                <svg class="ui-icon" viewBox="0 0 24 24"><path d="M6 4h12v17l-6-4-6 4z"></path></svg>
+            </a>
+            <button id="mobile-live-action" class="map-dock-action" type="button" onclick="toggleMobileLiveVehicles()" aria-label="Show live buses" title="Live buses" aria-pressed="false">
+                <svg class="ui-icon" viewBox="0 0 24 24"><path d="M5 16V6c0-2 2-3 7-3s7 1 7 3v10M5 11h14M8 19h8M7 16h.01M17 16h.01M7 19v2M17 19v2"></path></svg>
+            </button>
+        </span>
+    </nav>
 
     <div id="bottom-sheet">
         <div class="drag-handle"></div>
@@ -1894,12 +1956,28 @@
         function toggleLiveVehicles(forceEnabled) {
             liveVehicleLayerEnabled = typeof forceEnabled === 'boolean' ? forceEnabled : !liveVehicleLayerEnabled;
             const button = document.getElementById('map-live-vehicles');
+            const mobileButton = document.getElementById('mobile-live-action');
             button?.classList.toggle('active', liveVehicleLayerEnabled);
             button?.setAttribute('aria-pressed', String(liveVehicleLayerEnabled));
             button?.setAttribute('aria-label', liveVehicleLayerEnabled ? 'Hide live vehicles' : 'Show live vehicles');
             button?.setAttribute('title', liveVehicleLayerEnabled ? 'Hide live vehicles' : 'Show live vehicles');
+            mobileButton?.classList.toggle('active', liveVehicleLayerEnabled);
+            mobileButton?.setAttribute('aria-pressed', String(liveVehicleLayerEnabled));
+            mobileButton?.setAttribute('aria-label', liveVehicleLayerEnabled ? 'Hide live buses' : 'Show live buses');
+            mobileButton?.setAttribute('title', liveVehicleLayerEnabled ? 'Hide live buses' : 'Live buses');
             if (!journeyMapFocused) refreshVisibleBusMarkers();
             showMenuNotice(liveVehicleLayerEnabled ? 'Live vehicles shown in this map area' : 'Live vehicles hidden');
+        }
+
+        function toggleMobileLiveVehicles() {
+            toggleLiveVehicles();
+        }
+
+        function openMobileJourneyPlanner() {
+            const search = document.getElementById('header-journey-search');
+            const input = document.getElementById('journey-to');
+            search.classList.add('expanded');
+            input.focus({ preventScroll:true });
         }
 
         map.native?.addListener?.('idle', () => {
@@ -5181,7 +5259,8 @@
             startBusTracking, stopBusTracking, backTransitPanel, toggleDetailSheetSize,
             startGuidedJourney, advanceGuidedJourney, recenterGuidedJourney, endGuidedJourney,
             selectSidebarRegion, toggleLiveVehicles, recenterMapPosition, backFromGuidedJourney,
-            headNorthGuidedJourney, setGetOffAlertPreference, fetchBuses, retrySmartStop
+            headNorthGuidedJourney, setGetOffAlertPreference, fetchBuses, retrySmartStop,
+            openMobileJourneyPlanner, toggleMobileLiveVehicles
         });
 
         map.on('zoomend', scheduleRouteStopVisibility);
