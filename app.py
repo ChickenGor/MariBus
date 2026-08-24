@@ -515,6 +515,37 @@ def live_feed_metadata(feed_timestamp, received_at=None):
     }
 
 
+def deployment_configuration():
+    firebase_variables = (
+        "FIREBASE_API_KEY",
+        "FIREBASE_AUTH_DOMAIN",
+        "FIREBASE_PROJECT_ID",
+        "FIREBASE_STORAGE_BUCKET",
+        "FIREBASE_MESSAGING_SENDER_ID",
+        "FIREBASE_APP_ID",
+    )
+    service_variables = {
+        "google_maps": ("GOOGLE_MAPS_API_KEY",),
+        "firebase": firebase_variables,
+        "notifications": firebase_variables + ("FIREBASE_VAPID_KEY",),
+        "multimodal_routing": ("OTP_GRAPHQL_URL",),
+        "feedback_email": ("RESEND_API_KEY", "FEEDBACK_TO_EMAIL"),
+    }
+    services = {}
+    for name, variables in service_variables.items():
+        missing = [variable for variable in variables if not os.getenv(variable, "").strip()]
+        services[name] = {"configured": not missing, "missing": missing}
+    roads_configured = bool(
+        os.getenv("GOOGLE_ROADS_API_KEY", "").strip()
+        or os.getenv("GOOGLE_MAPS_API_KEY", "").strip()
+    )
+    services["road_geometry"] = {
+        "configured": roads_configured,
+        "missing": [] if roads_configured else ["GOOGLE_ROADS_API_KEY or GOOGLE_MAPS_API_KEY"],
+    }
+    return services
+
+
 @app.get("/api/health")
 def health():
     packaged_agencies = [
@@ -523,6 +554,17 @@ def health():
     ]
     database_available = os.path.exists(DATABASE_PATH) or os.path.exists(PACKAGED_DATABASE_PATH) or bool(packaged_agencies)
     return jsonify({"success": True, "database": database_available, "packaged_agencies": packaged_agencies, "routing_version": ROUTING_VERSION})
+
+
+@app.get("/api/readiness")
+def readiness():
+    services = deployment_configuration()
+    return jsonify({
+        "success": True,
+        "ready": all(service["configured"] for service in services.values()),
+        "services": services,
+        "routing_version": ROUTING_VERSION,
+    })
 
 
 @app.get("/api/config")
