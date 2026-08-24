@@ -3433,8 +3433,7 @@
                         // already selected. Only use the compact destination-
                         // first state when no A value exists yet. On mobile the
                         // floating planner must remain visible above autocomplete.
-                        const keepMobilePlannerOpen = window.matchMedia('(max-width: 767px)').matches;
-                        document.getElementById('header-journey-search').classList.toggle('expanded', hadOrigin || keepMobilePlannerOpen);
+                        document.getElementById('header-journey-search').classList.add('expanded');
                         if (hadOrigin) document.getElementById('destination-prefix').textContent = 'B';
                         else document.getElementById('destination-prefix').innerHTML = iconSvg('search');
                     }
