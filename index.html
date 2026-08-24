@@ -168,6 +168,8 @@
         .journey-divider { display:none; height:1px; margin-left:30px; background:var(--border-color); }
         #header-journey-search.expanded .journey-divider { display:block; }
         .point-label { width:20px; flex:0 0 20px; text-align:center; color:#2563eb; font-weight:850; font-size:15px; }
+        .point-label.origin-point-icon { display:grid; place-items:center; }
+        .point-label.origin-point-icon .ui-icon { width:18px; height:18px; stroke-width:2.2; }
         #header-journey-search input { flex:1; min-width:0; border:0; outline:0; background:transparent; color:var(--text-main); font:inherit; }
         #journey-location-button { width:34px; height:34px; flex:0 0 34px; border:0; border-radius:50%; background:#2563eb; color:#fff; font-size:17px; cursor:pointer; }
         #journey-swap-button { display:none; width:34px; height:34px; flex:0 0 34px; border:0; border-radius:50%; background:transparent; color:var(--text-main); font-size:20px; cursor:pointer; }
@@ -1458,7 +1460,7 @@
         <span class="desktop-brand">MARIBUS</span>
         <div id="header-journey-search">
             <div id="journey-origin-row" class="journey-input-row">
-                <span class="point-label">A</span>
+                <span class="point-label origin-point-icon" aria-hidden="true"><svg class="ui-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"></circle><circle cx="12" cy="12" r="2.5"></circle></svg></span>
                 <input id="journey-from" autocomplete="off" placeholder="Starting point" aria-label="Starting point">
                 <button id="journey-location-button" onclick="useCurrentLocationForJourney(true)" title="Use current location" aria-label="Use current location"><svg class="ui-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><circle cx="12" cy="12" r="8"></circle></svg></button>
             </div>
