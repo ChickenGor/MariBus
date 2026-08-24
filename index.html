@@ -370,6 +370,9 @@
             align-items: center;
             gap: 8px;
             background: var(--bg-color);
+            border: 0;
+            color: inherit;
+            cursor: pointer;
             padding: 4px 10px;
             border-radius: 12px;
             transition: background-color 0.3s;
@@ -835,6 +838,11 @@
         .stop-marker.route-stop-clear { width:16px; height:16px; border-width:3px; cursor:pointer; }
         .route-stop-hit { width:44px; height:44px; display:grid; place-items:center; }
         .panel-message { color:var(--text-muted); font-size:13px; padding:8px 0; }
+        .panel-state { padding:16px 12px; border:1px solid var(--border-color); border-radius:13px; background:var(--input-bg); text-align:center; }
+        .panel-state strong,.panel-state span { display:block; }
+        .panel-state strong { font-size:13px; }
+        .panel-state span { margin-top:5px; color:var(--text-muted); font-size:10px; line-height:1.45; }
+        .panel-state button { min-height:40px; margin-top:11px; padding:0 18px; border:0; border-radius:10px; background:#2563eb; color:#fff; font:800 10px Manrope,sans-serif; cursor:pointer; }
         .route-loader-panel { min-height:170px; display:flex; align-items:center; justify-content:center; padding:12px 0 30px; }
         #wifi-loader { --front-color:#f93999; --back-color:#d8dbea; --text-color:var(--text-main); width:64px; height:64px; border-radius:50px; position:relative; display:flex; justify-content:center; align-items:center; }
         #wifi-loader svg { position:absolute; display:flex; justify-content:center; align-items:center; }
@@ -1393,10 +1401,10 @@
         </div>
         <div class="sheet-header">
             <h2>Active Service</h2>
-            <div class="status-badge">
+            <button class="status-badge" type="button" onclick="fetchBuses()" aria-label="Refresh live vehicle data">
                 <div id="sync-dot" class="pulse-dot"></div>
                 <span id="refresh-timer" class="status-text">Live</span>
-            </div>
+            </button>
         </div>
         <button id="resume-journey-button" type="button" onclick="resumeTransitPanel()">
             <span><strong>Back to journey</strong><span id="resume-journey-label">View your previous route options</span></span>
@@ -1721,6 +1729,8 @@
         let journeyDetailBackAction = null;
         let countdownValue = 30;
         let countdownInterval;
+        let liveRefreshFailed = false;
+        let liveRefreshPartial = false;
         const journeySelection = { from: null, to: null };
         const journeySearchTimers = {};
         let routeCodeSearchTimer = null;
@@ -1851,8 +1861,9 @@
         }
 
         function updateCountdownDisplay() {
-            // Changed from "Sync in 30s" to a cleaner "Live (30s)"
-            document.getElementById('refresh-timer').innerText = `Live (${countdownValue}s)`;
+            document.getElementById('refresh-timer').innerText = liveRefreshFailed
+                ? 'Live unavailable · retry'
+                : `${liveRefreshPartial ? 'Live partial' : 'Live'} (${countdownValue}s)`;
         }
 
         function startCountdown() {
@@ -1877,17 +1888,23 @@
             const syncDot = document.getElementById('sync-dot');
             const timerText = document.getElementById('refresh-timer');
             syncDot.classList.add('is-syncing');
-            timerText.innerText = 'Syncing...';
-            
+            liveRefreshFailed = false;
+            liveRefreshPartial = false;
             startCountdown();
+            timerText.innerText = 'Syncing...';
 
             try {
                 const agenciesToLoad = agenciesForSelection(selectedAgency);
-                const feedResults = await Promise.all(agenciesToLoad.map(async agency => {
+                const settledFeeds = await Promise.allSettled(agenciesToLoad.map(async agency => {
                     const response = await fetch(`${API_BASE}/api/live-buses?agency=${encodeURIComponent(agency)}`);
                     const result = await response.json();
-                    return result.success ? result.data.map(vehicle => ({ ...vehicle, source_agency:agency })) : [];
+                    if (!response.ok || !result.success) throw new Error(result.error || `${operatorLabel(agency)} live feed unavailable`);
+                    return result.data.map(vehicle => ({ ...vehicle, source_agency:agency, source_feed_timestamp:result.feed_timestamp || null }));
                 }));
+                const successfulFeeds = settledFeeds.filter(item => item.status === 'fulfilled');
+                if (!successfulFeeds.length) throw new Error('All selected live feeds are unavailable');
+                liveRefreshPartial = successfulFeeds.length < settledFeeds.length;
+                const feedResults = successfulFeeds.map(item => item.value);
                 const vehicles = [...new Map(feedResults.flat().filter(vehicle => vehicle?.vehicle?.id).map(vehicle => [
                     `${vehicle.source_agency || selectedAgency}:${vehicle.vehicle.id}`,
                     vehicle
@@ -2008,7 +2025,7 @@
                             latitude:Number(vehicle.position.latitude),
                             longitude:Number(vehicle.position.longitude),
                             speedKmh:vehicle.position.speed > 0 ? Math.round(vehicle.position.speed * 3.6) : null,
-                            timestamp:vehicle.timestamp || result.feed_timestamp || null,
+                            timestamp:vehicle.timestamp || vehicle.source_feed_timestamp || null,
                             occupancyStatus:vehicle.occupancyStatus || null
                         };
 
@@ -2029,6 +2046,8 @@
                 if (guidedJourney) updateGuidedLiveStatus();
             } catch (error) {
                 console.error("Error fetching buses:", error);
+                liveRefreshFailed = true;
+                timerText.innerText = 'Live unavailable · retry';
             } finally {
                 // 2. REVERT TO LIVE STATE (Runs whether the fetch succeeded or failed)
                 syncDot.classList.remove('is-syncing');
@@ -2215,6 +2234,54 @@
             }
             if (!preserveSheetState) sheet.scrollTop = 0;
             updateDetailSheetToggle();
+        }
+
+        function panelStateHtml(title, detail, actionLabel = '', action = '') {
+            return `<div class="panel-state" role="status"><strong>${escapeHtml(title)}</strong><span>${escapeHtml(detail)}</span>${actionLabel && action ? `<button type="button" onclick="${action}">${escapeHtml(actionLabel)}</button>` : ''}</div>`;
+        }
+
+        const STATIC_API_CACHE_PREFIX = 'maribus-static-api:';
+        async function cachedApiJson(url, { ttlMs = 24 * 60 * 60 * 1000 } = {}) {
+            try {
+                const response = await fetch(url);
+                const result = await response.json();
+                if (!response.ok || !result.success) throw new Error(result.error || 'Request unavailable');
+                try {
+                    localStorage.setItem(`${STATIC_API_CACHE_PREFIX}${url}`, JSON.stringify({ savedAt:Date.now(), result }));
+                    const keys = Object.keys(localStorage).filter(key => key.startsWith(STATIC_API_CACHE_PREFIX));
+                    if (keys.length > 30) keys.map(key => ({ key, savedAt:JSON.parse(localStorage.getItem(key) || '{}').savedAt || 0 })).sort((a,b) => a.savedAt - b.savedAt).slice(0, keys.length - 30).forEach(item => localStorage.removeItem(item.key));
+                } catch (_) {}
+                return result;
+            } catch (networkError) {
+                try {
+                    const cached = JSON.parse(localStorage.getItem(`${STATIC_API_CACHE_PREFIX}${url}`) || 'null');
+                    if (!cached?.result || Date.now() - Number(cached.savedAt) > ttlMs) throw networkError;
+                    return { ...cached.result, cache_info:{ savedAt:Number(cached.savedAt), ageMs:Date.now() - Number(cached.savedAt) } };
+                } catch (_) { throw networkError; }
+            }
+        }
+
+        function cachedDataNotice(cacheInfo) {
+            if (!cacheInfo?.ageMs) return '';
+            const minutes = Math.max(1, Math.round(cacheInfo.ageMs / 60000));
+            const age = minutes < 60 ? `${minutes} min` : `${Math.round(minutes / 60)} hr`;
+            return `<p class="smart-stop-note">Showing cached timetable information from ${age} ago. Live vehicle locations are not cached.</p>`;
+        }
+
+        function rebaseCachedArrivals(result) {
+            if (!result?.cache_info || !Array.isArray(result.data)) return result;
+            const now = new Date(), currentSeconds = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
+            result.data = result.data.map(item => {
+                const parts = String(item.arrival_time || item.departure_time || '').split(':').map(Number);
+                if (parts.length !== 3 || parts.some(value => !Number.isFinite(value))) return item;
+                const waitSeconds = parts[0] * 3600 + parts[1] * 60 + parts[2] - currentSeconds;
+                return waitSeconds < -60 ? null : { ...item, minutes:Math.max(0, Math.ceil(waitSeconds / 60)) };
+            }).filter(Boolean);
+            return result;
+        }
+
+        function retrySmartStop() {
+            if (window.__mariBusSmartStop?.stop) showStopArrivals({ ...window.__mariBusSmartStop.stop, source_agency:window.__mariBusSmartStop.agency });
         }
 
         function updateDetailSheetToggle() {
@@ -2621,23 +2688,23 @@
             }
             if (!options.quiet) openTransitPanel('Nearby departures', 'Using your latest location', '<p class="panel-message">Finding nearby stops and departures…</p>');
             try {
-                const stopResponse = await fetch(`${API_BASE}/api/stops?agency=${encodeURIComponent(agency)}&lat=${lat}&lng=${lng}&radius_km=2&limit=6`);
-                const stopResult = await stopResponse.json();
-                if (!stopResult.success) throw new Error(stopResult.error || 'Nearby stops unavailable');
+                const stopResult = await cachedApiJson(`${API_BASE}/api/stops?agency=${encodeURIComponent(agency)}&lat=${lat}&lng=${lng}&radius_km=2&limit=6`, { ttlMs:24 * 60 * 60 * 1000 });
                 const stops = stopResult.data.slice(0, 3).map(stop => ({ ...stop, source_agency:agency }));
                 if (!stops.length) {
                     openTransitPanel('Nearby departures', '', '<p class="panel-message">No bus stops were found within 2 km of your location.</p>');
                     return;
                 }
                 const groups = await Promise.all(stops.map(async stop => {
-                    const response = await fetch(`${API_BASE}/api/stops/${encodeURIComponent(stop.stop_id)}/arrivals?agency=${encodeURIComponent(agency)}&limit=6`);
-                    const result = await response.json();
-                    const scheduled = result.success ? result.data : [];
-                    let live = [];
-                    try { live = await smartStopLiveEstimates(stop, agency, scheduled); } catch (_) {}
-                    return { stop, scheduled, live };
+                    try {
+                        const result = rebaseCachedArrivals(await cachedApiJson(`${API_BASE}/api/stops/${encodeURIComponent(stop.stop_id)}/arrivals?agency=${encodeURIComponent(agency)}&limit=6`, { ttlMs:2 * 60 * 60 * 1000 }));
+                        const scheduled = result.data || [];
+                        let live = [];
+                        try { live = await smartStopLiveEstimates(stop, agency, scheduled); } catch (_) {}
+                        return { stop, scheduled, live, cacheInfo:result.cache_info };
+                    } catch (_) { return { stop, scheduled:[], live:[], error:true }; }
                 }));
-                const html = groups.map(({ stop, scheduled, live }) => {
+                const cacheInfo = stopResult.cache_info || groups.find(group => group.cacheInfo)?.cacheInfo;
+                const html = cachedDataNotice(cacheInfo) + groups.map(({ stop, scheduled, live }) => {
                     const departures = live.length
                         ? live.slice(0,2).map(item => ({ route:item.routeName, destination:item.destination, minutes:item.minutes, live:true }))
                         : scheduled.slice(0,2).map(item => ({ route:item.route_short_name || 'Route', destination:item.trip_headsign || item.route_long_name, minutes:item.minutes, live:false }));
@@ -2649,7 +2716,7 @@
                 bindNearbyStopCards(groups);
             } catch (error) {
                 console.warn('Nearby departures unavailable', error);
-                openTransitPanel('Nearby departures unavailable', '', '<p class="panel-message">Check your connection and try your location again.</p>');
+                openTransitPanel('Nearby departures unavailable', '', panelStateHtml('Could not refresh departures', 'Check your connection. Your current map and previous information have been preserved.', 'Try again', 'locateMe()'));
             }
         }
 
@@ -2688,7 +2755,7 @@
         }
         window.addEventListener('maribus-service-alerts-updated', refreshVisibleServiceAlerts);
 
-        function smartStopHtml(stop, agency, arrivals, liveItems) {
+        function smartStopHtml(stop, agency, arrivals, liveItems, cacheInfo = null) {
             smartStopRenderContext = { agency, stopId:stop.stop_id, routes:arrivals.flatMap(item => [item.route_id, item.route_short_name]) };
             const liveHtml = liveItems.length ? `<section class="smart-stop-section"><h4>Live arrivals</h4>${liveItems.slice(0,6).map(item => `
                 <div class="smart-stop-arrival"><span class="smart-stop-route">${escapeHtml(item.routeName)}</span><span class="smart-stop-destination"><strong>${escapeHtml(readableStopName(item.destination) || 'Bus service')}</strong><small>Bus ${escapeHtml(item.vehicleId)}</small></span><span class="smart-stop-time"><strong>~${item.minutes} min</strong><small>● LIVE ESTIMATE</small></span></div>`).join('')}</section>` : '';
@@ -2698,7 +2765,7 @@
             const encodedRoute = encodeURIComponent(firstRoute?.route_id || '').replace(/'/g, '%27');
             const encodedAgency = encodeURIComponent(agency).replace(/'/g, '%27');
             const encodedDirection = encodeURIComponent(String(firstRoute?.direction_id ?? '')).replace(/'/g, '%27');
-            return `<div id="smart-stop-service-alerts">${serviceAlertsHtml(smartStopRenderContext)}</div>${liveHtml}${scheduledHtml}${liveItems.length ? '<p class="smart-stop-note">Live estimates are calculated from the latest vehicle position and are not operator-issued arrival predictions.</p>' : ''}<div class="smart-stop-actions"><button type="button" onclick="window.open('https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${stop.stop_lat},${stop.stop_lon}`)}','_blank')">Directions</button><button type="button" onclick="saveCurrentMariBusStop(this)" aria-pressed="false">Favourite</button>${firstRoute ? `<button type="button" onclick="showRoute(decodeURIComponent('${encodedRoute}'),decodeURIComponent('${encodedAgency}'),decodeURIComponent('${encodedDirection}'))">View route</button>` : '<button type="button" disabled>View route</button>'}</div>`;
+            return `<div id="smart-stop-service-alerts">${serviceAlertsHtml(smartStopRenderContext)}</div>${cachedDataNotice(cacheInfo)}${liveHtml}${scheduledHtml}${liveItems.length ? '<p class="smart-stop-note">Live estimates are calculated from the latest vehicle position and are not operator-issued arrival predictions.</p>' : ''}<div class="smart-stop-actions"><button type="button" onclick="window.open('https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${stop.stop_lat},${stop.stop_lon}`)}','_blank')">Directions</button><button type="button" onclick="saveCurrentMariBusStop(this)" aria-pressed="false">Favourite</button>${firstRoute ? `<button type="button" onclick="showRoute(decodeURIComponent('${encodedRoute}'),decodeURIComponent('${encodedAgency}'),decodeURIComponent('${encodedDirection}'))">View route</button>` : '<button type="button" disabled>View route</button>'}</div>`;
         }
 
         async function showStopArrivals(stop) {
@@ -2706,21 +2773,20 @@
             window.__mariBusSmartStop = { stop, agency };
             openTransitPanel(readableStopName(stop.stop_name), stop.stop_code ? `Stop ${stop.stop_code}` : 'Smart Stop', '<p class="panel-message">Checking live and scheduled arrivals…</p>');
             try {
-                const response = await fetch(`${API_BASE}/api/stops/${encodeURIComponent(stop.stop_id)}/arrivals?agency=${encodeURIComponent(agency)}`);
-                const result = await response.json();
-                if (!result.success) throw new Error(result.error || 'Arrivals unavailable');
+                const result = rebaseCachedArrivals(await cachedApiJson(`${API_BASE}/api/stops/${encodeURIComponent(stop.stop_id)}/arrivals?agency=${encodeURIComponent(agency)}`, { ttlMs:2 * 60 * 60 * 1000 }));
                 let liveItems = [];
                 try { liveItems = await smartStopLiveEstimates(stop, agency, result.data); }
                 catch (error) { console.warn('Smart Stop live estimates unavailable', error); }
-                openTransitPanel(readableStopName(stop.stop_name), stop.stop_code ? `Stop ${stop.stop_code}` : 'Smart Stop', smartStopHtml(stop, agency, result.data, liveItems));
+                openTransitPanel(readableStopName(stop.stop_name), stop.stop_code ? `Stop ${stop.stop_code}` : 'Smart Stop', smartStopHtml(stop, agency, result.data, liveItems, result.cache_info));
             } catch (error) {
-                openTransitPanel(readableStopName(stop.stop_name), '', '<p class="panel-message">Arrivals are temporarily unavailable. Please try again.</p>');
+                openTransitPanel(readableStopName(stop.stop_name), '', panelStateHtml('Arrivals temporarily unavailable', 'The stop remains available, but its timetable could not be refreshed.', 'Retry', 'retrySmartStop()'));
             }
         }
 
-        function routeLiveMarkerIcon(selected = false) {
+        function routeLiveMarkerIcon(selected = false, bearing = null) {
+            const bearingAttribute = Number.isFinite(Number(bearing)) ? ` data-bearing="${Number(bearing)}"` : '';
             return L.divIcon({
-                html:`<div class="route-browse-live-hit"><div class="route-browse-live-marker${selected ? ' selected' : ''}">${iconSvg('bus')}</div></div>`,
+                html:`<div class="route-browse-live-hit"><div class="route-browse-live-marker${selected ? ' selected' : ''}"${bearingAttribute}>${iconSvg('bus')}</div></div>`,
                 className:'', iconSize:[44,44], iconAnchor:[22,22],
             });
         }
@@ -2778,7 +2844,8 @@
             if (!vehicleId || !routeBrowseVehicleMarkers.has(vehicleId)) return;
             selectedRouteBrowseVehicleId = vehicleId;
             routeBrowseVehicleMarkers.forEach((marker, id) => {
-                marker.setIcon(routeLiveMarkerIcon(id === vehicleId));
+                const item = routeBrowseVehicles.find(vehicle => vehicle.vehicleId === id);
+                marker.setIcon(routeLiveMarkerIcon(id === vehicleId, item?.bearing));
                 marker.setZIndexOffset?.(id === vehicleId ? 2200 : 1500);
             });
             document.querySelectorAll('.route-live-bus').forEach(card => card.classList.toggle('selected', card.dataset.vehicleId === vehicleId));
@@ -2889,7 +2956,7 @@
                     const liveSpeed = Number(vehicle.position.speed);
                     const estimatedSpeed = liveSpeed >= 2 ? liveSpeed : 7;
                     const etaMinutes = nextIndex === nearestIndex ? 0 : Math.max(1, Math.ceil((remainingDistance * 1.18) / estimatedSpeed / 60));
-                    return { vehicle, point, nearestIndex, nextIndex, nextStop, progress, etaMinutes, stops,
+                    return { vehicle, point, nearestIndex, nextIndex, nextStop, progress, etaMinutes, stops, bearing:Number(vehicle.position.bearing),
                         vehicleId:routeVehicleId(vehicle, publicCode), timestamp:vehicle.timestamp || result.feed_timestamp || '',
                         distanceToNextMetres:Math.max(0, remainingDistance) };
                 }));
@@ -2906,11 +2973,11 @@
                     const existing = routeBrowseVehicleMarkers.get(item.vehicleId);
                     if (existing) {
                         existing.setLatLng([item.point.lat, item.point.lng]);
-                        existing.setIcon(routeLiveMarkerIcon(item.vehicleId === selectedRouteBrowseVehicleId));
+                        existing.setIcon(routeLiveMarkerIcon(item.vehicleId === selectedRouteBrowseVehicleId, item.bearing));
                         existing.setZIndexOffset?.(item.vehicleId === selectedRouteBrowseVehicleId ? 2200 : 1500);
                         return;
                     }
-                    const marker = L.marker([item.point.lat, item.point.lng], { icon:routeLiveMarkerIcon(item.vehicleId === selectedRouteBrowseVehicleId), title:`Live ${publicCode} bus`, zIndexOffset:1500 });
+                    const marker = L.marker([item.point.lat, item.point.lng], { icon:routeLiveMarkerIcon(item.vehicleId === selectedRouteBrowseVehicleId, item.bearing), title:`Live ${publicCode} bus`, zIndexOffset:1500, smoothMove:true });
                     marker.on('click', () => selectRouteBrowseVehicle(item.vehicleId, { center:false, scroll:true }));
                     marker.addTo(journeyLiveVehicleLayer);
                     routeBrowseVehicleMarkers.set(item.vehicleId, marker);
@@ -2963,9 +3030,7 @@
                 const params = new URLSearchParams({ agency });
                 if (directionId !== null && directionId !== undefined && directionId !== '') params.set('direction_id', directionId);
                 if (tripId) params.set('trip_id', tripId);
-                const response = await fetch(`${API_BASE}/api/routes/${encodeURIComponent(routeId)}?${params}`);
-                const result = await response.json();
-                if (!result.success) throw new Error(result.error);
+                const result = await cachedApiJson(`${API_BASE}/api/routes/${encodeURIComponent(routeId)}?${params}`, { ttlMs:7 * 24 * 60 * 60 * 1000 });
                 const data = result.data;
                 focusJourneyMap();
                 activeRouteLayer.clearLayers();
@@ -2998,7 +3063,7 @@
                 const title = `${routeLabel} ${data.trip.trip_headsign || ''}`.trim();
                 const geometryLabel = data.geometry_source === 'verified-override'
                     ? (roadMatched ? 'verified • road matched' : 'verified route') : 'official stops';
-                openRouteTransitPanel(title, `${data.stops.length} stops • ${geometryLabel}`, `<div id="route-service-alerts">${serviceAlertsHtml({ agency, routes:[routeId, routeLabel, publicCode] })}</div><div id="route-live-list" class="route-live-list"><p class="panel-message">Checking live bus locations…</p></div><div class="route-stop-list">` + data.stops.map((stop, index) => `
+                openRouteTransitPanel(title, `${data.stops.length} stops • ${geometryLabel}`, `${cachedDataNotice(result.cache_info)}<div id="route-service-alerts">${serviceAlertsHtml({ agency, routes:[routeId, routeLabel, publicCode] })}</div><div id="route-live-list" class="route-live-list"><p class="panel-message">Checking live bus locations…</p></div><div class="route-stop-list">` + data.stops.map((stop, index) => `
                     <button class="stop-row" type="button" data-route-stop-index="${index}" style="width:100%;border-left:0;border-right:0;border-bottom:0;background:transparent;color:inherit;text-align:left;cursor:pointer"><strong>${index + 1}</strong><span class="stop-name">${escapeHtml(readableStopName(stop.stop_name))}</span></button>
                 `).join('') + '</div>');
                 document.getElementById('bottom-sheet').classList.add('route-browse-mode');
@@ -3819,7 +3884,7 @@
                     showJourneySegment(journey);
                 }));
             } catch (error) {
-                openTransitPanel('Journey unavailable', '', `<p class="panel-message">${escapeHtml(error.message || 'Please try again.')}</p>`);
+                openTransitPanel('Journey unavailable', '', panelStateHtml('Could not plan this journey', error.message || 'The journey service could not be reached.', 'Retry', 'planJourney()'));
             }
         }
 
@@ -5027,7 +5092,7 @@
         });
 
         map.on('locationerror', function (e) {
-            alert("Could not find your location. Please check your browser permissions.");
+            openTransitPanel('Location unavailable', '', panelStateHtml('Location access is required', 'Enable precise location permission to see nearby departures and walking guidance.', 'Try location again', 'locateMe()'));
         });
 
         Object.assign(window, {
@@ -5037,7 +5102,7 @@
             startBusTracking, stopBusTracking, backTransitPanel, toggleDetailSheetSize,
             startGuidedJourney, advanceGuidedJourney, recenterGuidedJourney, endGuidedJourney,
             selectSidebarRegion, toggleLiveVehicles, recenterMapPosition, backFromGuidedJourney,
-            headNorthGuidedJourney, setGetOffAlertPreference
+            headNorthGuidedJourney, setGetOffAlertPreference, fetchBuses, retrySmartStop
         });
 
         map.on('zoomend', scheduleRouteStopVisibility);

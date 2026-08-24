@@ -108,6 +108,7 @@
             this.native = null;
             this.popupHtml = '';
             this.clickHandlers = [];
+            this.animationFrame = null;
         }
         addTo(target) { if (target instanceof LayerGroup) { target.addLayer(this); return this; } this.attach(target.native || target); return this; }
         nativeIcon() {
@@ -119,8 +120,11 @@
             }
             if (kind === 'route-live') {
                 const selected = Boolean(this.options.icon?.selected);
+                const bearing = Number(this.options.icon?.bearing);
                 const size = selected ? 40 : 34;
-                const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size + 12}" height="${size + 12}" viewBox="0 0 ${size + 12} ${size + 12}">${selected ? `<circle cx="${(size + 12) / 2}" cy="${(size + 12) / 2}" r="${(size + 10) / 2}" fill="#f93999" fill-opacity=".18"/>` : ''}<rect x="6" y="6" width="${size}" height="${size}" rx="${Math.round(size * .32)}" fill="#f93999" stroke="white" stroke-width="2.5"/><rect x="${size * .31}" y="${size * .28}" width="${size * .5}" height="${size * .26}" rx="2" fill="none" stroke="white" stroke-width="2"/><path d="M${size * .31} ${size * .68}h${size * .5}M${size * .38} ${size * .79}h.01M${size * .74} ${size * .79}h.01" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round"/></svg>`;
+                const center = (size + 12) / 2;
+                const heading = Number.isFinite(bearing) ? `<g transform="rotate(${bearing} ${center} ${center})"><path d="M${center} 1l-4 7h8z" fill="#111827" stroke="white" stroke-width="1.2"/></g>` : '';
+                const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size + 12}" height="${size + 12}" viewBox="0 0 ${size + 12} ${size + 12}">${selected ? `<circle cx="${center}" cy="${center}" r="${(size + 10) / 2}" fill="#f93999" fill-opacity=".18"/>` : ''}${heading}<rect x="6" y="6" width="${size}" height="${size}" rx="${Math.round(size * .32)}" fill="#f93999" stroke="white" stroke-width="2.5"/><rect x="${size * .31}" y="${size * .28}" width="${size * .5}" height="${size * .26}" rx="2" fill="none" stroke="white" stroke-width="2"/><path d="M${size * .31} ${size * .68}h${size * .5}M${size * .38} ${size * .79}h.01M${size * .74} ${size * .79}h.01" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round"/></svg>`;
                 return { url:`data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`, scaledSize:new google.maps.Size(size + 12,size + 12), anchor:new google.maps.Point((size + 12) / 2,(size + 12) / 2) };
             }
             const pillWidth = Math.max(46, Math.min(104, text.length * 8 + 22));
@@ -145,11 +149,27 @@
         bindTooltip(text) { this.options.title = String(text).replace(/<[^>]*>/g, ''); if (this.native) this.native.setTitle(this.options.title); return this; }
         openPopup() { if (!this.native || !this.popupHtml) return; window.__mariBusInfoWindow.setContent(this.popupHtml); window.__mariBusInfoWindow.open({ map:this.native.getMap(), anchor:this.native }); }
         getLatLng() { return new LatLngWrapper(this.native ? this.native.getPosition() : this.point); }
-        setLatLng(point) { this.point={lat:Number(point[0] ?? point.lat),lng:Number(point[1] ?? point.lng)}; this.native?.setPosition(this.point); return this; }
+        setLatLng(point, options = {}) {
+            const target={lat:Number(point[0] ?? point.lat),lng:Number(point[1] ?? point.lng)};
+            const shouldAnimate=Boolean(options.animate ?? this.options.smoothMove);
+            const start=this.native?.getPosition?.();
+            if (!this.native || !shouldAnimate || !start || !Number.isFinite(target.lat) || !Number.isFinite(target.lng)) {
+                this.point=target; this.native?.setPosition(target); return this;
+            }
+            if (this.animationFrame) cancelAnimationFrame(this.animationFrame);
+            const from={lat:start.lat(),lng:start.lng()},started=performance.now(),duration=650;
+            const tick=now=>{
+                const progress=Math.min(1,(now-started)/duration),eased=1-Math.pow(1-progress,3);
+                this.point={lat:from.lat+(target.lat-from.lat)*eased,lng:from.lng+(target.lng-from.lng)*eased};
+                this.native?.setPosition(this.point);
+                if(progress<1)this.animationFrame=requestAnimationFrame(tick);else this.animationFrame=null;
+            };
+            this.animationFrame=requestAnimationFrame(tick);return this;
+        }
         setIcon(icon) { this.options.icon=icon; if (this.native) this.native.setIcon(this.nativeIcon()); return this; }
         setZIndexOffset(value) { this.options.zIndexOffset=Number(value)||0; this.native?.setZIndex(this.options.zIndexOffset); return this; }
         on(event, handler) { if (event === 'click') this.clickHandlers.push(handler); return this; }
-        remove() { if (this.native) this.native.setMap(null); }
+        remove() { if (this.animationFrame) cancelAnimationFrame(this.animationFrame); this.animationFrame=null; if (this.native) this.native.setMap(null); }
     }
 
     class CircleWrapper extends MarkerWrapper {
@@ -247,8 +267,9 @@
                 : html.includes('rapid-pill') ? '#f60404'
                 : undefined);
             const stopScale = html.includes('route-stop-clear') ? 7 : html.includes('route-stop-major') ? 5 : 3;
+            const bearing = Number(html.match(/data-bearing="([\d.]+)"/)?.[1]);
             return { text:textFromIconHtml(html), kind:html.includes('journey-endpoint-marker') ? 'endpoint' : html.includes('route-browse-live-marker') ? 'route-live' : html.includes('stop-marker') ? 'stop' : 'vehicle', color,
-                scale:stopScale, strokeWeight:html.includes('route-stop-subtle') ? 1 : 1.8, selected:html.includes('route-browse-live-marker selected') };
+                scale:stopScale, strokeWeight:html.includes('route-stop-subtle') ? 1 : 1.8, selected:html.includes('route-browse-live-marker selected'), bearing:Number.isFinite(bearing) ? bearing : undefined };
         },
         marker:(point, options) => new MarkerWrapper(point, options),
         circleMarker:(point, options) => new CircleWrapper(point, options),
