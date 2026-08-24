@@ -64,7 +64,7 @@ test('mobile journey planner stays open while typing a destination', async ({ pa
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Destination', exact: true }).click();
+  await page.getByRole('button', { name: /^Destination/ }).click();
   const destination = page.getByRole('textbox', { name: 'Destination' });
   await destination.fill('Ipoh');
 
