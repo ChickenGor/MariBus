@@ -4872,8 +4872,12 @@
             if (!guidedJourney) return;
             const next = { lat:Number(position.coords.latitude), lng:Number(position.coords.longitude) };
             if (!Number.isFinite(next.lat) || !Number.isFinite(next.lng)) return;
+            const liveHeading = Number(position.coords.heading);
+            const movingWithReliableHeading = Number.isFinite(liveHeading) && Number(position.coords.speed) >= 1;
             let heading = map.native.getHeading?.() || 0;
-            if (guidedJourneyLastPosition && guidedDistanceMetres(guidedJourneyLastPosition, next) > 5) {
+            if (movingWithReliableHeading) {
+                heading = liveHeading;
+            } else if (guidedJourneyLastPosition && guidedDistanceMetres(guidedJourneyLastPosition, next) > 5) {
                 heading = guidedBearing(guidedJourneyLastPosition, next);
             } else if (!guidedJourneyLastPosition) {
                 heading = guidedRouteHeading(next);
@@ -4884,8 +4888,10 @@
             }
             guidedJourneyMarker.setPosition(next);
             guidedJourneyMarker.setIcon({
-                path:google.maps.SymbolPath.FORWARD_CLOSED_ARROW,
-                rotation:heading, scale:6, fillColor:'#2563eb', fillOpacity:1,
+                path:movingWithReliableHeading ? google.maps.SymbolPath.FORWARD_CLOSED_ARROW : google.maps.SymbolPath.CIRCLE,
+                rotation:movingWithReliableHeading ? heading : 0,
+                scale:movingWithReliableHeading ? 6 : 8,
+                fillColor:'#2563eb', fillOpacity:1,
                 strokeColor:'#ffffff', strokeWeight:2,
             });
             const routeDistance = trimCompletedGuidedRoute(next);
