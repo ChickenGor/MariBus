@@ -1426,9 +1426,11 @@
             #header-journey-search.expanded .point-label { width:26px; flex-basis:26px; color:var(--maribus-teal-deep); font-size:17px; }
             #header-journey-search.expanded input { font-size:16px; font-weight:500; }
             #header-journey-search.expanded #journey-location-button {
-                width:46px; height:46px; flex-basis:46px; background:var(--maribus-teal-deep);
-                box-shadow:0 6px 16px color-mix(in srgb,var(--maribus-teal) 30%,transparent);
+                width:42px; height:42px; min-height:42px; flex:0 0 42px; align-self:center; margin-right:2px;
+                display:grid; place-items:center; padding:0; background:var(--maribus-teal-deep);
+                box-shadow:0 4px 12px color-mix(in srgb,var(--maribus-teal) 24%,transparent);
             }
+            #header-journey-search.expanded #journey-location-button .ui-icon { width:20px; height:20px; margin:auto; }
             #header-journey-search.expanded #journey-swap-button {
                 width:40px; height:40px; flex-basis:40px; color:var(--maribus-teal-deep); font-size:23px;
             }
@@ -3431,8 +3433,10 @@
                     if (kind === 'to') {
                         // Editing B must never discard an origin the user has
                         // already selected. Only use the compact destination-
-                        // first state when no A value exists yet.
-                        document.getElementById('header-journey-search').classList.toggle('expanded', hadOrigin);
+                        // first state when no A value exists yet. On mobile the
+                        // floating planner must remain visible above autocomplete.
+                        const keepMobilePlannerOpen = window.matchMedia('(max-width: 767px)').matches;
+                        document.getElementById('header-journey-search').classList.toggle('expanded', hadOrigin || keepMobilePlannerOpen);
                         if (hadOrigin) document.getElementById('destination-prefix').textContent = 'B';
                         else document.getElementById('destination-prefix').innerHTML = iconSvg('search');
                     }

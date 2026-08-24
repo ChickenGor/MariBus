@@ -60,6 +60,19 @@ test('mobile navigation and theme control remain accessible', async ({ page }) =
   await expect(page.getByRole('button', { name: 'Light mode' })).toHaveAttribute('aria-pressed', 'true');
 });
 
+test('mobile journey planner stays open while typing a destination', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Destination', exact: true }).click();
+  const destination = page.getByRole('textbox', { name: 'Destination' });
+  await destination.fill('Ipoh');
+
+  await expect(page.locator('#header-journey-search')).toHaveClass(/expanded/);
+  await expect(destination).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Use current location' })).toBeVisible();
+});
+
 test('reduced motion disables repeating loader animation', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('/');
