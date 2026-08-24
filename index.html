@@ -4599,6 +4599,8 @@
         }
 
         const formatGuidedDuration = minutes => window.MariBusTransitServices.formatDuration(minutes);
+        const formatGuidedArrivalTime = minutes => new Intl.DateTimeFormat('en-MY', { hour:'numeric', minute:'2-digit' })
+            .format(new Date(Date.now() + Math.max(0, Number(minutes) || 0) * 60000));
 
         function guidedProgressHtml() {
             return guidedJourney.steps.map((step, index) => {
@@ -4630,7 +4632,9 @@
             const routeName = line.short_name || line.name || 'service';
             if (guidedJourney.boardedStageIndex !== guidedJourney.stageIndex) {
                 const approaching = guidedJourney.state === GUIDED_JOURNEY_STATE.BUS_APPROACHING;
-                return { kind:'wait', kicker:approaching ? 'Bus approaching' : 'Wait for service', title:`Board ${routeName} at ${step.transit?.departure_stop?.name || 'the station'}`, meta:`${step.transit?.departure_time?.text ? `Scheduled ${step.transit.departure_time.text}` : 'Check the live arrival information'}${step.transit?.headsign ? ` · towards ${step.transit.headsign}` : ''}`, action:"I'm on this service" };
+                const live = guidedLiveBusEstimate()?.closest;
+                const liveMeta = live ? `Arrives ~${formatGuidedArrivalTime(live.minutes)} · in ${formatGuidedDuration(live.minutes)} · ${live.vehicle.vehicleId || 'Live bus'} · LIVE` : null;
+                return { kind:'wait', kicker:approaching ? 'Bus approaching' : 'Wait for service', title:`Board ${routeName} at ${step.transit?.departure_stop?.name || 'the station'}`, meta:`${liveMeta || (step.transit?.departure_time?.text ? `Scheduled ${step.transit.departure_time.text}` : 'Live location unavailable')}${step.transit?.headsign ? ` · towards ${step.transit.headsign}` : ''}`, action:"I'm on this service" };
             }
             const getOffNow = guidedJourney.state === GUIDED_JOURNEY_STATE.GET_OFF_NOW;
             const approachingExit = guidedJourney.state === GUIDED_JOURNEY_STATE.APPROACHING_DESTINATION;
@@ -4769,8 +4773,8 @@
                     const approaching = estimate.closest.minutes <= 2;
                     title.textContent = approaching ? `${estimate.routeName} is approaching` : `${estimate.routeName}${currentStep.transit?.headsign ? ` → ${currentStep.transit.headsign}` : ''}`;
                     detail.textContent = approaching
-                        ? `~${formatGuidedDuration(estimate.closest.minutes)} · Prepare to board`
-                        : `Arriving in ~${formatGuidedDuration(estimate.closest.minutes)} · ${vehicle.vehicleId || 'Live bus'} · LIVE`;
+                        ? `Arrives ~${formatGuidedArrivalTime(estimate.closest.minutes)} · in ${formatGuidedDuration(estimate.closest.minutes)} · Prepare to board`
+                        : `Arrives ~${formatGuidedArrivalTime(estimate.closest.minutes)} · in ${formatGuidedDuration(estimate.closest.minutes)} · ${vehicle.vehicleId || 'Live bus'} · LIVE`;
                 }
             } else {
                 status.classList.remove('approaching');
