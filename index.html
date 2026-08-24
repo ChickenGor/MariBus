@@ -866,11 +866,12 @@
         .journey-card.modern.selected { border:2px solid #2563eb; background:rgba(37,99,235,.04); }
         .journey-option-top { display:block; }
         .journey-option-head { display:flex; align-items:center; justify-content:space-between; gap:12px; }
-        .transit-priority { display:grid; grid-template-columns:1fr 1fr auto; gap:6px; margin:2px 0 8px; padding:4px; border-radius:12px; background:var(--input-bg); }
+        .transit-priority { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)) auto; gap:6px; margin:2px 0 8px; padding:4px; border-radius:12px; background:var(--input-bg); }
         .transit-priority button { min-height:36px; border:0; border-radius:9px; background:transparent; color:var(--text-muted); font:inherit; font-size:11px; font-weight:800; cursor:pointer; }
         .transit-priority button.active { background:var(--sheet-bg); color:#2563eb; box-shadow:0 2px 8px var(--shadow-color); }
         .transit-priority .adjust-transit-button { width:40px; display:grid; place-items:center; }
         .transit-priority .adjust-transit-button .ui-icon { width:17px; height:17px; }
+        @media(max-width:420px){.transit-priority{grid-template-columns:repeat(3,minmax(0,1fr))}.transit-priority .adjust-transit-button{grid-column:1/-1;width:100%}.transit-priority button{font-size:9px}}
         .transit-mode-panel { display:none; margin:0 0 10px; padding:10px; border:1px solid var(--border-color); border-radius:12px; background:var(--input-bg); }
         .transit-mode-panel.open { display:block; }
         .transit-mode-title { display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:8px; color:var(--text-main); font-size:11px; font-weight:800; }
@@ -898,7 +899,14 @@
         .journey-fare { margin-top:7px; display:flex; align-items:baseline; gap:6px; color:var(--text-main); font-size:11px; }
         .journey-fare strong { font-size:13px; }
         .journey-fare-note { color:var(--text-muted); }
+        .journey-fare-detail { margin-top:3px; color:var(--text-muted); font-size:9px; line-height:1.35; }
+        .occupancy-badge { display:inline-flex; align-items:center; gap:4px; margin-top:5px; padding:3px 6px; border-radius:999px; background:#dcfce7; color:#166534; font-size:8px; font-weight:850; }
+        .occupancy-badge.moderate { background:#fef3c7; color:#92400e; }
+        .occupancy-badge.crowded,.occupancy-badge.full { background:#ffe4e6; color:#9f1239; }
         .journey-alternatives { margin-top:5px; color:var(--text-muted); font-size:10px; }
+        .journey-rank-label { display:inline-flex; margin-bottom:6px; padding:3px 7px; border-radius:999px; background:var(--input-bg); color:var(--text-muted); font-size:8px; font-weight:900; letter-spacing:.45px; text-transform:uppercase; }
+        .journey-card.selected .journey-rank-label { background:#dcfce7; color:#166534; }
+        .journey-comparison { margin-top:5px; color:#0f766e; font-size:9px; font-weight:750; }
         .journey-card.modern .route-action { margin-top:6px; padding:7px 12px; }
         .journey-actions { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:8px; }
         .journey-actions:has(.icon-only) { grid-template-columns:1fr 42px; }
@@ -1717,7 +1725,7 @@
         const journeySearchTimers = {};
         let routeCodeSearchTimer = null;
         let autoPlanAfterLocation = false;
-        let transitJourneyPriority = localStorage.getItem('maribus-transit-priority') === 'less-walking' ? 'less-walking' : 'fastest';
+        let transitJourneyPriority = ['less-walking','fewer-transfers'].includes(localStorage.getItem('maribus-transit-priority')) ? localStorage.getItem('maribus-transit-priority') : 'fastest';
         let transitModePreferences = new Set((() => {
             try {
                 const saved = JSON.parse(localStorage.getItem('maribus-transit-modes') || '[]');
@@ -1963,6 +1971,7 @@
                             let speedKmh = Math.round(vehicle.position.speed * 3.6);
                             speedHtml = `<div class="info-row"><span>Speed</span><strong>${speedKmh} km/h</strong></div>`;
                         }
+                        const occupancyHtml = occupancyBadgeHtml(vehicle.occupancyStatus);
                         
                         // 2. Build the new popup layout
                         const popupHtml = `
@@ -1977,6 +1986,7 @@
                                     ${destinationName ? `<div class="info-row"><span>Destination</span><strong>${escapeHtml(destinationName)}</strong></div>` : ''}
                                     <div class="info-row"><span>Trip ID</span><strong>${escapeHtml(vehicle.trip?.tripId || 'N/A')}</strong></div>
                                     ${speedHtml}
+                                    ${occupancyHtml}
                                     <button class="route-action track-bus-action" onclick="startBusTracking(decodeURIComponent('${encodeURIComponent(vehicleId).replace(/'/g, '%27')}'))">Track this bus</button>
                                     ${vehicle.trip?.routeId ? `<button class="route-action" onclick="showRoute(decodeURIComponent('${encodeURIComponent(vehicle.trip.routeId).replace(/'/g, '%27')}'), '${escapeHtml(sourceAgency)}')">View route and stops</button>` : ''}
                                 </div>
@@ -1998,7 +2008,8 @@
                             latitude:Number(vehicle.position.latitude),
                             longitude:Number(vehicle.position.longitude),
                             speedKmh:vehicle.position.speed > 0 ? Math.round(vehicle.position.speed * 3.6) : null,
-                            timestamp:vehicle.timestamp || result.feed_timestamp || null
+                            timestamp:vehicle.timestamp || result.feed_timestamp || null,
+                            occupancyStatus:vehicle.occupancyStatus || null
                         };
 
                         if (routeShortName && routeShortName !== "Bus" && routeShortName !== "KTM") {
@@ -2718,6 +2729,22 @@
             return String(vehicle?.vehicle?.id || vehicle?.vehicle?.label || vehicle?.trip?.tripId || fallback);
         }
 
+        function occupancyPresentation(status) {
+            const value = String(status || '').toUpperCase();
+            const presentations = {
+                EMPTY:{ label:'Seats available', tone:'available' }, MANY_SEATS_AVAILABLE:{ label:'Seats available', tone:'available' },
+                FEW_SEATS_AVAILABLE:{ label:'Moderate occupancy', tone:'moderate' }, STANDING_ROOM_ONLY:{ label:'Standing room only', tone:'crowded' },
+                CRUSHED_STANDING_ROOM_ONLY:{ label:'Crowded', tone:'crowded' }, FULL:{ label:'Full', tone:'full' },
+                NOT_ACCEPTING_PASSENGERS:{ label:'Not accepting passengers', tone:'full' },
+            };
+            return presentations[value] || null;
+        }
+
+        function occupancyBadgeHtml(status) {
+            const occupancy = occupancyPresentation(status);
+            return occupancy ? `<span class="occupancy-badge ${occupancy.tone}">${escapeHtml(occupancy.label)}</span>` : '';
+        }
+
         function routeFreshnessText(timestamp) {
             const value = Number(timestamp);
             const milliseconds = value > 1e12 ? value : value > 0 ? value * 1000 : routeBrowseUpdatedAt;
@@ -2784,6 +2811,7 @@
             return `<article class="route-live-bus${selectedRouteBrowseVehicleId === vehicleName ? ' selected' : ''}" data-vehicle-id="${escapeHtml(vehicleName)}" tabindex="0" role="button" style="--route-live-color:${markerColor}">
                 <div class="route-live-primary"><div class="route-live-next"><small>Next stop</small><strong>${escapeHtml(nextName)}</strong></div><span class="route-live-eta">~${item.etaMinutes} min</span></div>
                 <div class="route-live-meta"><span class="route-live-source">● LIVE</span> · Bus <strong>${escapeHtml(vehicleName)}</strong>${direction ? ` · toward ${escapeHtml(direction)}` : ''}<br>Currently near ${escapeHtml(previousName)}${distanceText ? ` · ${escapeHtml(distanceText)}` : ''}</div>
+                ${occupancyBadgeHtml(item.vehicle?.occupancyStatus)}
                 <div class="route-live-freshness${freshness.stale ? ' stale' : ''}" data-live-timestamp="${escapeHtml(item.timestamp || '')}">${freshness.text}</div>
                 <div class="route-live-bus-track" aria-label="Bus progress from ${escapeHtml(previousName)} to ${escapeHtml(nextName)}">
                     <div class="route-live-bus-fill" style="width:${item.progress}%"></div>
@@ -3830,7 +3858,7 @@
                             <div class="journey-option-head"><div class="journey-total">${escapeHtml(formatJourneyDuration(journey.total_minutes))}</div><div class="journey-main-time">${escapeHtml(journey.departure_time)} &ndash; ${escapeHtml(journey.arrival_time)}</div></div>
                             <div class="journey-steps"><span>${iconSvg('walk', 'inline-icon')} ${journey.walk_minutes} min</span><span>&rsaquo;</span>${routeBadges(journey)}<span>&rsaquo;</span><span>${journey.transfers ? `${journey.transfers} change` : 'Direct'}</span></div>
                             <div class="journey-board">Board at <strong>${escapeHtml(journey.from_stop.stop_name)}</strong><br>Exit at ${escapeHtml(journey.to_stop.stop_name)}</div>
-                            ${journey.fare ? `<div class="journey-fare"><strong>Estimated fare RM${Number(journey.fare.adult_rm).toFixed(2)}</strong><span class="journey-fare-note">Adult · ${Number(journey.fare.distance_km).toFixed(1)} km</span></div>` : ''}
+                            ${journey.fare ? `<div class="journey-fare"><strong>Estimated adult fare RM${Number(journey.fare.adult_rm).toFixed(2)}</strong><span class="journey-fare-note">${Number(journey.fare.distance_km).toFixed(1)} km</span></div><div class="journey-fare-detail">Estimated concession RM${Number(journey.fare.concession_rm).toFixed(2)} · distance-band calculation, confirm with the operator</div>` : ''}
                             <div class="journey-live-progress" id="journey-progress-${index}">
                                 <div class="journey-progress-labels"><span>A</span><span>B</span></div>
                                 <div class="journey-progress-track"><div class="journey-progress-fill"></div><span class="journey-progress-node a"></span><span class="journey-progress-node b"></span><span class="journey-progress-bus" title="Live bus">${iconSvg('bus')}</span></div>
@@ -4161,6 +4189,13 @@
                     return { route_id:routeName, route_short_name:routeName, route_color:line.color || '#2563eb' };
                 }),
             };
+        }
+
+        function googleTransitFareHtml(route) {
+            const fare = route?.fare;
+            if (!fare || (!fare.text && !Number.isFinite(Number(fare.value)))) return '';
+            const label = fare.text || `${fare.currency || ''} ${Number(fare.value).toFixed(2)}`.trim();
+            return `<div class="journey-fare"><strong>${escapeHtml(label)}</strong><span class="journey-fare-note">Provider fare</span></div><div class="journey-fare-detail">Fare supplied by Google Transit. Payment methods are not available from this result.</div>`;
         }
 
         function googleTransitRouteNames(route) {
@@ -4756,17 +4791,22 @@
                     route,
                     routeIndex,
                     walkSeconds:googleRouteWalkingSeconds(route),
+                    transferCount:Math.max(0, (route.legs?.[0]?.steps || []).filter(step => step.travel_mode === google.maps.TravelMode.TRANSIT).length - 1),
                     durationSeconds:Number(route.legs?.[0]?.duration?.value || Number.MAX_SAFE_INTEGER),
                     arrivalTimestamp:Number(route.legs?.[0]?.arrival_time?.value?.getTime?.() || Number.MAX_SAFE_INTEGER),
                 })).sort((a, b) => transitJourneyPriority === 'less-walking'
                     ? a.walkSeconds - b.walkSeconds || a.arrivalTimestamp - b.arrivalTimestamp
-                    : a.arrivalTimestamp - b.arrivalTimestamp || a.durationSeconds - b.durationSeconds || a.walkSeconds - b.walkSeconds);
+                    : transitJourneyPriority === 'fewer-transfers'
+                        ? a.transferCount - b.transferCount || a.arrivalTimestamp - b.arrivalTimestamp || a.walkSeconds - b.walkSeconds
+                        : a.arrivalTimestamp - b.arrivalTimestamp || a.durationSeconds - b.durationSeconds || a.walkSeconds - b.walkSeconds);
                 const priorityControl = `<div class="transit-priority" role="group" aria-label="Journey priority">
-                    <button type="button" data-transit-priority="fastest" class="${transitJourneyPriority === 'fastest' ? 'active' : ''}">Arrive faster</button>
-                    <button type="button" data-transit-priority="less-walking" class="${transitJourneyPriority === 'less-walking' ? 'active' : ''}">Walk less</button>
+                    <button type="button" data-transit-priority="fastest" class="${transitJourneyPriority === 'fastest' ? 'active' : ''}">⚡ Fastest</button>
+                    <button type="button" data-transit-priority="less-walking" class="${transitJourneyPriority === 'less-walking' ? 'active' : ''}">🚶 Less walking</button>
+                    <button type="button" data-transit-priority="fewer-transfers" class="${transitJourneyPriority === 'fewer-transfers' ? 'active' : ''}">⇄ Fewer transfers</button>
                     <button type="button" class="adjust-transit-button ${transitModePreferences.size ? 'active' : ''}" id="adjust-transit-modes" title="Preferred transport" aria-label="Adjust preferred transport" aria-expanded="false">${iconSvg('adjust')}</button>
                 </div>${transitModeControlsHtml()}`;
-                const cards = rankedRoutes.map(({ route, routeIndex, walkSeconds }, displayIndex) => {
+                const recommended = rankedRoutes[0];
+                const cards = rankedRoutes.map(({ route, routeIndex, walkSeconds, transferCount, durationSeconds }, displayIndex) => {
                     const leg = route.legs?.[0];
                     if (!leg) return '';
                     const steps = leg.steps || [];
@@ -4774,12 +4814,24 @@
                     const routeSteps = steps.map(googleTransitStepLabel).join('<span>&rsaquo;</span>');
                     const board = transitSteps[0]?.transit?.departure_stop?.name;
                     const exit = transitSteps[transitSteps.length - 1]?.transit?.arrival_stop?.name;
+                    const comparisons = [];
+                    if (displayIndex > 0) {
+                        const durationDifference = Math.round((durationSeconds - recommended.durationSeconds) / 60);
+                        const walkingDifference = Math.round((walkSeconds - recommended.walkSeconds) / 60);
+                        if (durationDifference > 0) comparisons.push(`${durationDifference} min slower`);
+                        else if (durationDifference < 0) comparisons.push(`${Math.abs(durationDifference)} min faster`);
+                        if (walkingDifference <= -2) comparisons.push(`${Math.abs(walkingDifference)} min less walking`);
+                        if (transferCount < recommended.transferCount) comparisons.push(`${recommended.transferCount - transferCount} fewer transfer${recommended.transferCount - transferCount === 1 ? '' : 's'}`);
+                    }
                     return `<article class="journey-card modern ${displayIndex === 0 ? 'selected' : ''}" data-google-transit-index="${routeIndex}">
                         <div class="journey-option-top">
+                            <span class="journey-rank-label">${displayIndex === 0 ? 'Recommended' : `Alternative ${displayIndex}`}</span>
                             <div class="journey-option-head"><div class="journey-total">${escapeHtml(leg.duration?.text || '')}</div><div class="journey-main-time">${escapeHtml(leg.departure_time?.text || '')} &ndash; ${escapeHtml(leg.arrival_time?.text || '')}</div></div>
                             <div class="journey-steps">${routeSteps}</div>
                             <div class="journey-board">${board ? `Board at <strong>${escapeHtml(board)}</strong>` : ''}${board && exit ? '<br>' : ''}${exit ? `Exit at ${escapeHtml(exit)}` : ''}</div>
                             <div class="journey-meta">${Math.ceil(walkSeconds / 60)} min walking · ${Math.max(0, transitSteps.length - 1)} change${transitSteps.length === 2 ? '' : 's'} · Google Transit</div>
+                            ${googleTransitFareHtml(route)}
+                            ${comparisons.length ? `<div class="journey-comparison">${escapeHtml(comparisons.join(' · '))}</div>` : ''}
                             ${googleTransitLiveStatus(transitSteps)}
                         </div>
                         <div class="journey-actions">
