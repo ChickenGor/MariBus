@@ -121,11 +121,11 @@
             if (kind === 'route-live') {
                 const selected = Boolean(this.options.icon?.selected);
                 const bearing = Number(this.options.icon?.bearing);
-                const size = selected ? 40 : 34;
-                const center = (size + 12) / 2;
-                const heading = Number.isFinite(bearing) ? `<g transform="rotate(${bearing} ${center} ${center})"><path d="M${center} 1l-4 7h8z" fill="#111827" stroke="white" stroke-width="1.2"/></g>` : '';
-                const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size + 12}" height="${size + 12}" viewBox="0 0 ${size + 12} ${size + 12}">${selected ? `<circle cx="${center}" cy="${center}" r="${(size + 10) / 2}" fill="#f93999" fill-opacity=".18"/>` : ''}${heading}<rect x="6" y="6" width="${size}" height="${size}" rx="${Math.round(size * .32)}" fill="#f93999" stroke="white" stroke-width="2.5"/><rect x="${size * .31}" y="${size * .28}" width="${size * .5}" height="${size * .26}" rx="2" fill="none" stroke="white" stroke-width="2"/><path d="M${size * .31} ${size * .68}h${size * .5}M${size * .38} ${size * .79}h.01M${size * .74} ${size * .79}h.01" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round"/></svg>`;
-                return { url:`data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`, scaledSize:new google.maps.Size(size + 12,size + 12), anchor:new google.maps.Point((size + 12) / 2,(size + 12) / 2) };
+                const displaySize = selected ? 44 : 40;
+                const heading = Number.isFinite(bearing) ? `<g transform="rotate(${bearing} 23 23)"><path d="M23 1l-3.5 6h7z" fill="#111827" stroke="white" stroke-width="1.3"/></g>` : '';
+                const halo = selected ? '<circle cx="23" cy="23" r="21.5" fill="#d81b76" fill-opacity=".18"/>' : '';
+                const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="46" height="46" viewBox="0 0 46 46">${halo}${heading}<rect x="10" y="8" width="26" height="30" rx="7" fill="#d81b76" stroke="white" stroke-width="3"/><rect x="14" y="13" width="18" height="9" rx="2.5" fill="white" fill-opacity=".95"/><path d="M23 13v9M14 26h18" fill="none" stroke="white" stroke-width="2"/><circle cx="16.5" cy="31.5" r="1.7" fill="white"/><circle cx="29.5" cy="31.5" r="1.7" fill="white"/><path d="M14 38v3M32 38v3" stroke="#111827" stroke-width="3" stroke-linecap="round"/></svg>`;
+                return { url:`data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`, scaledSize:new google.maps.Size(displaySize,displaySize), anchor:new google.maps.Point(displaySize / 2,displaySize / 2) };
             }
             const pillWidth = Math.max(46, Math.min(104, text.length * 8 + 22));
             const pillSvg = text ? `<svg xmlns="http://www.w3.org/2000/svg" width="${pillWidth}" height="34" viewBox="0 0 ${pillWidth} 34"><rect x="1" y="1" width="${pillWidth - 2}" height="32" rx="16" fill="${markerColor}" stroke="white" stroke-width="2"/><text x="50%" y="22" text-anchor="middle" font-family="Manrope,Arial,sans-serif" font-size="12" font-weight="800" fill="white">${String(text).replace(/[&<>"']/g, '')}</text></svg>` : '';
