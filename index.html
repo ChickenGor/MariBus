@@ -1676,6 +1676,10 @@
             if (search?.contains(document.activeElement)) document.activeElement.blur();
             window.toggleSidebar(true);
         };
+        document.getElementById('journey-to')?.addEventListener('input', () => {
+            if (!window.matchMedia('(max-width: 767px)').matches) return;
+            queueMicrotask(() => document.getElementById('header-journey-search')?.classList.add('expanded'));
+        });
         window.showMenuNotice = function(message) {
             const toast = document.getElementById('menu-toast');
             toast.textContent = message;
