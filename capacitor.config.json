@@ -4,6 +4,7 @@
   "webDir": "www",
   "server": {
     "url": "https://mari-bus.vercel.app/",
+    "errorPath": "offline.html",
     "cleartext": false
   },
   "android": {

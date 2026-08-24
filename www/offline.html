@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#eff6ff">
+    <title>MariBus is offline</title>
+    <style>
+      :root { color-scheme: light; font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      * { box-sizing: border-box; }
+      body { margin: 0; min-height: 100vh; min-height: 100dvh; display: grid; place-items: center; padding: max(24px, env(safe-area-inset-top)) 24px max(24px, env(safe-area-inset-bottom)); color: #172033; background: linear-gradient(160deg, #eff6ff, #f8fafc 55%, #dbeafe); }
+      main { width: min(100%, 420px); padding: 32px 26px; text-align: center; background: rgba(255,255,255,.92); border: 1px solid rgba(37,99,235,.14); border-radius: 28px; box-shadow: 0 24px 70px rgba(30,64,175,.14); }
+      .icon { width: 76px; height: 76px; display: grid; place-items: center; margin: 0 auto 22px; border-radius: 22px; background: #2563eb; box-shadow: 0 12px 28px rgba(37,99,235,.3); }
+      svg { width: 42px; height: 42px; fill: none; stroke: #fff; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+      h1 { margin: 0 0 10px; font-size: clamp(25px, 7vw, 32px); letter-spacing: -.03em; }
+      p { margin: 0; color: #526077; line-height: 1.6; }
+      .hint { margin-top: 12px; font-size: 14px; }
+      button { width: 100%; margin-top: 26px; padding: 14px 18px; border: 0; border-radius: 14px; color: #fff; background: #2563eb; font: inherit; font-weight: 700; cursor: pointer; }
+      button:focus-visible { outline: 3px solid #93c5fd; outline-offset: 3px; }
+      #status { min-height: 22px; margin-top: 14px; font-size: 14px; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="icon" aria-hidden="true">
+        <svg viewBox="0 0 48 48"><path d="M11 29V14a5 5 0 0 1 5-5h16a5 5 0 0 1 5 5v15M13 29h22v8H13zM17 37v3M31 37v3M16 15h16v8H16z"/><circle cx="18" cy="33" r="1"/><circle cx="30" cy="33" r="1"/><path d="M6 7l36 36"/></svg>
+      </div>
+      <h1>Unable to reach MariBus</h1>
+      <p>Check your Wi-Fi, mobile data, VPN or Private DNS connection, then try again.</p>
+      <p class="hint">Your saved information on this device is not affected.</p>
+      <button id="retry" type="button">Try again</button>
+      <p id="status" role="status" aria-live="polite"></p>
+    </main>
+    <script>
+      const appUrl = 'https://mari-bus.vercel.app/';
+      const retryButton = document.getElementById('retry');
+      const status = document.getElementById('status');
+      retryButton.addEventListener('click', () => {
+        retryButton.disabled = true;
+        status.textContent = 'Connecting…';
+        location.replace(appUrl);
+      });
+    </script>
+  </body>
+</html>
