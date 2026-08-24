@@ -1731,6 +1731,7 @@
         let countdownInterval;
         let liveRefreshFailed = false;
         let liveRefreshPartial = false;
+        let liveFetchInFlight = false;
         const journeySelection = { from: null, to: null };
         const journeySearchTimers = {};
         let routeCodeSearchTimer = null;
@@ -1777,14 +1778,15 @@
         }
 
         function refreshVisibleBusMarkers() {
-            if (journeyMapFocused || !allLiveBusMarkers.length) return;
-            markersGroup.clearLayers();
-            if (!liveVehicleLayerEnabled) return;
+            if (journeyMapFocused) return;
             const bounds = visibleBusBounds();
-            const visibleMarkers = bounds
+            const visibleMarkers = liveVehicleLayerEnabled ? (bounds
                 ? allLiveBusMarkers.filter(marker => bounds.contains(marker.point || marker.getLatLng()?.native))
-                : allLiveBusMarkers;
-            markersGroup.addLayers(visibleMarkers);
+                : allLiveBusMarkers) : [];
+            const desired = new Set(visibleMarkers);
+            [...markersGroup.items].forEach(marker => { if (!desired.has(marker)) markersGroup.removeLayer(marker); });
+            visibleMarkers.forEach(marker => { if (!markersGroup.hasLayer(marker)) markersGroup.addLayer(marker); });
+            markersGroup.refresh?.();
         }
 
         function toggleLiveVehicles(forceEnabled) {
@@ -1879,10 +1881,12 @@
         }
 
         async function fetchBuses() {
+            if (liveFetchInFlight) return;
             if (journeyMapFocused) {
                 startCountdown();
                 return;
             }
+            liveFetchInFlight = true;
             const selectedAgency = document.getElementById('agency-select').value;
             // 1. TRIGGER SYNCING STATE
             const syncDot = document.getElementById('sync-dot');
@@ -1910,18 +1914,19 @@
                     vehicle
                 ])).values()];
 
-                markersGroup.clearLayers();
-                busMarkersDict = {};
-                busLiveDataDict = {};
-                routeMarkersDict = {};
-                allLiveBusMarkers = [];
-
-                let newMarkers = [];
+                const previousMarkers = new Map(allLiveBusMarkers.filter(marker => marker._vehicleKey).map(marker => [marker._vehicleKey, marker]));
+                const nextMarkerKeys = new Set();
+                const nextBusMarkers = {};
+                const nextBusLiveData = {};
+                const nextRouteMarkers = {};
+                const newMarkers = [];
 
                 vehicles.forEach(vehicle => {
                     if (vehicle.position && vehicle.vehicle && vehicle.vehicle.id) {
                         const sourceAgency = vehicle.source_agency || selectedAgency;
                         const vehicleId = vehicle.vehicle.id;
+                        const markerKey = `${sourceAgency}:${vehicleId}`;
+                        nextMarkerKeys.add(markerKey);
                         const safeVehicleId = escapeHtml(vehicleId);
                         
                         // 1. Define default names so the script never crashes
@@ -2010,12 +2015,20 @@
                             </div>
                         `;
 
-                        // 3. Bind the popupHtml variable properly!
-                        const marker = L.marker([vehicle.position.latitude, vehicle.position.longitude], { icon: dynamicIcon })
-                            .bindPopup(popupHtml);
+                        const iconSignature = `${routeShortName}:${pillClass}:${Math.round(Number(bearing) || 0)}`;
+                        let marker = previousMarkers.get(markerKey);
+                        if (marker) {
+                            marker.setLatLng([vehicle.position.latitude, vehicle.position.longitude], { animate:true });
+                            if (marker._iconSignature !== iconSignature) marker.setIcon(dynamicIcon);
+                            marker.bindPopup(popupHtml);
+                        } else {
+                            marker = L.marker([vehicle.position.latitude, vehicle.position.longitude], { icon:dynamicIcon, smoothMove:true }).bindPopup(popupHtml);
+                            marker._vehicleKey = markerKey;
+                        }
+                        marker._iconSignature = iconSignature;
 
-                        busMarkersDict[vehicleId] = marker;
-                        busLiveDataDict[vehicleId] = {
+                        nextBusMarkers[vehicleId] = marker;
+                        nextBusLiveData[vehicleId] = {
                             vehicleId,
                             routeShortName,
                             destinationName,
@@ -2031,15 +2044,21 @@
 
                         if (routeShortName && routeShortName !== "Bus" && routeShortName !== "KTM") {
                             const cleanRouteName = routeShortName.toString().toUpperCase();
-                            if (!routeMarkersDict[cleanRouteName]) {
-                                routeMarkersDict[cleanRouteName] = [];
+                            if (!nextRouteMarkers[cleanRouteName]) {
+                                nextRouteMarkers[cleanRouteName] = [];
                             }
-                            routeMarkersDict[cleanRouteName].push(marker);
+                            nextRouteMarkers[cleanRouteName].push(marker);
                         }
 
                         newMarkers.push(marker);
                     }
                 });
+                previousMarkers.forEach((marker, key) => {
+                    if (!nextMarkerKeys.has(key)) markersGroup.removeLayer(marker);
+                });
+                busMarkersDict = nextBusMarkers;
+                busLiveDataDict = nextBusLiveData;
+                routeMarkersDict = nextRouteMarkers;
                 allLiveBusMarkers = newMarkers;
                 refreshVisibleBusMarkers();
                 refreshTrackedBus();
@@ -2052,6 +2071,7 @@
                 // 2. REVERT TO LIVE STATE (Runs whether the fetch succeeded or failed)
                 syncDot.classList.remove('is-syncing');
                 updateCountdownDisplay();
+                liveFetchInFlight = false;
             }
         }
 
@@ -5106,6 +5126,24 @@
         });
 
         map.on('zoomend', scheduleRouteStopVisibility);
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                if (countdownInterval) clearInterval(countdownInterval);
+                countdownInterval = null;
+                if (routeBrowseTimer) clearInterval(routeBrowseTimer);
+                routeBrowseTimer = null;
+                if (routeBrowseFreshnessTimer) clearInterval(routeBrowseFreshnessTimer);
+                routeBrowseFreshnessTimer = null;
+                return;
+            }
+            fetchBuses();
+            if (routeBrowseContext && document.getElementById('bottom-sheet')?.classList.contains('route-browse-mode')) {
+                const context = routeBrowseContext;
+                updateBrowsedRouteVehicles(context.routeId, context.publicCode, context.agency, context.directionId, context.stops);
+                routeBrowseTimer = setInterval(() => updateBrowsedRouteVehicles(context.routeId, context.publicCode, context.agency, context.directionId, context.stops), 30000);
+                routeBrowseFreshnessTimer = setInterval(updateRouteFreshnessLabels, 5000);
+            }
+        });
         initializeJourneyPlanner();
         restoreSavedJourneyFromUrl();
         restoreSavedStopFromUrl();

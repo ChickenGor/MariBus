@@ -231,12 +231,22 @@
             return this;
         }
         addLayer(item) {
+            if (this.items.includes(item)) return this;
             this.items.push(item);
             item.attach(null);
             if (this.clusterer) this.clusterer.addMarker(item.native);
             else if (this.map) item.attach(this.map.native);
             return this;
         }
+        removeLayer(item) {
+            const index=this.items.indexOf(item);
+            if(index<0)return this;
+            this.items.splice(index,1);
+            if(this.clusterer)this.clusterer.removeMarker(item.native);
+            else item?.remove?.();
+            return this;
+        }
+        refresh() { this.clusterer?.render?.(); return this; }
         clearLayers() {
             this.items.forEach(item => item.remove());
             if (this.clusterer) {
