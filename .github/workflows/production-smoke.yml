@@ -1,0 +1,47 @@
+name: Production browser smoke tests
+
+on:
+  deployment_status:
+  schedule:
+    - cron: "30 2 * * *"
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: Deployment URL to test
+        required: false
+        default: https://mari-bus.vercel.app
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-smoke-${{ github.event.deployment.id || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    if: github.event_name != 'deployment_status' || github.event.deployment_status.state == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      PLAYWRIGHT_TEST_BASE_URL: ${{ github.event.deployment_status.target_url || inputs.base_url || 'https://mari-bus.vercel.app' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Run production smoke tests
+        run: npm run test:smoke
+      - name: Upload Playwright report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-${{ github.run_id }}
+          path: playwright-report/
+          if-no-files-found: ignore
+          retention-days: 14
