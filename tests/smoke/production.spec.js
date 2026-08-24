@@ -59,3 +59,20 @@ test('mobile navigation and theme control remain accessible', async ({ page }) =
   await darkMode.click();
   await expect(page.getByRole('button', { name: 'Light mode' })).toHaveAttribute('aria-pressed', 'true');
 });
+
+test('reduced motion disables repeating loader animation', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto('/');
+  await page.locator('body').evaluate(body => {
+    body.insertAdjacentHTML('beforeend', `
+      <div id="wifi-loader" data-smoke-fixture>
+        <svg><circle class="front"></circle></svg>
+        <div class="text" data-text="Searching routes"></div>
+      </div>
+    `);
+  });
+  const loaderCircle = page.locator('#wifi-loader circle.front').first();
+  const loaderTextOverlay = page.locator('#wifi-loader .text').first();
+  await expect(loaderCircle).toHaveCSS('animation-name', 'none');
+  await expect(loaderTextOverlay).toHaveAttribute('data-text', 'Searching routes');
+});
