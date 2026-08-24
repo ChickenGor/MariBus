@@ -633,6 +633,15 @@ def index():
     return send_file(os.path.join(os.path.dirname(__file__), "index.html"))
 
 
+@app.get("/favicon.ico")
+def favicon():
+    return send_file(
+        os.path.join(os.path.dirname(__file__), "static", "favicon.svg"),
+        mimetype="image/svg+xml",
+        max_age=60 * 60 * 24 * 30,
+    )
+
+
 PAGE_NAMES = {
     "ad-free", "saved-routes", "notifications", "feedback",
     "share", "rate-us", "about-us", "sign-in", "account",

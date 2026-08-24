@@ -90,6 +90,14 @@ class MariBusApiTests(unittest.TestCase):
         response = self.client.get("/not-a-maribus-page")
         self.assertEqual(response.status_code, 404)
 
+    def test_favicon_is_available_and_cacheable(self):
+        response = self.client.get("/favicon.ico")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.mimetype, "image/svg+xml")
+        self.assertIn("max-age=2592000", response.headers["Cache-Control"])
+        self.assertIn(b"<svg", response.data)
+        response.close()
+
     def test_privacy_terms_and_account_pages_are_available(self):
         for path in ("/privacy-policy", "/terms", "/account"):
             with self.subTest(path=path):
