@@ -1013,7 +1013,8 @@
         .guided-live-copy small { margin-top:2px; color:#cbd5e1; font-size:11px; }
         .guided-live-body { min-width:0; flex:1; }
         .guided-stop-progress { display:none; margin-top:10px; }
-        #guided-live-status.onboard .guided-stop-progress { display:block; }
+        #guided-live-status.onboard .guided-stop-progress,
+        #guided-live-status.approaching .guided-stop-progress { display:block; }
         .guided-stop-track { position:relative; height:5px; margin:14px 7px 9px; border-radius:999px; background:#334155; }
         .guided-stop-fill { position:absolute; inset:0 auto 0 0; width:50%; border-radius:inherit; background:#38bdf8; box-shadow:0 0 10px rgba(56,189,248,.45); transition:width .45s ease; }
         .guided-stop-node { position:absolute; top:50%; width:9px; height:9px; border:2px solid #cbd5e1; border-radius:50%; background:#111827; transform:translate(-50%,-50%); }
@@ -1253,13 +1254,14 @@
                 top:max(8px, env(safe-area-inset-top)); right:16px; bottom:auto; left:16px;
             }
             #bottom-sheet.guided-mode:not(.sheet-half):not(.sheet-expanded) {
-                max-height:226px;
-                padding:6px 16px max(7px, env(safe-area-inset-bottom));
+                height:auto;
+                max-height:min(44dvh,390px);
+                padding:6px 16px max(14px, env(safe-area-inset-bottom));
             }
             #bottom-sheet.guided-mode .sheet-detail-controls { display:none; }
             #bottom-sheet.guided-mode:not(.sheet-half):not(.sheet-expanded) .panel-heading { display:none; }
-            #bottom-sheet.guided-mode #transit-panel.open { overflow:hidden; }
-            #bottom-sheet.guided-mode #panel-content { padding:0; overflow:hidden; }
+            #bottom-sheet.guided-mode #transit-panel.open { min-height:0; overflow-y:auto; overscroll-behavior:contain; }
+            #bottom-sheet.guided-mode #panel-content { padding:0 0 4px; overflow:visible; }
             body:has(#bottom-sheet.detail-mode) #map-view-toggle { bottom:292px; }
             body:has(#bottom-sheet.guided-mode) #header-journey-search { display:none; }
             body:has(#bottom-sheet.guided-mode) #map-view-toggle { bottom:242px; }
@@ -1965,6 +1967,8 @@
         let guidedJourneyMarker = null;
         let guidedJourneyFollowMode = true;
         let guidedJourneyHeadingMode = 'route';
+        let guidedRouteSegments = [];
+        let guidedRerouteInFlight = false;
         let guidedLiveStopRequest = null;
 
         function visibleBusBounds() {
@@ -4689,6 +4693,7 @@
             const currentStep = guidedJourney?.steps?.[guidedJourney.stageIndex];
             const onboard = currentStep?.travel_mode === google.maps.TravelMode.TRANSIT && guidedJourney.boardedStageIndex === guidedJourney.stageIndex;
             status.classList.toggle('onboard', Boolean(onboard && estimate.closest));
+            status.classList.toggle('approaching', Boolean(!onboard && estimate.closest));
             if (estimate.closest) {
                 const vehicle = estimate.closest.vehicle;
                 title.textContent = `${estimate.routeName} · ${vehicle.vehicleId}`;
@@ -4716,6 +4721,14 @@
                         detail.textContent = `On board · locating the next stop…`;
                     }
                 } else {
+                    const initialMinutes = Math.max(Number(guidedJourney.approachInitialMinutes || 0), estimate.closest.minutes, 5);
+                    guidedJourney.approachInitialMinutes = initialMinutes;
+                    const arrivalProgress = Math.max(8, Math.min(94, (1 - estimate.closest.minutes / initialMinutes) * 100));
+                    document.getElementById('guided-stop-previous').textContent = 'Bus';
+                    document.getElementById('guided-stop-current').textContent = estimate.station;
+                    document.getElementById('guided-stop-next').textContent = 'Board';
+                    document.getElementById('guided-stop-fill').style.width = `${arrivalProgress}%`;
+                    document.getElementById('guided-stop-bus').style.left = `${arrivalProgress}%`;
                     if (estimate.closest.minutes <= 2) {
                         setGuidedJourneyState(GUIDED_JOURNEY_STATE.BUS_APPROACHING);
                         document.getElementById('panel-title').textContent = 'Bus approaching';
@@ -4724,6 +4737,7 @@
                     detail.textContent = `About ${estimate.closest.minutes} min to ${estimate.station}`;
                 }
             } else {
+                status.classList.remove('approaching');
                 title.textContent = estimate.routeName;
                 detail.textContent = `No approaching live bus estimated for ${estimate.station}`;
             }
@@ -4774,6 +4788,86 @@
             return ahead ? guidedBearing(position, ahead) : (map.native.getHeading?.() || 0);
         }
 
+        function nearestGuidedPathIndex(position, path) {
+            let nearestIndex = 0;
+            let nearestDistance = Number.POSITIVE_INFINITY;
+            path.forEach((point, index) => {
+                const distance = guidedDistanceMetres(position, googleStepPoint(point));
+                if (distance < nearestDistance) {
+                    nearestDistance = distance;
+                    nearestIndex = index;
+                }
+            });
+            return { index:nearestIndex, distance:nearestDistance };
+        }
+
+        function trimCompletedGuidedRoute(position) {
+            if (!guidedJourney || !guidedRouteSegments.length) return Number.POSITIVE_INFINITY;
+            let activeDistance = Number.POSITIVE_INFINITY;
+            guidedRouteSegments.forEach(segment => {
+                if (segment.stepIndex < guidedJourney.stageIndex) {
+                    segment.outline.setMap(null);
+                    segment.routeLine.setMap(null);
+                    return;
+                }
+                segment.outline.setMap(map.native);
+                segment.routeLine.setMap(map.native);
+                if (segment.stepIndex !== guidedJourney.stageIndex) {
+                    segment.outline.setPath(segment.path);
+                    segment.routeLine.setPath(segment.path);
+                    return;
+                }
+                const nearest = nearestGuidedPathIndex(position, segment.path);
+                activeDistance = nearest.distance;
+                if (guidedJourney.steps[guidedJourney.stageIndex]?.travel_mode === google.maps.TravelMode.WALKING) {
+                    const remainingPath = segment.path.slice(Math.max(0, nearest.index));
+                    const anchoredPath = [new google.maps.LatLng(position.lat, position.lng), ...remainingPath];
+                    segment.outline.setPath(anchoredPath);
+                    segment.routeLine.setPath(anchoredPath);
+                }
+            });
+            return activeDistance;
+        }
+
+        async function rerouteGuidedJourney(position) {
+            if (!guidedJourney || guidedRerouteInFlight || !guidedJourney.destinationLocation || !google.maps.DirectionsService) return;
+            const now = Date.now();
+            if (now - Number(guidedJourney.lastRerouteAt || 0) < 30000) return;
+            guidedRerouteInFlight = true;
+            guidedJourney.lastRerouteAt = now;
+            showMenuNotice('Finding a better route from your location…');
+            try {
+                const service = new google.maps.DirectionsService();
+                const response = await new Promise((resolve, reject) => service.route({
+                    origin:position,
+                    destination:guidedJourney.destinationLocation,
+                    travelMode:google.maps.TravelMode.TRANSIT,
+                    provideRouteAlternatives:true,
+                    transitOptions:{ departureTime:new Date() },
+                }, (result, status) => status === google.maps.DirectionsStatus.OK ? resolve(result) : reject(new Error(status))));
+                const route = response.routes?.[0];
+                const steps = route?.legs?.[0]?.steps || [];
+                if (!steps.length || !guidedJourney) return;
+                window.__mariBusGoogleTransitResponse = response;
+                guidedJourney.routeIndex = 0;
+                guidedJourney.leg = route.legs[0];
+                guidedJourney.steps = steps;
+                guidedJourney.stageIndex = 0;
+                guidedJourney.boardedStageIndex = null;
+                guidedJourney.offRouteSamples = 0;
+                guidedJourney.liveStopKey = '';
+                guidedJourney.liveStops = [];
+                renderGoogleTransitRoute(response, 0, true);
+                renderGuidedJourney();
+                showMenuNotice(response.routes.length > 1 ? `Rerouted · ${response.routes.length} options found` : 'Route updated');
+            } catch (error) {
+                console.warn('Guided journey reroute unavailable', error);
+                showMenuNotice('Could not reroute yet · continuing current guidance');
+            } finally {
+                guidedRerouteInFlight = false;
+            }
+        }
+
         function updateGuidedJourneyPosition(position) {
             if (!guidedJourney) return;
             const next = { lat:Number(position.coords.latitude), lng:Number(position.coords.longitude) };
@@ -4794,6 +4888,11 @@
                 rotation:heading, scale:6, fillColor:'#2563eb', fillOpacity:1,
                 strokeColor:'#ffffff', strokeWeight:2,
             });
+            const routeDistance = trimCompletedGuidedRoute(next);
+            if (guidedJourney.steps[guidedJourney.stageIndex]?.travel_mode === google.maps.TravelMode.WALKING) {
+                guidedJourney.offRouteSamples = routeDistance > 120 ? Number(guidedJourney.offRouteSamples || 0) + 1 : 0;
+                if (guidedJourney.offRouteSamples >= 3) rerouteGuidedJourney(next);
+            }
             if (guidedJourneyFollowMode) centerGuidedJourneyCamera(next, heading);
             const step = guidedJourney.steps[guidedJourney.stageIndex];
             if (step?.travel_mode === google.maps.TravelMode.WALKING && guidedDistanceMetres(next, googleStepPoint(step.end_location)) < 45) {
@@ -4811,12 +4910,14 @@
                 return;
             }
             stopGuidedJourney(false);
-            guidedJourney = { routeIndex:Number(routeIndex), leg:route.legs?.[0] || null, steps, stageIndex:0, state:null, stateChangedAt:Date.now(), boardedStageIndex:null, alerted:new Set(), destinationName:journeySelection.to?.place?.name || 'your destination', liveStopKey:'', liveStops:[] };
+            const destinationPlace = journeySelection.to?.place;
+            const destinationLocation = destinationPlace ? googleDirectionsLocation(destinationPlace) : googleStepPoint(route.legs?.[0]?.end_location);
+            guidedJourney = { routeIndex:Number(routeIndex), leg:route.legs?.[0] || null, steps, stageIndex:0, state:null, stateChangedAt:Date.now(), boardedStageIndex:null, alerted:new Set(), destinationName:destinationPlace?.name || 'your destination', destinationLocation, liveStopKey:'', liveStops:[], offRouteSamples:0, lastRerouteAt:0, approachInitialMinutes:null };
             guidedJourneyFollowMode = true;
             guidedJourneyHeadingMode = 'route';
             guidedLiveStopRequest = null;
             updateGuidedCameraControls();
-            renderGoogleTransitRoute(response, Number(routeIndex));
+            renderGoogleTransitRoute(response, Number(routeIndex), true);
             openTransitPanel('Journey guidance', '', '');
             document.getElementById('bottom-sheet').classList.add('guided-mode');
             renderGuidedJourney();
@@ -4922,8 +5023,11 @@
             guidedJourneyLastPosition = null;
             guidedJourneyFollowMode = true;
             guidedJourneyHeadingMode = 'route';
+            guidedRouteSegments = [];
+            guidedRerouteInFlight = false;
             guidedJourneyMarker?.setMap(null);
             guidedJourneyMarker = null;
+            document.getElementById('guided-live-status')?.classList.remove('onboard', 'approaching');
             document.getElementById('bottom-sheet')?.classList.remove('guided-mode');
             if (resetCamera) {
                 map.native.setHeading(0);
@@ -4982,16 +5086,30 @@
             return `#${channel(match[1])}${channel(match[2])}${channel(match[3])}`;
         }
 
-        function renderGoogleTransitRoute(response, routeIndex) {
+        function renderGoogleTransitRoute(response, routeIndex, showAlternatives = false) {
             if (walkingDirectionsRenderer) walkingDirectionsRenderer.setMap(null);
             routeDirectionsRenderers.forEach(renderer => renderer.setMap(null));
             routeDirectionsRenderers = [];
+            guidedRouteSegments = [];
             activeRouteLayer.clearLayers();
             const route = response.routes?.[routeIndex];
             if (!route) return;
             const bounds = new google.maps.LatLngBounds();
+            if (showAlternatives) {
+                response.routes.forEach((alternative, index) => {
+                    if (index === routeIndex) return;
+                    const path = Array.from(alternative.overview_path || []);
+                    if (path.length < 2) return;
+                    const alternateLine = new google.maps.Polyline({
+                        map:map.native, path, clickable:false, strokeColor:'#64748b',
+                        strokeOpacity:.48, strokeWeight:5, zIndex:12,
+                    });
+                    routeDirectionsRenderers.push(alternateLine);
+                    path.forEach(point => bounds.extend(point));
+                });
+            }
             const steps = (route.legs || []).flatMap(leg => leg.steps || []);
-            steps.forEach(step => {
+            steps.forEach((step, stepIndex) => {
                 const path = Array.from(step.path || []);
                 if (path.length < 2) return;
                 path.forEach(point => bounds.extend(point));
@@ -5013,6 +5131,7 @@
                 }
                 const routeLine = new google.maps.Polyline(lineOptions);
                 routeDirectionsRenderers.push(outline, routeLine);
+                if (showAlternatives) guidedRouteSegments.push({ stepIndex, path, outline, routeLine });
             });
             if (!bounds.isEmpty()) map.native.fitBounds(bounds, 64);
         }
