@@ -60,8 +60,10 @@ class MariBusApiTests(unittest.TestCase):
         response_text = response.get_data(as_text=True)
         self.assertEqual(response.status_code, 200)
         self.assertFalse(payload["ready"])
+        self.assertFalse(payload["operational"])
         self.assertTrue(payload["services"]["google_maps"]["configured"])
         self.assertTrue(payload["services"]["road_geometry"]["configured"])
+        self.assertFalse(payload["services"]["multimodal_routing"]["required"])
         self.assertIn("FIREBASE_AUTH_DOMAIN", payload["services"]["firebase"]["missing"])
         self.assertNotIn("maps-secret", response_text)
         self.assertNotIn("firebase-secret", response_text)
@@ -84,6 +86,27 @@ class MariBusApiTests(unittest.TestCase):
         with patch.dict(os.environ, environment):
             response = self.client.get("/api/readiness")
         self.assertTrue(response.get_json()["ready"])
+
+    def test_readiness_is_operational_without_optional_otp(self):
+        environment = {
+            "GOOGLE_MAPS_API_KEY": "configured",
+            "FIREBASE_API_KEY": "configured",
+            "FIREBASE_AUTH_DOMAIN": "configured",
+            "FIREBASE_PROJECT_ID": "configured",
+            "FIREBASE_STORAGE_BUCKET": "configured",
+            "FIREBASE_MESSAGING_SENDER_ID": "configured",
+            "FIREBASE_APP_ID": "configured",
+            "FIREBASE_VAPID_KEY": "configured",
+            "OTP_GRAPHQL_URL": "",
+            "RESEND_API_KEY": "configured",
+            "FEEDBACK_TO_EMAIL": "feedback@example.com",
+        }
+        with patch.dict(os.environ, environment):
+            response = self.client.get("/api/readiness")
+        payload = response.get_json()
+        self.assertTrue(payload["ready"])
+        self.assertTrue(payload["operational"])
+        self.assertFalse(payload["optional_features"]["multimodal_routing"]["configured"])
 
     def test_default_operator_uses_packaged_database(self):
         response = self.client.get("/api/routes/search", query_string={"q": "T100"})

@@ -534,7 +534,11 @@ def deployment_configuration():
     services = {}
     for name, variables in service_variables.items():
         missing = [variable for variable in variables if not os.getenv(variable, "").strip()]
-        services[name] = {"configured": not missing, "missing": missing}
+        services[name] = {
+            "configured": not missing,
+            "missing": missing,
+            "required": name != "multimodal_routing",
+        }
     roads_configured = bool(
         os.getenv("GOOGLE_ROADS_API_KEY", "").strip()
         or os.getenv("GOOGLE_MAPS_API_KEY", "").strip()
@@ -542,6 +546,7 @@ def deployment_configuration():
     services["road_geometry"] = {
         "configured": roads_configured,
         "missing": [] if roads_configured else ["GOOGLE_ROADS_API_KEY or GOOGLE_MAPS_API_KEY"],
+        "required": True,
     }
     return services
 
@@ -559,9 +564,20 @@ def health():
 @app.get("/api/readiness")
 def readiness():
     services = deployment_configuration()
+    operational = all(
+        service["configured"]
+        for service in services.values()
+        if service["required"]
+    )
     return jsonify({
         "success": True,
-        "ready": all(service["configured"] for service in services.values()),
+        "ready": operational,
+        "operational": operational,
+        "optional_features": {
+            name: {"configured": service["configured"], "missing": service["missing"]}
+            for name, service in services.items()
+            if not service["required"]
+        },
         "services": services,
         "routing_version": ROUTING_VERSION,
     })
