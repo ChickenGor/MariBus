@@ -6,14 +6,21 @@
     WALKING_TO_DESTINATION:'WALKING_TO_DESTINATION', ARRIVED:'ARRIVED',
   });
 
+  function formatDuration(minutes) {
+    const total=Math.max(0,Math.ceil(Number(minutes)||0));
+    if(total<60)return `${total} min`;
+    return `${Math.floor(total/60)} hr${total>=120?'s':''}${total%60?` ${total%60} min`:''}`;
+  }
+
   function adviseLeaveNow({ walkingSeconds, busMinutes, nextBusMinutes, source='scheduled', isStale=false, safetyBufferSeconds=120 }) {
     const walkMinutes=Math.max(1,Math.ceil(Number(walkingSeconds||0)/60));
     if(!Number.isFinite(Number(busMinutes))||isStale)return{tone:'unknown',title:'Check before leaving',detail:`Walking takes approximately ${walkMinutes} min. Reliable live arrival information is not currently available.`,meta:'Use the published departure time as a guide.'};
     const arrivalMinutes=Math.max(0,Math.ceil(Number(busMinutes))),marginSeconds=arrivalMinutes*60-Number(walkingSeconds||0)-safetyBufferSeconds,sourceText=source==='live'?'Live vehicle estimate':'Scheduled departure';
-    if(marginSeconds>=300)return{tone:'plenty',title:'Plenty of time',detail:`The bus is expected in ~${arrivalMinutes} min and the walk takes about ${walkMinutes} min.`,meta:`${sourceText} · includes a ${Math.ceil(safetyBufferSeconds/60)} min safety buffer`};
-    if(marginSeconds>=0)return{tone:'likely',title:'Leave now · likely to catch',detail:`The bus is expected in ~${arrivalMinutes} min. Walking takes approximately ${walkMinutes} min.`,meta:`${sourceText} · this is an estimate, not a guarantee`};
-    if(Number.isFinite(Number(nextBusMinutes))&&Number(nextBusMinutes)*60-Number(walkingSeconds||0)>=safetyBufferSeconds)return{tone:'miss',title:'You may miss this bus',detail:`The nearest bus is expected in ~${arrivalMinutes} min. The next is estimated in ~${Math.ceil(nextBusMinutes)} min.`,meta:`Walk: ${walkMinutes} min · no need to rush unsafely`};
-    return{tone:'miss',title:'You may miss this bus',detail:`The bus is expected in ~${arrivalMinutes} min while the walk takes about ${walkMinutes} min.`,meta:`${sourceText} · allow time to reach the correct boarding point`};
+    if(arrivalMinutes>=90)return{tone:'long-wait',title:'Long wait ahead',detail:`The next bus is expected in approximately ${formatDuration(arrivalMinutes)}. Walking to the stop takes about ${formatDuration(walkMinutes)}.`,meta:`${sourceText} · consider checking an earlier option`};
+    if(marginSeconds>=300)return{tone:'plenty',title:'Plenty of time',detail:`Bus: ~${formatDuration(arrivalMinutes)} · Walk: ~${formatDuration(walkMinutes)}. You have about ${formatDuration(Math.floor(marginSeconds/60))} spare.`,meta:`${sourceText} · includes a ${Math.ceil(safetyBufferSeconds/60)} min safety buffer`};
+    if(marginSeconds>=0)return{tone:'likely',title:'Likely to catch',detail:`Bus: ~${formatDuration(arrivalMinutes)} · Walk: ~${formatDuration(walkMinutes)}. Leave now.`,meta:`${sourceText} · this is an estimate, not a guarantee`};
+    if(Number.isFinite(Number(nextBusMinutes))&&Number(nextBusMinutes)*60-Number(walkingSeconds||0)>=safetyBufferSeconds)return{tone:'miss',title:'Likely to miss',detail:`The nearest bus is expected in ~${formatDuration(arrivalMinutes)}. The next is estimated in ~${formatDuration(nextBusMinutes)}.`,meta:`Walk: ${formatDuration(walkMinutes)} · no need to rush unsafely`};
+    return{tone:'miss',title:'Likely to miss',detail:`Bus: ~${formatDuration(arrivalMinutes)} · Walk: ~${formatDuration(walkMinutes)}.`,meta:`${sourceText} · allow time to reach the correct boarding point`};
   }
 
   function occupancy(status) {
@@ -46,5 +53,5 @@
     }
   }
 
-  window.MariBusTransitServices=Object.freeze({JourneyState,adviseLeaveNow,occupancy,StaticApiCache});
+  window.MariBusTransitServices=Object.freeze({JourneyState,formatDuration,adviseLeaveNow,occupancy,StaticApiCache});
 })();

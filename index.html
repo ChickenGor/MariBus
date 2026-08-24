@@ -1001,6 +1001,11 @@
         .guided-nav-time strong,.guided-nav-time small { display:block; }
         .guided-nav-time strong { color:var(--text-main); font-size:17px; line-height:1.05; }
         .guided-nav-time small { margin-top:2px; color:var(--text-muted); font-size:10px; }
+        .guided-nav-route-steps { display:flex; align-items:center; gap:5px; overflow-x:auto; color:var(--text-muted); font-size:10px; font-weight:750; white-space:nowrap; }
+        .guided-progress-step { padding:5px 7px; border-radius:999px; background:var(--input-bg); }
+        .guided-progress-step.current { color:#fff; background:#2563eb; }
+        .guided-progress-step.complete { color:#16734a; background:#dcfce7; }
+        .guided-progress-step.future { opacity:.62; }
         #guided-map-back { position:absolute; top:max(10px, env(safe-area-inset-top)); left:12px; z-index:2100; width:42px; height:42px; display:none; place-items:center; border:0; border-radius:50%; background:color-mix(in srgb, var(--sheet-bg) 94%, transparent); color:var(--text-main); box-shadow:0 3px 14px var(--shadow-color); cursor:pointer; }
         #guided-map-back .ui-icon { width:21px; height:21px; }
         #guided-live-status { position:absolute; top:max(10px, env(safe-area-inset-top)); left:62px; right:12px; z-index:2090; min-height:58px; display:none; align-items:center; gap:11px; padding:9px 13px; box-sizing:border-box; overflow:hidden; border:1px solid rgba(255,255,255,.12); border-radius:16px; background:rgba(5,7,11,.94); color:#fff; box-shadow:0 5px 20px rgba(0,0,0,.34); backdrop-filter:blur(14px); }
@@ -1520,7 +1525,7 @@
         <svg class="ui-icon" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"></path></svg>
     </button>
     <div id="guided-live-status" role="status" aria-live="polite">
-        <span class="guided-live-icon"><svg class="ui-icon" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="15" rx="3"></rect><path d="M7 7h10M7 12h.01M17 12h.01M7 21v-3M17 21v-3"></path></svg></span>
+        <span id="guided-live-icon" class="guided-live-icon"><svg class="ui-icon" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="15" rx="3"></rect><path d="M7 7h10M7 12h.01M17 12h.01M7 21v-3M17 21v-3"></path></svg></span>
         <div class="guided-live-body">
             <span class="guided-live-copy"><strong id="guided-live-title">Checking approaching service…</strong><small id="guided-live-detail">Live vehicle information</small></span>
             <div id="guided-stop-progress" class="guided-stop-progress" aria-label="Live bus stop progress">
@@ -4593,6 +4598,20 @@
             }
         }
 
+        const formatGuidedDuration = minutes => window.MariBusTransitServices.formatDuration(minutes);
+
+        function guidedProgressHtml() {
+            return guidedJourney.steps.map((step, index) => {
+                const transit = step.transit || {};
+                const label = step.travel_mode === google.maps.TravelMode.WALKING
+                    ? `Walk ${step.duration?.text || ''}`
+                    : (transit.line?.short_name || transit.line?.name || 'Bus');
+                const state = index < guidedJourney.stageIndex ? 'complete' : index === guidedJourney.stageIndex ? 'current' : 'future';
+                const prefix = state === 'complete' ? '✓ ' : '';
+                return `<span class="guided-progress-step ${state}">${prefix}${escapeHtml(label)}</span>`;
+            }).join('<span aria-hidden="true">›</span>');
+        }
+
         function guidedStageDetails() {
             const step = guidedJourney?.steps?.[guidedJourney.stageIndex];
             if (!step) return null;
@@ -4689,14 +4708,24 @@
             const status = document.getElementById('guided-live-status');
             const title = document.getElementById('guided-live-title');
             const detail = document.getElementById('guided-live-detail');
-            if (!status || !title || !detail || !estimate) return;
+            const icon = document.getElementById('guided-live-icon');
+            if (!status || !title || !detail) return;
             const currentStep = guidedJourney?.steps?.[guidedJourney.stageIndex];
+            if (currentStep?.travel_mode === google.maps.TravelMode.WALKING) {
+                const finalWalk = !guidedJourney.steps.slice(guidedJourney.stageIndex + 1).some(step => step.travel_mode === google.maps.TravelMode.TRANSIT);
+                status.classList.remove('onboard', 'approaching');
+                icon.innerHTML = iconSvg('walk');
+                title.textContent = currentStep.instructions ? plainGoogleInstruction(currentStep.instructions) : (finalWalk ? `Walk to ${guidedJourney.destinationName}` : 'Walk to the boarding stop');
+                detail.textContent = `${currentStep.distance?.text || ''}${currentStep.duration?.text ? `${currentStep.distance?.text ? ' · ' : ''}${currentStep.duration.text}` : ''}` || 'Walking directions';
+                return;
+            }
+            if (!estimate) return;
             const onboard = currentStep?.travel_mode === google.maps.TravelMode.TRANSIT && guidedJourney.boardedStageIndex === guidedJourney.stageIndex;
             status.classList.toggle('onboard', Boolean(onboard && estimate.closest));
             status.classList.toggle('approaching', Boolean(!onboard && estimate.closest));
+            icon.innerHTML = iconSvg('bus');
             if (estimate.closest) {
                 const vehicle = estimate.closest.vehicle;
-                title.textContent = `${estimate.routeName} · ${vehicle.vehicleId}`;
                 if (onboard) {
                     loadGuidedLiveStops(vehicle);
                     const progress = guidedOnboardStopProgress(vehicle);
@@ -4709,8 +4738,10 @@
                             const alertTitle = progress.stopsToExit === 0 ? 'Get off now' : 'Your stop is approaching';
                             journeyAlertManager.notify(`get-off-${guidedJourney.stageIndex}`, alertTitle, `Prepare to get off at ${progress.exitName || progress.next}.`);
                         }
+                        title.textContent = progress.stopsToExit === 0 ? 'GET OFF NOW' : progress.stopsToExit === 1 ? 'YOUR STOP IS NEXT' : `Next: ${progress.next}`;
                         detail.textContent = progress.stopsToExit === 0
-                            ? `Get off at ${progress.exitName || progress.current}`
+                            ? `${progress.exitName || progress.current} · Get off now`
+                            : progress.stopsToExit === 1 ? `${progress.exitName || 'Your stop'} · Prepare to get off`
                             : `${progress.stopsToExit ?? '—'} stop${progress.stopsToExit === 1 ? '' : 's'} to ${progress.exitName || 'your exit'}`;
                         document.getElementById('guided-stop-previous').textContent = progress.previous;
                         document.getElementById('guided-stop-current').textContent = progress.current;
@@ -4718,6 +4749,7 @@
                         document.getElementById('guided-stop-fill').style.width = `${progress.progress}%`;
                         document.getElementById('guided-stop-bus').style.left = `${progress.progress}%`;
                     } else {
+                        title.textContent = `${estimate.routeName} · On board`;
                         detail.textContent = `On board · locating the next stop…`;
                     }
                 } else {
@@ -4734,12 +4766,17 @@
                         document.getElementById('panel-title').textContent = 'Bus approaching';
                         journeyAlertManager.notify(`approaching-${guidedJourney.stageIndex}`, `${estimate.routeName} is approaching`, `Your bus is approximately ${estimate.closest.minutes} minute${estimate.closest.minutes === 1 ? '' : 's'} away. Prepare to board at ${estimate.station}.`);
                     }
-                    detail.textContent = `About ${estimate.closest.minutes} min to ${estimate.station}`;
+                    const approaching = estimate.closest.minutes <= 2;
+                    title.textContent = approaching ? `${estimate.routeName} is approaching` : `${estimate.routeName}${currentStep.transit?.headsign ? ` → ${currentStep.transit.headsign}` : ''}`;
+                    detail.textContent = approaching
+                        ? `~${formatGuidedDuration(estimate.closest.minutes)} · Prepare to board`
+                        : `Arriving in ~${formatGuidedDuration(estimate.closest.minutes)} · ${vehicle.vehicleId || 'Live bus'} · LIVE`;
                 }
             } else {
                 status.classList.remove('approaching');
-                title.textContent = estimate.routeName;
-                detail.textContent = `No approaching live bus estimated for ${estimate.station}`;
+                title.textContent = `${estimate.routeName} live location unavailable`;
+                const scheduled = currentStep?.transit?.departure_time?.text;
+                detail.textContent = scheduled ? `Scheduled departure: ${scheduled}` : `Check the timetable for ${estimate.station}`;
             }
         }
 
@@ -4755,26 +4792,26 @@
             }
             document.getElementById('panel-title').textContent = details.kicker;
             document.getElementById('panel-subtitle').textContent = `Stage ${guidedJourney.stageIndex + 1} of ${guidedJourney.steps.length}`;
-            const routeSteps = guidedJourney.steps.map(googleTransitStepLabel).join('<span>&rsaquo;</span>');
+            const routeSteps = guidedProgressHtml();
             const leg = guidedJourney.leg;
             const arrivalTime = leg?.arrival_time?.text || '';
             const arrivalDate = leg?.arrival_time?.value;
             const remainingMinutes = arrivalDate?.getTime
                 ? Math.max(1, Math.ceil((arrivalDate.getTime() - Date.now()) / 60000))
                 : null;
-            const remainingText = remainingMinutes ? `${remainingMinutes} min` : (leg?.duration?.text || 'In progress');
+            const remainingText = remainingMinutes ? `${formatGuidedDuration(remainingMinutes)} remaining` : (leg?.duration?.text || 'In progress');
             const needsStageAction = details.kind !== 'walk';
             const alertPreference = getOffAlertPreference();
             const alertValue = alertPreference.mode === 'minutes' ? 'minutes-5' : `stops-${alertPreference.value}`;
             document.getElementById('panel-content').innerHTML = `<div class="guided-nav-card">
-                <div class="guided-nav-route"><div class="guided-nav-route-steps">${routeSteps}</div><button class="guided-nav-close" type="button" onclick="endGuidedJourney()" aria-label="End navigation">&times;</button></div>
+                <div class="guided-nav-route"><div class="guided-nav-route-steps" aria-label="Journey progress">${routeSteps}</div><button class="guided-nav-close" type="button" onclick="confirmEndGuidedJourney()" aria-label="End navigation">&times;</button></div>
                 <div class="guided-nav-current"><strong>${escapeHtml(details.title)}</strong><small>${escapeHtml(details.meta)}</small></div>
                 ${details.advice ? `<div class="leave-now-advice ${escapeHtml(details.advice.tone)}"><strong>${escapeHtml(details.advice.title)}</strong><span>${escapeHtml(details.advice.detail)}</span><small>${escapeHtml(details.advice.meta)}</small></div>` : ''}
                 ${details.kind === 'ride' ? `<label class="get-off-setting"><span>Get-off alert</span><select onchange="setGetOffAlertPreference(this.value)" aria-label="Get-off alert timing"><option value="stops-1"${alertValue === 'stops-1' ? ' selected' : ''}>1 stop before</option><option value="stops-2"${alertValue === 'stops-2' ? ' selected' : ''}>2 stops before</option><option value="minutes-5"${alertValue === 'minutes-5' ? ' selected' : ''}>5 minutes before</option></select></label>` : ''}
                 ${needsStageAction ? `<button class="guided-nav-stage-action" type="button" onclick="advanceGuidedJourney()">${escapeHtml(details.action)}</button>` : ''}
                 <div class="guided-nav-footer">
-                    <button class="guided-nav-end" type="button" onclick="endGuidedJourney()">End</button>
-                    <button class="guided-nav-save" type="button" onclick="saveCurrentJourneyFromMap(this)">${iconSvg('bookmark')}<span>Save</span></button>
+                    <button class="guided-nav-end" type="button" onclick="confirmEndGuidedJourney()">End</button>
+                    <span></span>
                     <div class="guided-nav-time"><strong>${escapeHtml(remainingText)}</strong><small>${escapeHtml(arrivalTime)}</small></div>
                 </div>
             </div>`;
@@ -5039,6 +5076,10 @@
                 map.native.setHeading(0);
                 map.native.setTilt(0);
             }
+        }
+
+        function confirmEndGuidedJourney() {
+            if (window.confirm('End this journey?')) endGuidedJourney();
         }
 
         function endGuidedJourney() {
