@@ -3393,9 +3393,6 @@
                 searchFocusTimer = setTimeout(() => {
                     if (!headerSearch.contains(document.activeElement)) {
                         topBar.classList.remove('search-focused');
-                        if (window.matchMedia('(max-width: 767px)').matches && !journeySelection.from) {
-                            headerSearch.classList.remove('expanded');
-                        }
                     }
                 }, 180);
             });
