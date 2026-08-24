@@ -1556,7 +1556,7 @@
     </div>
 
     <nav id="mobile-map-dock" aria-label="Map shortcuts">
-        <button class="map-dock-action primary" type="button" onclick="openMobileJourneyPlanner()">
+        <button class="map-dock-action primary" type="button" onclick="openMobileJourneyPlanner(event)">
             <span class="map-dock-icon"><svg class="ui-icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>
             <span>Destination</span>
         </button>
@@ -2001,11 +2001,12 @@
             toggleLiveVehicles();
         }
 
-        function openMobileJourneyPlanner() {
+        function openMobileJourneyPlanner(event) {
+            event?.preventDefault();
             const search = document.getElementById('header-journey-search');
             const input = document.getElementById('journey-to');
             search.classList.add('expanded');
-            input.focus({ preventScroll:true });
+            requestAnimationFrame(() => input.focus({ preventScroll:true }));
         }
 
         map.native?.addListener?.('idle', () => {
