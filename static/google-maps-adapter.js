@@ -151,7 +151,7 @@
         getLatLng() { return new LatLngWrapper(this.native ? this.native.getPosition() : this.point); }
         setLatLng(point, options = {}) {
             const target={lat:Number(point[0] ?? point.lat),lng:Number(point[1] ?? point.lng)};
-            const shouldAnimate=Boolean(options.animate ?? this.options.smoothMove);
+            const shouldAnimate=Boolean(options.animate ?? this.options.smoothMove) && !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
             const start=this.native?.getPosition?.();
             if (!this.native || !shouldAnimate || !start || !Number.isFinite(target.lat) || !Number.isFinite(target.lng)) {
                 this.point=target; this.native?.setPosition(target); return this;

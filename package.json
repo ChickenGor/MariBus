@@ -5,7 +5,8 @@
   "description": "MariBus Capacitor Android wrapper",
   "scripts": {
     "android:sync": "cap sync android",
-    "android:open": "cap open android"
+    "android:open": "cap open android",
+    "test:transit": "node tests/transit-services.test.js"
   },
   "dependencies": {
     "@capacitor-firebase/authentication": "^7.5.0",

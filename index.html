@@ -46,6 +46,15 @@
             color: var(--text-main);
             transition: background-color 0.3s;
         }
+        :focus-visible { outline:3px solid #2563eb; outline-offset:3px; }
+        .journey-card[role="button"]:focus-visible,.route-live-bus:focus-visible,.nearby-stop-card:focus-visible { border-color:#2563eb; box-shadow:0 0 0 3px rgba(37,99,235,.18); }
+        @media (pointer:coarse) {
+            button,.button,[role="button"],select { min-height:44px; }
+            .sidebar-theme-switch { min-width:44px; }
+        }
+        @media (prefers-reduced-motion:reduce) {
+            *,*::before,*::after { scroll-behavior:auto !important; animation-duration:.01ms !important; animation-iteration-count:1 !important; transition-duration:.01ms !important; }
+        }
 
         #map {
             height: 100vh;
@@ -1532,6 +1541,7 @@
     <script type="module" src="/static/sidebar-auth.js"></script>
     <script type="module" src="/static/route-saver.js"></script>
     <script type="module" src="/static/public-config.js"></script>
+    <script src="/static/transit-services.js"></script>
     <script src="/static/google-maps-adapter.js"></script>
 
     <script>
@@ -1746,12 +1756,7 @@
             }
         })());
         let guidedJourney = null;
-        const GUIDED_JOURNEY_STATE = Object.freeze({
-            WALKING_TO_STOP:'WALKING_TO_STOP', WAITING_FOR_BUS:'WAITING_FOR_BUS',
-            BUS_APPROACHING:'BUS_APPROACHING', BOARDING:'BOARDING', ON_BUS:'ON_BUS',
-            APPROACHING_DESTINATION:'APPROACHING_DESTINATION', GET_OFF_NOW:'GET_OFF_NOW',
-            WALKING_TO_DESTINATION:'WALKING_TO_DESTINATION', ARRIVED:'ARRIVED',
-        });
+        const GUIDED_JOURNEY_STATE = window.MariBusTransitServices.JourneyState;
         const journeyAlertManager = {
             notify(key, title, body) {
                 if (!guidedJourney || guidedJourney.alerted.has(key)) return false;
@@ -2260,26 +2265,8 @@
             return `<div class="panel-state" role="status"><strong>${escapeHtml(title)}</strong><span>${escapeHtml(detail)}</span>${actionLabel && action ? `<button type="button" onclick="${action}">${escapeHtml(actionLabel)}</button>` : ''}</div>`;
         }
 
-        const STATIC_API_CACHE_PREFIX = 'maribus-static-api:';
-        async function cachedApiJson(url, { ttlMs = 24 * 60 * 60 * 1000 } = {}) {
-            try {
-                const response = await fetch(url);
-                const result = await response.json();
-                if (!response.ok || !result.success) throw new Error(result.error || 'Request unavailable');
-                try {
-                    localStorage.setItem(`${STATIC_API_CACHE_PREFIX}${url}`, JSON.stringify({ savedAt:Date.now(), result }));
-                    const keys = Object.keys(localStorage).filter(key => key.startsWith(STATIC_API_CACHE_PREFIX));
-                    if (keys.length > 30) keys.map(key => ({ key, savedAt:JSON.parse(localStorage.getItem(key) || '{}').savedAt || 0 })).sort((a,b) => a.savedAt - b.savedAt).slice(0, keys.length - 30).forEach(item => localStorage.removeItem(item.key));
-                } catch (_) {}
-                return result;
-            } catch (networkError) {
-                try {
-                    const cached = JSON.parse(localStorage.getItem(`${STATIC_API_CACHE_PREFIX}${url}`) || 'null');
-                    if (!cached?.result || Date.now() - Number(cached.savedAt) > ttlMs) throw networkError;
-                    return { ...cached.result, cache_info:{ savedAt:Number(cached.savedAt), ageMs:Date.now() - Number(cached.savedAt) } };
-                } catch (_) { throw networkError; }
-            }
-        }
+        const staticApiCache = new window.MariBusTransitServices.StaticApiCache();
+        const cachedApiJson = (url, options) => staticApiCache.get(url, options);
 
         function cachedDataNotice(cacheInfo) {
             if (!cacheInfo?.ageMs) return '';
@@ -2288,17 +2275,7 @@
             return `<p class="smart-stop-note">Showing cached timetable information from ${age} ago. Live vehicle locations are not cached.</p>`;
         }
 
-        function rebaseCachedArrivals(result) {
-            if (!result?.cache_info || !Array.isArray(result.data)) return result;
-            const now = new Date(), currentSeconds = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
-            result.data = result.data.map(item => {
-                const parts = String(item.arrival_time || item.departure_time || '').split(':').map(Number);
-                if (parts.length !== 3 || parts.some(value => !Number.isFinite(value))) return item;
-                const waitSeconds = parts[0] * 3600 + parts[1] * 60 + parts[2] - currentSeconds;
-                return waitSeconds < -60 ? null : { ...item, minutes:Math.max(0, Math.ceil(waitSeconds / 60)) };
-            }).filter(Boolean);
-            return result;
-        }
+        const rebaseCachedArrivals = result => staticApiCache.rebaseArrivals(result);
 
         function retrySmartStop() {
             if (window.__mariBusSmartStop?.stop) showStopArrivals({ ...window.__mariBusSmartStop.stop, source_agency:window.__mariBusSmartStop.agency });
@@ -2815,16 +2792,7 @@
             return String(vehicle?.vehicle?.id || vehicle?.vehicle?.label || vehicle?.trip?.tripId || fallback);
         }
 
-        function occupancyPresentation(status) {
-            const value = String(status || '').toUpperCase();
-            const presentations = {
-                EMPTY:{ label:'Seats available', tone:'available' }, MANY_SEATS_AVAILABLE:{ label:'Seats available', tone:'available' },
-                FEW_SEATS_AVAILABLE:{ label:'Moderate occupancy', tone:'moderate' }, STANDING_ROOM_ONLY:{ label:'Standing room only', tone:'crowded' },
-                CRUSHED_STANDING_ROOM_ONLY:{ label:'Crowded', tone:'crowded' }, FULL:{ label:'Full', tone:'full' },
-                NOT_ACCEPTING_PASSENGERS:{ label:'Not accepting passengers', tone:'full' },
-            };
-            return presentations[value] || null;
-        }
+        const occupancyPresentation = status => window.MariBusTransitServices.occupancy(status);
 
         function occupancyBadgeHtml(status) {
             const occupancy = occupancyPresentation(status);
@@ -3938,7 +3906,7 @@
                             && (other.legs ? other.legs.map(leg => leg.route_id).join('|') : other.route_id) === signature
                             && other.departure_time !== journey.departure_time)
                         .map(other => other.departure_time))].slice(0, 2);
-                    return `<article class="journey-card modern ${index === 0 ? 'selected' : ''}" data-nearby-index="${index}">
+                    return `<article class="journey-card modern ${index === 0 ? 'selected' : ''}" data-nearby-index="${index}" role="button" tabindex="0" aria-pressed="${index === 0 ? 'true' : 'false'}" aria-label="Journey option ${index + 1}, ${escapeHtml(formatJourneyDuration(journey.total_minutes))}">
                         <div class="journey-option-top">
                             <div class="journey-option-head"><div class="journey-total">${escapeHtml(formatJourneyDuration(journey.total_minutes))}</div><div class="journey-main-time">${escapeHtml(journey.departure_time)} &ndash; ${escapeHtml(journey.arrival_time)}</div></div>
                             <div class="journey-steps"><span>${iconSvg('walk', 'inline-icon')} ${journey.walk_minutes} min</span><span>&rsaquo;</span>${routeBadges(journey)}<span>&rsaquo;</span><span>${journey.transfers ? `${journey.transfers} change` : 'Direct'}</span></div>
@@ -3965,16 +3933,20 @@
                     agency,
                 };
                 openTransitPanel('', '', html);
-                document.querySelectorAll('[data-nearby-index]').forEach(card => card.addEventListener('click', () => {
-                    document.querySelectorAll('.journey-card.modern').forEach(item => item.classList.remove('selected'));
-                    card.classList.add('selected');
+                document.querySelectorAll('[data-nearby-index]').forEach(card => {
+                    const select = () => {
+                    document.querySelectorAll('.journey-card.modern').forEach(item => { item.classList.remove('selected'); item.setAttribute('aria-pressed','false'); });
+                    card.classList.add('selected'); card.setAttribute('aria-pressed','true');
                     activeTrackedJourneyIndex = Number(card.dataset.nearbyIndex);
                     const journey = result.data[Number(card.dataset.nearbyIndex)];
                     setActiveJourneyRoutes(journeyRouteNames(journey));
                     if (journey.legs) showJourneyRoutes(journey);
                     else showJourneySegment(journey, true);
                     updateLiveJourneyTracking(result.data);
-                }));
+                    };
+                    card.addEventListener('click', select);
+                    card.addEventListener('keydown', event => { if (event.target === card && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); select(); } });
+                });
                 document.querySelectorAll('[data-show-route]').forEach(button => button.addEventListener('click', event => {
                     event.stopPropagation();
                     const journey = result.data[Number(button.dataset.showRoute)];
@@ -4341,21 +4313,7 @@
             return (degrees(Math.atan2(y, x)) + 360) % 360;
         }
 
-        function leaveNowAdvice({ walkingSeconds, busMinutes, nextBusMinutes, source = 'scheduled', isStale = false, safetyBufferSeconds = 120 }) {
-            const walkMinutes = Math.max(1, Math.ceil(Number(walkingSeconds || 0) / 60));
-            if (!Number.isFinite(Number(busMinutes)) || isStale) {
-                return { tone:'unknown', title:'Check before leaving', detail:`Walking takes approximately ${walkMinutes} min. Reliable live arrival information is not currently available.`, meta:'Use the published departure time as a guide.' };
-            }
-            const arrivalMinutes = Math.max(0, Math.ceil(Number(busMinutes)));
-            const marginSeconds = arrivalMinutes * 60 - Number(walkingSeconds || 0) - safetyBufferSeconds;
-            const sourceText = source === 'live' ? 'Live vehicle estimate' : 'Scheduled departure';
-            if (marginSeconds >= 5 * 60) return { tone:'plenty', title:'Plenty of time', detail:`The bus is expected in ~${arrivalMinutes} min and the walk takes about ${walkMinutes} min.`, meta:`${sourceText} · includes a ${Math.ceil(safetyBufferSeconds / 60)} min safety buffer` };
-            if (marginSeconds >= 0) return { tone:'likely', title:'Leave now · likely to catch', detail:`The bus is expected in ~${arrivalMinutes} min. Walking takes approximately ${walkMinutes} min.`, meta:`${sourceText} · this is an estimate, not a guarantee` };
-            if (Number.isFinite(Number(nextBusMinutes)) && Number(nextBusMinutes) * 60 - Number(walkingSeconds || 0) >= safetyBufferSeconds) {
-                return { tone:'miss', title:'You may miss this bus', detail:`The nearest bus is expected in ~${arrivalMinutes} min. The next is estimated in ~${Math.ceil(nextBusMinutes)} min.`, meta:`Walk: ${walkMinutes} min · no need to rush unsafely` };
-            }
-            return { tone:'miss', title:'You may miss this bus', detail:`The bus is expected in ~${arrivalMinutes} min while the walk takes about ${walkMinutes} min.`, meta:`${sourceText} · allow time to reach the correct boarding point` };
-        }
+        const leaveNowAdvice = options => window.MariBusTransitServices.adviseLeaveNow(options);
 
         function guidedLeaveNowAdvice(step, nextTransit) {
             if (!step || !nextTransit) return null;
@@ -4908,7 +4866,7 @@
                         if (walkingDifference <= -2) comparisons.push(`${Math.abs(walkingDifference)} min less walking`);
                         if (transferCount < recommended.transferCount) comparisons.push(`${recommended.transferCount - transferCount} fewer transfer${recommended.transferCount - transferCount === 1 ? '' : 's'}`);
                     }
-                    return `<article class="journey-card modern ${displayIndex === 0 ? 'selected' : ''}" data-google-transit-index="${routeIndex}">
+                    return `<article class="journey-card modern ${displayIndex === 0 ? 'selected' : ''}" data-google-transit-index="${routeIndex}" role="button" tabindex="0" aria-pressed="${displayIndex === 0 ? 'true' : 'false'}" aria-label="${displayIndex === 0 ? 'Recommended journey' : `Alternative journey ${displayIndex}`}, ${escapeHtml(leg.duration?.text || '')}">
                         <div class="journey-option-top">
                             <span class="journey-rank-label">${displayIndex === 0 ? 'Recommended' : `Alternative ${displayIndex}`}</span>
                             <div class="journey-option-head"><div class="journey-total">${escapeHtml(leg.duration?.text || '')}</div><div class="journey-main-time">${escapeHtml(leg.departure_time?.text || '')} &ndash; ${escapeHtml(leg.arrival_time?.text || '')}</div></div>
@@ -4969,13 +4927,17 @@
                     localStorage.setItem('maribus-transit-priority', priority);
                     tryGoogleTransitJourney(true);
                 }));
-                document.querySelectorAll('[data-google-transit-index]').forEach(card => card.addEventListener('click', () => {
-                    document.querySelectorAll('.journey-card.modern').forEach(item => item.classList.remove('selected'));
-                    card.classList.add('selected');
+                document.querySelectorAll('[data-google-transit-index]').forEach(card => {
+                    const select = () => {
+                    document.querySelectorAll('.journey-card.modern').forEach(item => { item.classList.remove('selected'); item.setAttribute('aria-pressed','false'); });
+                    card.classList.add('selected'); card.setAttribute('aria-pressed','true');
                     activeTrackedJourneyIndex = Number(card.dataset.googleTransitIndex);
                     setActiveJourneyRoutes(googleTransitRouteNames(response.routes[activeTrackedJourneyIndex]));
                     renderGoogleTransitRoute(response, activeTrackedJourneyIndex);
-                }));
+                    };
+                    card.addEventListener('click', select);
+                    card.addEventListener('keydown', event => { if (event.target === card && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); select(); } });
+                });
                 document.querySelectorAll('[data-google-transit-show]').forEach(button => button.addEventListener('click', event => {
                     event.stopPropagation();
                     showGoogleTransitJourneyDetails(response, Number(button.dataset.googleTransitShow));
