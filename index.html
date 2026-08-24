@@ -1445,6 +1445,8 @@
             body:not(:has(#bottom-sheet.detail-mode)) #map-view-toggle { bottom:164px; }
             body:not(:has(#bottom-sheet.detail-mode)):has(#header-journey-search.expanded) #map-view-toggle { bottom:18px; }
             body:has(#bottom-sheet.detail-mode) #mobile-map-dock { display:none; }
+            /* Saved routes and live buses already have dedicated home-dock shortcuts. */
+            #map-live-vehicles,#map-save-route,#map-view-toggle .map-tool-divider { display:none; }
         }
 
         #mobile-map-dock { display:none; }
