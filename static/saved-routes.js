@@ -4,6 +4,7 @@ import { getFirestore, collection, query, orderBy, onSnapshot, doc, deleteDoc } 
 
 const status=document.querySelector('#saved-status'),list=document.querySelector('#saved-route-list');
 const stopStatus=document.querySelector('#saved-stop-status'),stopList=document.querySelector('#saved-stop-list');
+const stopHeading=document.querySelector('#saved-stops-heading');
 const escape=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const reopenUrl=route=>{const params=new URLSearchParams({saved:'1',fromName:route.origin.name,fromLat:route.origin.lat,fromLng:route.origin.lng,toName:route.destination.name,toLat:route.destination.lat,toLng:route.destination.lng,agency:route.agency||''});return `/?${params}`;};
 const stopUrl=stop=>{const params=new URLSearchParams({stop:stop.stopId,agency:stop.agency,lat:stop.latitude,lng:stop.longitude,name:stop.stopName});return `/?${params}`;};
@@ -22,11 +23,11 @@ try{
     status.innerHTML='<p>Loading saved routes…</p>';
     stopStatus.innerHTML='<p>Loading favourite stops…</p>';
     onSnapshot(query(collection(db,'users',user.uid,'savedStops'),orderBy('createdAt','desc')),snapshot=>{
-      stopStatus.hidden=snapshot.size>0;stopStatus.innerHTML=snapshot.empty?'<div class="icon" style="margin-inline:auto">☆</div><h2>No favourite stops yet</h2><p>Open a stop on the map and tap Favourite.</p><a class="button" href="/">Find nearby stops</a>':'';
+      stopHeading.hidden=false;stopStatus.hidden=snapshot.size>0;stopStatus.innerHTML=snapshot.empty?'<div class="icon" style="margin-inline:auto">☆</div><h2>No favourite stops yet</h2><p>Open a stop on the map and tap Favourite.</p><a class="button" href="/">Find nearby stops</a>':'';
       stopList.innerHTML=snapshot.docs.map(item=>{const stop=item.data();return `<article class="saved-route-card"><div class="saved-route-top"><span class="pill">Bus stop</span><button data-delete-stop="${item.id}" aria-label="Remove favourite stop">×</button></div><h2>${escape(stop.stopName)}</h2><p>${escape(stop.stopCode?`Stop ${stop.stopCode}`:'Favourite stop')}</p><div class="saved-stop-departures" data-stop-departures="${item.id}"><p>Loading departures…</p></div><a class="button" href="${escape(stopUrl(stop))}">View on map</a></article>`;}).join('');
       snapshot.docs.forEach(item=>{const element=stopList.querySelector(`[data-stop-departures="${CSS.escape(item.id)}"]`);if(element)loadStopDepartures(item,element);});
       stopList.querySelectorAll('[data-delete-stop]').forEach(button=>button.addEventListener('click',()=>deleteDoc(doc(db,'users',user.uid,'savedStops',button.dataset.deleteStop))));
-    },()=>{stopStatus.hidden=false;stopStatus.innerHTML='<h2>Favourite stops unavailable</h2><p>Publish the updated Firestore rules and try again.</p>';});
+    },()=>{stopStatus.hidden=true;stopList.innerHTML='';stopHeading.hidden=true;});
     onSnapshot(query(collection(db,'users',user.uid,'savedRoutes'),orderBy('createdAt','desc')),snapshot=>{
       status.hidden=snapshot.size>0;status.innerHTML=snapshot.empty?'<div class="icon" style="margin-inline:auto">☆</div><h2>No saved routes yet</h2><p>Basic accounts can save up to 3 routes.</p><a class="button" href="/">Find a route</a>':'';
       list.innerHTML=snapshot.docs.map(item=>{const route=item.data(),names=(route.routes||[]).map(value=>value.routeName).filter(Boolean).join(' › ');return `<article class="saved-route-card"><div class="saved-route-top"><span class="pill">${escape(names||'Bus')}</span><button data-delete-route="${item.id}" aria-label="Delete saved route">×</button></div><h2>${escape(route.origin?.name)} → ${escape(route.destination?.name)}</h2><p>${route.totalMinutes?`${route.totalMinutes} min · `:''}${route.transfers?`${route.transfers} change`:'Direct'}</p><a class="button" href="${escape(reopenUrl(route))}">Plan this journey</a></article>`;}).join('');
