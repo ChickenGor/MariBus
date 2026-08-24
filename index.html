@@ -1294,8 +1294,89 @@
             }
         }
 
-       
+        /* MariBus visual refresh: calm navigation surfaces with vivid live-transit accents. */
+        :root {
+            --bg-color:#eef3f2;
+            --sheet-bg:#fbfdfc;
+            --text-main:#17272b;
+            --text-muted:#66787b;
+            --border-color:#dbe5e3;
+            --input-bg:#f0f5f4;
+            --shadow-color:rgba(19,52,58,.14);
+            --maribus-teal:#285d66;
+            --maribus-teal-deep:#18444d;
+            --maribus-teal-soft:#dcebec;
+            --maribus-live:#d81b76;
+        }
+        body.dark-mode {
+            --bg-color:#0d1b1e;
+            --sheet-bg:#15282c;
+            --text-main:#f2f8f7;
+            --text-muted:#a9bcbd;
+            --border-color:#2d4549;
+            --input-bg:#20373b;
+            --shadow-color:rgba(0,0,0,.48);
+            --maribus-teal:#67aeb5;
+            --maribus-teal-deep:#c2e6e8;
+            --maribus-teal-soft:#23464b;
+        }
+        :focus-visible { outline-color:var(--maribus-teal); }
+        .journey-card[role="button"]:focus-visible,.route-live-bus:focus-visible,.nearby-stop-card:focus-visible {
+            border-color:var(--maribus-teal); box-shadow:0 0 0 3px color-mix(in srgb,var(--maribus-teal) 20%,transparent);
+        }
+        #top-bar { border-bottom:1px solid color-mix(in srgb,var(--border-color) 72%,transparent); }
+        #menu-button,#journey-menu-button { color:var(--maribus-teal-deep); }
+        .logo-text,.desktop-brand { color:var(--maribus-teal-deep); }
+        #header-journey-search {
+            border-color:color-mix(in srgb,var(--maribus-teal) 18%,var(--border-color));
+            background:color-mix(in srgb,var(--sheet-bg) 96%,var(--maribus-teal-soft));
+            box-shadow:0 8px 26px rgba(19,52,58,.13);
+        }
+        #header-journey-search.expanded { box-shadow:0 16px 42px rgba(19,52,58,.2); }
+        .point-label { color:var(--maribus-teal); }
+        #journey-location-button { background:var(--maribus-teal); }
+        #map-view-toggle {
+            padding:5px; border-color:color-mix(in srgb,var(--maribus-teal) 16%,var(--border-color));
+            border-radius:18px; box-shadow:0 10px 28px rgba(19,52,58,.18);
+        }
+        .map-view-button,.map-tool-button { color:var(--text-muted); }
+        .map-tool-button:hover { color:var(--maribus-teal); background:var(--maribus-teal-soft); }
+        .map-view-button.active { color:var(--maribus-teal-deep); background:var(--maribus-teal-soft); }
+        body.dark-mode .map-view-button.active { color:#fff; background:var(--maribus-teal); }
+        #bottom-sheet {
+            border:1px solid color-mix(in srgb,var(--maribus-teal) 11%,var(--border-color));
+            border-bottom:0; border-radius:30px 30px 0 0;
+            box-shadow:0 -12px 38px rgba(19,52,58,.16);
+        }
+        .drag-handle { width:36px; height:4px; background:color-mix(in srgb,var(--maribus-teal) 48%,var(--border-color)); }
+        .sheet-header h2,.panel-heading h2 { color:var(--maribus-teal-deep); letter-spacing:-.025em; }
+        .sidebar-signin .sidebar-item { background:var(--maribus-teal); }
+        .sidebar-profile-avatar { background:linear-gradient(145deg,var(--maribus-teal),var(--maribus-live)); }
+        .subscription-plan-badge { color:var(--maribus-teal-deep); background:var(--maribus-teal-soft); }
 
+        @media (max-width:767px) {
+            #top-bar #menu-button {
+                width:44px; height:44px; flex-basis:44px; border:1px solid rgba(40,93,102,.1);
+                background:color-mix(in srgb,var(--sheet-bg) 94%,transparent);
+                box-shadow:0 8px 24px rgba(19,52,58,.18);
+                backdrop-filter:blur(16px);
+            }
+            #header-journey-search,#header-journey-search.expanded {
+                border:1px solid rgba(40,93,102,.12); border-radius:18px;
+                box-shadow:0 10px 30px rgba(19,52,58,.2);
+                backdrop-filter:blur(18px);
+            }
+            #header-journey-search { right:14px; bottom:max(14px,env(safe-area-inset-bottom)); left:14px; }
+            body:has(#bottom-sheet.detail-mode) #header-journey-search { right:14px; left:14px; }
+            #map-view-toggle { right:12px; border-radius:20px; }
+            #bottom-sheet { padding-left:18px; padding-right:18px; border-radius:28px 28px 0 0; }
+        }
+
+        @media (min-width:900px) and (orientation:landscape) {
+            #bottom-sheet,#bottom-sheet.detail-mode,#bottom-sheet.detail-mode.sheet-half,#bottom-sheet.detail-mode.sheet-expanded {
+                border-radius:26px 0 0 0; border-left:1px solid var(--border-color);
+            }
+        }
     </style>
 </head>
 
