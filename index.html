@@ -559,7 +559,7 @@
             #header-journey-search { max-width:560px; }
         }
 
-        @media (min-width:900px) and (orientation:landscape) {
+        @media (min-width:1100px) and (orientation:landscape) {
             :root { --desktop-side-column:clamp(360px,32vw,440px); }
             #map { position:absolute; top:72px; left:0; width:calc(100vw - var(--desktop-side-column)); height:calc(100dvh - 72px); }
             #bottom-sheet,#bottom-sheet.detail-mode,#bottom-sheet.detail-mode.sheet-half,#bottom-sheet.detail-mode.sheet-expanded {
@@ -1278,7 +1278,7 @@
 
         /* Keep the desktop/tablet results pane as a true full-height column.
            This must follow the mobile/detail rules above so they cannot shrink it. */
-        @media (min-width:900px) and (orientation:landscape) {
+        @media (min-width:1100px) and (orientation:landscape) {
             #bottom-sheet,
             #bottom-sheet.detail-mode,
             #bottom-sheet.detail-mode.sheet-half,
@@ -1452,10 +1452,36 @@
         #mobile-map-dock { display:none; }
         @media (max-width:767px) { #mobile-map-dock { display:grid; } }
 
-        @media (min-width:900px) and (orientation:landscape) {
+        @media (min-width:1100px) and (orientation:landscape) {
             #bottom-sheet,#bottom-sheet.detail-mode,#bottom-sheet.detail-mode.sheet-half,#bottom-sheet.detail-mode.sheet-expanded {
                 border-radius:26px 0 0 0; border-left:1px solid var(--border-color);
             }
+        }
+
+        /* Use the new map-first home experience on tablets and desktops too.
+           The existing results panel returns only once a journey is being viewed. */
+        @media (min-width:768px) {
+            body:not(:has(#bottom-sheet.detail-mode)) #map {
+                position:absolute; top:72px; left:0; width:100vw; height:calc(100dvh - 72px);
+            }
+            body:not(:has(#bottom-sheet.detail-mode)) #bottom-sheet { display:none; }
+            body:not(:has(#bottom-sheet.detail-mode)) #mobile-map-dock {
+                position:fixed; left:24px; bottom:24px; z-index:1950; width:360px; min-height:112px;
+                display:grid; grid-template-columns:minmax(0,1.15fr) minmax(0,.9fr) 48px; gap:9px; padding:9px;
+                border:1px solid rgba(40,93,102,.11); border-radius:22px;
+                background:color-mix(in srgb,var(--sheet-bg) 94%,transparent); box-shadow:0 14px 34px rgba(19,52,58,.2); backdrop-filter:blur(18px);
+            }
+            body:not(:has(#bottom-sheet.detail-mode)) .map-dock-action {
+                min-width:0; min-height:92px; display:flex; flex-direction:column; align-items:flex-start; justify-content:flex-end; gap:7px;
+                padding:13px; border:1px solid rgba(40,93,102,.08); border-radius:16px; background:var(--sheet-bg); color:var(--text-main); font:inherit; font-size:11px; font-weight:850; text-decoration:none; cursor:pointer;
+            }
+            body:not(:has(#bottom-sheet.detail-mode)) .map-dock-action.primary { color:#fff; background:var(--maribus-teal); }
+            body:not(:has(#bottom-sheet.detail-mode)) .map-dock-icon { width:23px; height:23px; display:grid; place-items:center; }
+            body:not(:has(#bottom-sheet.detail-mode)) .map-dock-icon .ui-icon { width:21px; height:21px; }
+            body:not(:has(#bottom-sheet.detail-mode)) .map-dock-rail { display:grid; grid-template-rows:1fr 1fr; gap:7px; }
+            body:not(:has(#bottom-sheet.detail-mode)) .map-dock-rail .map-dock-action { min-height:0; align-items:center; justify-content:center; padding:0; border-radius:13px; }
+            body:not(:has(#bottom-sheet.detail-mode)) .map-dock-rail .map-dock-action .ui-icon { width:18px; height:18px; }
+            body:not(:has(#bottom-sheet.detail-mode)) #map-view-toggle { right:22px; bottom:22px; }
         }
     </style>
 </head>
