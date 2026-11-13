@@ -64,8 +64,14 @@ function drawNetworkPath(data) {
     networkLayers.push(L.circleMarker(point, { radius:6, color:'#fff', weight:2, fillColor:'#7c3aed', fillOpacity:1 }).addTo(map));
   });
 }
-async function loadWalkingPathNetwork() {
+function clearWalkingPathNetwork() {
+  networkLayers.forEach(layer => layer.remove?.());
+  networkLayers.length = 0;
+  networkEndpoints.length = 0;
+}
+async function loadWalkingPathNetwork(refresh = false) {
   try {
+    if (refresh) clearWalkingPathNetwork();
     const snapshot = await getDocs(collection(db, 'walkingPaths'));
     snapshot.forEach(item => drawNetworkPath(item.data()));
   } catch (error) {
@@ -104,6 +110,7 @@ function setOpen(open) {
   document.body.classList.toggle('walking-path-editing', open);
   $('#curate-route-main').setAttribute('aria-expanded', String(open));
   $('#curate-route-main').classList.toggle('active', open);
+  if (open && db) void loadWalkingPathNetwork(true);
   if (!open) { clearDrawing(); pathId = undefined; }
 }
 function startDrawing() {
