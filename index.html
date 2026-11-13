@@ -122,8 +122,6 @@
             background: none; border: none; font-size: 20px; cursor: pointer; padding: 5px;
             margin-left: auto; 
         }
-        #curate-route-main { display:inline-flex; align-items:center; gap:7px; flex:0 0 auto; min-height:36px; padding:0 12px; border:0; border-radius:999px; background:var(--maribus-teal, #164e63); color:#fff; font:inherit; font-size:12px; font-weight:800; text-decoration:none; white-space:nowrap; }
-        #curate-route-main:hover { filter:brightness(1.08); }
         body.dark-mode #theme-toggle-header { color:#ffffff; }
         .ui-icon { width:20px; height:20px; display:block; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
         .inline-icon { width:15px; height:15px; display:inline-block; vertical-align:-2px; margin-right:3px; }
@@ -328,6 +326,8 @@
         .map-tool-button.saved { color:#16a34a; background:rgba(22,163,74,.1); }
         .map-tool-button.active { color:#059669; background:rgba(16,185,129,.13); }
         .map-tool-button .ui-icon { width:19px; height:19px; }
+        #curate-route-main { color:var(--maribus-teal-deep, #164e63); background:var(--maribus-teal-soft, #e0f2f1); }
+        #curate-route-main:hover { color:#fff; background:var(--maribus-teal, #0f766e); }
         .map-tool-divider { width:28px; height:1px; margin:3px auto; background:var(--border-color); }
         .map-view-button.active { color:#2563eb; background:#dbeafe; }
         body.dark-mode .map-view-button.active { color:#fff; background:#2563eb; }
@@ -1134,8 +1134,7 @@
             #bottom-sheet:not(.detail-mode) .select-value { gap:9px; font-size:14px; }
             #bottom-sheet:not(.detail-mode) #app-footer { display:none; }
             #top-bar.search-focused #menu-button,
-            #top-bar.search-focused #theme-toggle-header,
-            #top-bar.search-focused #curate-route-main { display:none; }
+            #top-bar.search-focused #theme-toggle-header { display:none; }
             #top-bar.search-focused #header-journey-search {
                 width:100%;
                 max-width:none;
@@ -1148,8 +1147,7 @@
             }
             #top-bar:has(#header-journey-search.expanded) #menu-button,
             #top-bar:has(#header-journey-search.expanded) .desktop-brand,
-            #top-bar:has(#header-journey-search.expanded) #theme-toggle-header,
-            #top-bar:has(#header-journey-search.expanded) #curate-route-main { display:none; }
+            #top-bar:has(#header-journey-search.expanded) #theme-toggle-header { display:none; }
             #top-bar:has(#header-journey-search.expanded) #journey-menu-button { display:grid; }
             #header-journey-search.expanded {
                 position:relative;
@@ -1524,7 +1522,6 @@
                 <button id="journey-swap-button" type="button" onclick="swapJourneyPoints()" title="Swap locations" aria-label="Swap locations">&#8645;</button>
             </div>
         </div>
-        <a id="curate-route-main" href="/curate-route" hidden><svg class="ui-icon" viewBox="0 0 24 24"><path d="M4 19 9 5l4 10 7-6"></path><circle cx="4" cy="19" r="1.5"></circle><circle cx="9" cy="5" r="1.5"></circle><circle cx="13" cy="15" r="1.5"></circle><circle cx="20" cy="9" r="1.5"></circle></svg>Curate route</a>
     </header>
 
     <button id="sidebar-backdrop" type="button" onclick="toggleSidebar(false)" aria-label="Close menu"></button>
@@ -1593,6 +1590,9 @@
     </div>
 
     <div id="map-view-toggle" role="group" aria-label="Map view">
+        <button id="curate-route-main" class="map-tool-button" type="button" hidden onclick="location.href='/curate-route'" title="Curate routes" aria-label="Curate routes">
+            <svg class="ui-icon" viewBox="0 0 24 24"><path d="M4 19 9 5l4 10 7-6"></path><circle cx="4" cy="19" r="1.5"></circle><circle cx="9" cy="5" r="1.5"></circle><circle cx="13" cy="15" r="1.5"></circle><circle cx="20" cy="9" r="1.5"></circle></svg>
+        </button>
         <button class="map-view-button active" type="button" data-map-view="2d" aria-pressed="true">2D</button>
         <button class="map-view-button" type="button" data-map-view="3d" aria-pressed="false">3D</button>
         <button id="map-live-vehicles" class="map-tool-button" type="button" onclick="toggleLiveVehicles()" title="Show live vehicles" aria-label="Show live vehicles" aria-pressed="false">
