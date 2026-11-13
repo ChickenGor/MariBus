@@ -4058,20 +4058,35 @@
                 const point = value => ({ lat:Number(value?.lat ?? value?.location?.lat), lng:Number(value?.lng ?? value?.location?.lng) });
                 const mode = request.travelMode === google.maps.TravelMode.WALKING ? 'WALK'
                     : request.travelMode === google.maps.TravelMode.TRANSIT ? 'TRANSIT' : 'DRIVE';
+                const durationSeconds = value => Number(String(value || '0s').replace('s', '')) || 0;
+                const mapsLocation = value => {
+                    const lat = Number(value?.latitude ?? value?.lat);
+                    const lng = Number(value?.longitude ?? value?.lng);
+                    return Number.isFinite(lat) && Number.isFinite(lng) ? new google.maps.LatLng(lat, lng) : null;
+                };
+                const mapsTime = value => {
+                    const date = value ? new Date(value) : null;
+                    if (!date || Number.isNaN(date.getTime())) return null;
+                    return { value:date, text:new Intl.DateTimeFormat('en-MY', { hour:'numeric', minute:'2-digit' }).format(date) };
+                };
                 try {
                     const response = await fetch(`${API_BASE}/api/directions`, { method:'POST', headers:{'Content-Type':'application/json'},
                         body:JSON.stringify({ origin:point(request.origin), destination:point(request.destination), travel_mode:mode }) });
                     const result = await response.json();
                     const routes = (result.data || []).map(route => {
                         const path = google.maps.geometry.encoding.decodePath(route.polyline?.encodedPolyline || '');
-                        const seconds = Number(String(route.duration || '0s').replace('s', '')) || 0;
+                        const seconds = durationSeconds(route.duration);
+                        const leg = route.legs?.[0] || {};
                         const steps = (route.legs?.[0]?.steps || []).map(step => {
                             const transit = step.transitDetails, stopDetails = transit?.stopDetails || {};
-                            return { travel_mode:step.travelMode, path:google.maps.geometry.encoding.decodePath(step.polyline?.encodedPolyline || ''), duration:{ value:Number(String(step.duration || '0s').replace('s','')) || 0 },
-                                start_location:step.startLocation?.latLng, end_location:step.endLocation?.latLng,
-                                transit: transit ? { line:{ short_name:transit.tripShortText || transit.transitLine?.name || '', name:transit.transitLine?.name || '', vehicle:{ type:transit.transitLine?.vehicle?.type || 'BUS' } }, headsign:transit.headsign || '', departure_stop:{ name:stopDetails.departureStop?.name || '' }, arrival_stop:{ name:stopDetails.arrivalStop?.name || '' } } : null };
+                            return { travel_mode:step.travelMode === 'WALK' ? google.maps.TravelMode.WALKING : step.travelMode,
+                                path:google.maps.geometry.encoding.decodePath(step.polyline?.encodedPolyline || ''), duration:{ value:durationSeconds(step.duration), text:formatJourneyDuration(durationSeconds(step.duration) / 60) },
+                                start_location:mapsLocation(step.startLocation?.latLng), end_location:mapsLocation(step.endLocation?.latLng),
+                                transit: transit ? { line:{ short_name:transit.tripShortText || transit.transitLine?.name || '', name:transit.transitLine?.name || '', color:transit.transitLine?.color || '', vehicle:{ type:transit.transitLine?.vehicle?.type || 'BUS' } }, headsign:transit.headsign || '',
+                                    departure_stop:{ name:stopDetails.departureStop?.name || '', location:mapsLocation(stopDetails.departureStop?.location?.latLng) }, arrival_stop:{ name:stopDetails.arrivalStop?.name || '', location:mapsLocation(stopDetails.arrivalStop?.location?.latLng) },
+                                    departure_time:mapsTime(stopDetails.departureTime), arrival_time:mapsTime(stopDetails.arrivalTime), num_stops:Number(transit.stopCount || 0) } : null };
                         });
-                        return { overview_path:path, legs:[{ distance:{ value:Number(route.distanceMeters || 0), text:`${(Number(route.distanceMeters || 0) / 1000).toFixed(1)} km` }, duration:{ value:seconds, text:formatJourneyDuration(seconds / 60) }, steps }] };
+                        return { overview_path:path, legs:[{ distance:{ value:Number(route.distanceMeters || 0), text:`${(Number(route.distanceMeters || 0) / 1000).toFixed(1)} km` }, duration:{ value:seconds, text:formatJourneyDuration(seconds / 60) }, departure_time:mapsTime(leg.departureTime), arrival_time:mapsTime(leg.arrivalTime), steps }] };
                     });
                     callback({ routes }, routes.length ? google.maps.DirectionsStatus.OK : 'ZERO_RESULTS');
                 } catch (error) { callback(null, 'ERROR'); }
@@ -4121,10 +4136,10 @@
                     const multimodalHandled = await tryMultimodalJourney();
                     if (multimodalHandled) return;
                 }
-                if (agenciesForSelection().length > 1) {
-                    const googleTransitHandled = await tryGoogleTransitJourney();
-                    if (googleTransitHandled) return;
-                }
+                // Google Transit is independent of the selected local operator. Always
+                // try it before falling back to the local GTFS-only planner.
+                const googleTransitHandled = await tryGoogleTransitJourney();
+                if (googleTransitHandled) return;
                 const nearbyHandled = await tryNearbyStopJourneys();
                 if (nearbyHandled) return;
             }
