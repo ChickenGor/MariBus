@@ -4,6 +4,7 @@ import { getFirestore, collection, doc, getDocs, serverTimestamp, setDoc } from 
 const $ = selector => document.querySelector(selector);
 let map, db, drawing = false, points = [], line, referenceLine, markers = [], pathId;
 const networkEndpoints = [];
+const networkSegments = [];
 const networkLayers = [];
 
 function status(message) { $('#inline-curator-status').textContent = message; }
@@ -34,7 +35,6 @@ function clearDrawing() {
   $('#inline-curator-reference').disabled = true;
   $('#inline-curator').classList.remove('drawing');
   document.body.classList.remove('drawing-walking-path');
-  document.getElementById('walking-path-target')?.classList.remove('snapped');
   map?.native?.setOptions?.({ draggable:true });
 }
 function decodePolyline(encoded) {
@@ -87,6 +87,7 @@ function drawNetworkPath(data, id = '') {
     const pathLine = L.polyline(pathPoints, { ...style, opacity:.78 }).addTo(map);
     pathLine.native?.addListener?.('click', () => selectNetworkPath(id, data));
     networkLayers.push(pathLine);
+    for (let index = 1; index < pathPoints.length; index += 1) networkSegments.push([pathPoints[index - 1], pathPoints[index]]);
   }
   const endpoints = pathPoints.length === 1 ? pathPoints : [pathPoints[0], pathPoints.at(-1)];
   endpoints.forEach(point => {
@@ -100,6 +101,7 @@ function clearWalkingPathNetwork() {
   networkLayers.forEach(layer => layer.remove?.());
   networkLayers.length = 0;
   networkEndpoints.length = 0;
+  networkSegments.length = 0;
 }
 async function loadWalkingPathNetwork(refresh = false) {
   try {
@@ -118,14 +120,22 @@ function snapToNetwork(point) {
     const distance = distanceMetres(point, endpoint);
     if (distance < closestDistance) { closest = endpoint; closestDistance = distance; }
   });
+  networkSegments.forEach(([start, end]) => {
+    const latitudeScale = 111320;
+    const longitudeScale = latitudeScale * Math.cos(((start[0] + end[0] + point[0]) / 3) * Math.PI / 180);
+    const ax = start[1] * longitudeScale, ay = start[0] * latitudeScale;
+    const bx = end[1] * longitudeScale, by = end[0] * latitudeScale;
+    const px = point[1] * longitudeScale, py = point[0] * latitudeScale;
+    const lengthSquared = (bx - ax) ** 2 + (by - ay) ** 2;
+    const ratio = lengthSquared ? Math.max(0, Math.min(1, ((px - ax) * (bx - ax) + (py - ay) * (by - ay)) / lengthSquared)) : 0;
+    const candidate = [start[0] + (end[0] - start[0]) * ratio, start[1] + (end[1] - start[1]) * ratio];
+    const distance = distanceMetres(point, candidate);
+    if (distance < closestDistance) { closest = candidate; closestDistance = distance; }
+  });
   return closest ? { point:[...closest], distance:Math.round(closestDistance) } : null;
 }
 function previewConnection() {
-  if (!drawing) return;
-  const centre = map?.native?.getCenter?.();
-  const lat = centre?.lat?.(), lng = centre?.lng?.();
-  const snapped = Number.isFinite(lat) && Number.isFinite(lng) ? snapToNetwork([lat, lng]) : null;
-  document.getElementById('walking-path-target')?.classList.toggle('snapped', Boolean(snapped));
+  // Keep the centre target static. The confirmed point snaps when Add point is pressed.
 }
 async function showGoogleWalkingReference() {
   if (points.length < 2) return status('Add a start and end point first.');
@@ -173,7 +183,6 @@ function startDrawing() {
     $('#inline-curator-draw').textContent = 'Edit path';
     $('#inline-curator-add-point').hidden = true;
   }
-  if (!drawing) document.getElementById('walking-path-target')?.classList.remove('snapped');
 }
 function addPointAtMapCentre() {
   if (!drawing) return;
@@ -183,7 +192,7 @@ function addPointAtMapCentre() {
   const snapped = snapToNetwork([lat, lng]);
   points.push(snapped?.point || [lat, lng]); redraw();
   status(snapped
-    ? `Connected to an existing path endpoint (${snapped.distance} m away).`
+    ? `Connected to the existing path (${snapped.distance} m away).`
     : `${points.length} point${points.length === 1 ? '' : 's'} added. Move the map and add another point, or finish drawing.`);
 }
 async function save() {
