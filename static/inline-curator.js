@@ -5,6 +5,7 @@ import { getFirestore, doc, serverTimestamp, setDoc } from 'https://www.gstatic.
 const OWNER_EMAIL = 'chickendevstu@gmail.com';
 const $ = selector => document.querySelector(selector);
 let map, db, user, drawing = false, points = [], line, referenceLine, markers = [], pathId;
+const isOwner = () => user?.email?.toLowerCase() === OWNER_EMAIL;
 
 function status(message) { $('#inline-curator-status').textContent = message; }
 function clearDrawing() {
@@ -73,10 +74,11 @@ async function save(publish) {
   if (!db || !user) return status('Your curator sign-in is still loading.');
   try {
     const id = pathId || `${name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'walking-path'}-${Date.now().toString(36)}`;
+    const statusValue = isOwner() ? (publish ? 'published' : 'draft') : 'pending';
     await setDoc(doc(db, 'walkingPaths', id), {
       name:name || 'Unnamed walking path',
       pathType:$('#inline-curator-type').value,
-      status:publish ? 'published' : 'draft',
+      status:statusValue,
       ownerUid:user.uid,
       points:points.map(([lat,lng]) => [Number(lat.toFixed(6)), Number(lng.toFixed(6))]),
       start:{ lat:points[0][0], lng:points[0][1] },
@@ -85,8 +87,8 @@ async function save(publish) {
       ...(pathId ? {} : { createdAt:serverTimestamp() }),
     }, { merge:true });
     pathId = id;
-    $('#inline-curator-publish').hidden = false;
-    status(publish ? 'Walking path published.' : 'Draft saved. Review it, then publish when ready.');
+    $('#inline-curator-publish').hidden = !isOwner();
+    status(isOwner() ? (publish ? 'Walking path published.' : 'Draft saved. Review it, then publish when ready.') : 'Thanks — your walking path was submitted for review.');
   } catch (error) {
     console.error('Could not save walking path', error);
     status('Could not save. Check your curator sign-in and try again.');
@@ -104,13 +106,13 @@ async function initialize() {
     const auth = getAuth(firebaseApp); db = getFirestore(firebaseApp);
     onAuthStateChanged(auth, currentUser => {
       user = currentUser;
-      const allowed = currentUser?.email?.toLowerCase() === OWNER_EMAIL;
-      if (!allowed) setOpen(false);
+      if (!currentUser) setOpen(false);
+      $('#inline-curator-publish').hidden = !isOwner();
     });
   } catch (error) { console.warn('Inline curator unavailable', error); }
 
   $('#curate-route-main').addEventListener('click', () => {
-    if (user?.email?.toLowerCase() !== OWNER_EMAIL) return status('Sign in with the owner account to add walking paths.');
+    if (!user) return status('Sign in to contribute a walking path.');
     setOpen($('#inline-curator').hidden);
   });
   $('#inline-curator-draw').addEventListener('click', startDrawing);

@@ -18,7 +18,7 @@ try{
     if(!user){signedOut.hidden=false;signedIn.hidden=true;details.hidden=true;curatorLink.hidden=true;updateAdVisibility(false);document.querySelector('#sidebar-plus-title').textContent='Upgrade to Plus';document.querySelector('#sidebar-plus-copy').textContent='Unlock more routes, alerts and an ad-free experience';return;}
     let profile={};try{const snapshot=await getDoc(doc(db,'users',user.uid));if(snapshot.exists())profile=snapshot.data();}catch(error){console.warn('MariBus profile unavailable',error);}
     const username=profile.username||user.displayName||user.email?.split('@')[0]||'MariBus rider';
-    curatorLink.hidden=user.email?.toLowerCase()!=='chickendevstu@gmail.com';
+    curatorLink.hidden=false;
     signedOut.hidden=true;signedIn.hidden=false;
     const avatar=document.querySelector('#sidebar-profile-avatar');
     const photo=profile.photoURL||user.photoURL;
