@@ -14,6 +14,8 @@ function clearDrawing() {
   markers.forEach(marker => marker.remove()); markers = [];
   $('#inline-curator-draw').textContent = 'Start drawing';
   $('#inline-curator-undo').disabled = true;
+  $('#inline-curator').classList.remove('drawing');
+  map?.native?.setOptions?.({ draggable:true });
 }
 function redraw() {
   line?.remove();
@@ -30,6 +32,8 @@ function setOpen(open) {
 }
 function startDrawing() {
   drawing = !drawing;
+  $('#inline-curator').classList.toggle('drawing', drawing);
+  map?.native?.setOptions?.({ draggable:!drawing });
   if (drawing) {
     status('Tap start, each turn, then the end. Press Finish drawing when done.');
     $('#inline-curator-draw').textContent = 'Finish drawing';
@@ -98,7 +102,10 @@ async function initialize() {
   $('#inline-curator-close').addEventListener('click', () => setOpen(false));
   map.on('click', event => {
     if (!drawing) return;
-    points.push([event.latlng.lat, event.latlng.lng]);
+    const lat = event.latlng?.lat ?? event.latLng?.lat?.();
+    const lng = event.latlng?.lng ?? event.latLng?.lng?.();
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+    points.push([lat, lng]);
     redraw();
     status(`${points.length} point${points.length === 1 ? '' : 's'} added. Continue drawing or finish.`);
   });

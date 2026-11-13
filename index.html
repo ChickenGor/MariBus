@@ -338,6 +338,10 @@
         #inline-curator-save,#inline-curator-publish { color:#fff; background:var(--maribus-teal); }
         #inline-curator-close { color:var(--text-main); background:var(--input-bg); }
         #inline-curator-status { min-height:18px; margin-top:10px; font-size:12px; color:var(--text-muted); }
+        #inline-curator.drawing { top:auto; bottom:152px; padding:12px; }
+        #inline-curator.drawing h2,#inline-curator.drawing .inline-curator-field,#inline-curator.drawing #inline-curator-save,#inline-curator.drawing #inline-curator-publish { display:none; }
+        #inline-curator.drawing p { margin-bottom:8px; }
+        #inline-curator.drawing #inline-curator-status { display:none; }
         .map-tool-divider { width:28px; height:1px; margin:3px auto; background:var(--border-color); }
         .map-view-button.active { color:#2563eb; background:#dbeafe; }
         body.dark-mode .map-view-button.active { color:#fff; background:#2563eb; }
@@ -1402,6 +1406,13 @@
             #header-journey-search { right:14px; bottom:max(14px,env(safe-area-inset-bottom)); left:14px; }
             body:has(#bottom-sheet.detail-mode) #header-journey-search { right:14px; left:14px; }
             #map-view-toggle { right:12px; border-radius:20px; }
+            #inline-curator { top:auto; right:12px; bottom:152px; width:min(286px,calc(100vw - 24px)); padding:12px; border-radius:16px; }
+            #inline-curator h2 { font-size:16px; }
+            #inline-curator p { font-size:12px; margin-bottom:8px; }
+            .inline-curator-field { margin-bottom:7px; padding:8px 9px; font-size:13px; }
+            .inline-curator-actions { gap:6px; }
+            .inline-curator-actions button { min-height:34px; padding:7px; font-size:12px; }
+            #inline-curator.drawing { bottom:152px; }
             #bottom-sheet { padding-left:18px; padding-right:18px; border-radius:28px 28px 0 0; }
 
             /* Mobile map home: compact destination dock inspired by modern map apps. */
