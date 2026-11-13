@@ -4,10 +4,20 @@
 
     function showSetupMessage(message) {
         window.googleMapsLoadError = message;
-        document.addEventListener('DOMContentLoaded', () => {
+        const render = () => {
             const mapElement = document.getElementById('map');
-            if (mapElement) mapElement.innerHTML = `<div class="map-setup-message"><strong>Google Maps setup required</strong><span>${message}</span></div>`;
-        });
+            if (!mapElement) return;
+            const wrapper = document.createElement('div');
+            wrapper.className = 'map-setup-message';
+            const title = document.createElement('strong');
+            title.textContent = 'Map temporarily unavailable';
+            const detail = document.createElement('span');
+            detail.textContent = message;
+            wrapper.append(title, detail);
+            mapElement.replaceChildren(wrapper);
+        };
+        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', render, { once:true });
+        else render();
     }
 
     let config;
@@ -23,6 +33,11 @@
         return;
     }
     window.MARIBUS_CONFIG = config;
+    // Google calls this global callback for key, billing, or authorization
+    // failures. Replace the opaque Google overlay with a useful app fallback.
+    window.gm_authFailure = () => {
+        showSetupMessage('Maps cannot be displayed right now. You can still search routes and stops; please try again later.');
+    };
 
     await new Promise((resolve, reject) => {
         window.__mariBusGoogleReady = resolve;

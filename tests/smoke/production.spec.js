@@ -27,7 +27,8 @@ test('home page renders core journey controls without application errors', async
   await expect(page).toHaveTitle(/MariBus Malaysia/);
   await expect(page.getByRole('textbox', { name: 'Destination' })).toBeVisible();
   await expect(page.getByRole('group', { name: 'Map view' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Active Service' })).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'Map shortcuts' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Nearby stops' })).toBeVisible();
   await expect.poll(() => applicationErrors, { timeout: 3_000 }).toEqual([]);
 });
 

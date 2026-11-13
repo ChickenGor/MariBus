@@ -1,6 +1,7 @@
 __pycache__/
 *.pyc
 .env
+mobile/.env
 otp/*.zip
 otp/*.pbf
 otp/*.obj

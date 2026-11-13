@@ -621,16 +621,47 @@ def firebase_messaging_service_worker():
     script = f"""
 importScripts('https://www.gstatic.com/firebasejs/12.1.0/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/12.1.0/firebase-messaging-compat.js');
-firebase.initializeApp({json.dumps(firebase_config)});
-const messaging = firebase.messaging();
-messaging.onBackgroundMessage(payload => {{
-  const data = payload.data || {{}};
-  if (!data.title) return;
-  self.registration.showNotification(data.title, {{
-    body:data.body || '', tag:data.tag || 'maribus-update',
-    data:{{ url:data.url || '/notifications' }}
-  }});
+const firebaseConfig = {json.dumps(firebase_config)};
+const CACHE_NAME = 'maribus-shell-v1';
+const APP_SHELL = ['/', '/static/manifest.webmanifest', '/static/favicon.svg'];
+const isSameOrigin = request => new URL(request.url).origin === self.location.origin;
+
+self.addEventListener('install', event => {{
+  event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(APP_SHELL)));
+  self.skipWaiting();
 }});
+self.addEventListener('activate', event => {{
+  event.waitUntil(caches.keys().then(keys => Promise.all(keys
+    .filter(key => key.startsWith('maribus-shell-') && key !== CACHE_NAME)
+    .map(key => caches.delete(key)))));
+  self.clients.claim();
+}});
+self.addEventListener('fetch', event => {{
+  if (event.request.method !== 'GET' || !isSameOrigin(event.request) || new URL(event.request.url).pathname.startsWith('/api/')) return;
+  if (event.request.mode === 'navigate') {{
+    event.respondWith(fetch(event.request).then(response => {{
+      const copy = response.clone();
+      caches.open(CACHE_NAME).then(cache => cache.put('/', copy));
+      return response;
+    }}).catch(() => caches.match('/')));
+    return;
+  }}
+  event.respondWith(caches.match(event.request).then(cached => cached || fetch(event.request).then(response => {{
+    if (response.ok) caches.open(CACHE_NAME).then(cache => cache.put(event.request, response.clone()));
+    return response;
+  }})));
+}});
+if (firebaseConfig.apiKey && firebaseConfig.projectId) {{
+  firebase.initializeApp(firebaseConfig);
+  firebase.messaging().onBackgroundMessage(payload => {{
+    const data = payload.data || {{}};
+    if (!data.title) return;
+    self.registration.showNotification(data.title, {{
+      body:data.body || '', tag:data.tag || 'maribus-update',
+      data:{{ url:data.url || '/notifications' }}
+    }});
+  }});
+}}
 self.addEventListener('notificationclick', event => {{
   event.notification.close();
   const target = new URL(event.notification.data?.url || '/notifications', self.location.origin).href;

@@ -5,10 +5,19 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>MariBus Malaysia - Pro Tracker</title>
+    <meta name="theme-color" content="#d81b76">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <link rel="manifest" href="/static/manifest.webmanifest">
     <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4382546512370754" crossorigin="anonymous"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => navigator.serviceWorker.register('/firebase-messaging-sw.js'));
+        }
+    </script>
 
     <style>
         /* 1. CSS Variables for Light/Dark Theming */
@@ -229,6 +238,9 @@
             box-shadow: 0 12px 28px rgba(15, 23, 42, .22) !important;
             font-family: inherit !important;
         }
+        .place-suggestions { position:absolute; top:calc(100% + 4px); left:0; right:0; z-index:3000; overflow:hidden; border:1px solid var(--border-color); border-radius:12px; background:var(--sheet-bg); box-shadow:0 10px 24px var(--shadow-color); }
+        .place-suggestions button { display:block; width:100%; padding:10px 12px; border:0; border-bottom:1px solid var(--border-color); background:transparent; color:var(--text-main); font:inherit; text-align:left; cursor:pointer; }
+        .place-suggestions button:last-child { border-bottom:0; }
         .pac-item { padding: 10px 12px; cursor: pointer; }
         .pac-item:hover { background: #eef2ff; }
         body.route-code-entry .pac-container { display:none !important; }
@@ -3480,20 +3492,45 @@
                         else document.getElementById('destination-prefix').innerHTML = iconSvg('search');
                     }
                 });
-                const autocomplete = new google.maps.places.Autocomplete(input, {
-                    componentRestrictions: { country: 'my' },
-                    fields: ['geometry', 'name', 'formatted_address', 'place_id'],
-                });
-                autocomplete.bindTo('bounds', map.native);
-                autocomplete.addListener('place_changed', () => {
+                let suggestions = [], requestId = 0, sessionToken = null;
+                const suggestionList = document.createElement('div');
+                suggestionList.className = 'place-suggestions';
+                suggestionList.hidden = true;
+                input.parentElement.style.position = 'relative';
+                input.parentElement.appendChild(suggestionList);
+                const chooseSuggestion = async prediction => {
+                    const place = prediction.toPlace();
+                    await place.fetchFields({ fields:['displayName', 'formattedAddress', 'location', 'id'] });
+                    sessionToken = null; suggestions = []; suggestionList.hidden = true;
+                    if (!place.location) return;
                     document.body.classList.remove('route-code-entry');
-                    const place = autocomplete.getPlace();
-                    if (!place.geometry?.location) return;
-                    matchPlaceToStop(kind, {
-                        lat: place.geometry.location.lat(), lng: place.geometry.location.lng(),
-                        name: place.name || place.formatted_address || input.value,
-                        placeId: place.place_id || '',
-                    });
+                    matchPlaceToStop(kind, { lat:place.location.lat(), lng:place.location.lng(), name:place.displayName || place.formattedAddress || input.value, placeId:place.id || '' });
+                };
+                const renderSuggestions = () => {
+                    suggestionList.replaceChildren(...suggestions.slice(0, 5).flatMap(item => {
+                        const prediction = item.placePrediction; if (!prediction) return [];
+                        const button = document.createElement('button'); button.type = 'button';
+                        button.textContent = prediction.text.toString();
+                        button.addEventListener('click', () => void chooseSuggestion(prediction));
+                        return [button];
+                    }));
+                    suggestionList.hidden = !suggestionList.childElementCount;
+                };
+                input.addEventListener('input', async () => {
+                    const query = input.value.trim();
+                    if (query.length < 3 || /^[A-Z]{1,3}\d{1,4}(?:[A-Z]|\([A-Z]\))?$/i.test(query)) { suggestions = []; renderSuggestions(); return; }
+                    const currentRequest = ++requestId;
+                    try {
+                        const { AutocompleteSuggestion, AutocompleteSessionToken } = await google.maps.importLibrary('places');
+                        sessionToken ||= new AutocompleteSessionToken();
+                        const result = await AutocompleteSuggestion.fetchAutocompleteSuggestions({ input:query, includedRegionCodes:['my'], sessionToken });
+                        if (currentRequest === requestId) { suggestions = result.suggestions || []; renderSuggestions(); }
+                    } catch { suggestions = []; renderSuggestions(); }
+                });
+                input.addEventListener('keydown', async event => {
+                    if (event.key !== 'Enter' || !suggestions[0]?.placePrediction) return;
+                    event.preventDefault();
+                    await chooseSuggestion(suggestions[0].placePrediction);
                 });
             });
         }
