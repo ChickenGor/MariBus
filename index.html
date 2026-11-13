@@ -339,9 +339,16 @@
         #inline-curator-close { color:var(--text-main); background:var(--input-bg); }
         #inline-curator-status { min-height:18px; margin-top:10px; font-size:12px; color:var(--text-muted); }
         #inline-curator.drawing { top:auto; bottom:152px; padding:12px; }
-        #inline-curator.drawing h2,#inline-curator.drawing .inline-curator-field,#inline-curator.drawing #inline-curator-save,#inline-curator.drawing #inline-curator-publish { display:none; }
+        #inline-curator.drawing h2,#inline-curator.drawing .inline-curator-field,#inline-curator.drawing #inline-curator-save,#inline-curator.drawing #inline-curator-publish,#inline-curator.drawing #inline-curator-reference,#inline-curator.drawing #inline-curator-close { display:none; }
         #inline-curator.drawing p { margin-bottom:8px; }
         #inline-curator.drawing #inline-curator-status { display:none; }
+        body.walking-path-editing #mobile-map-dock { display:none !important; }
+        body.walking-path-editing #inline-curator { position:fixed; top:auto; right:12px; bottom:max(12px,env(safe-area-inset-bottom)); left:12px; width:auto; box-sizing:border-box; max-width:none; }
+        #walking-path-target { position:fixed; z-index:2050; top:50%; left:50%; display:none; width:34px; height:34px; margin:-17px 0 0 -17px; pointer-events:none; }
+        #walking-path-target::before,#walking-path-target::after { content:""; position:absolute; background:#d81b76; box-shadow:0 0 0 2px #fff,0 2px 6px rgba(0,0,0,.25); }
+        #walking-path-target::before { top:0; bottom:0; left:16px; width:2px; }
+        #walking-path-target::after { right:0; left:0; top:16px; height:2px; }
+        body.walking-path-editing.drawing-walking-path #walking-path-target { display:block; }
         .map-tool-divider { width:28px; height:1px; margin:3px auto; background:var(--border-color); }
         .map-view-button.active { color:#2563eb; background:#dbeafe; }
         body.dark-mode .map-view-button.active { color:#fff; background:#2563eb; }
@@ -1413,6 +1420,8 @@
             .inline-curator-actions { gap:6px; }
             .inline-curator-actions button { min-height:34px; padding:7px; font-size:12px; }
             #inline-curator.drawing { bottom:152px; }
+            body.walking-path-editing #inline-curator { right:0; bottom:0; left:0; width:100%; padding:14px; border-right:0; border-bottom:0; border-left:0; border-radius:24px 24px 0 0; }
+            body.walking-path-editing #inline-curator.drawing { bottom:0; }
             #bottom-sheet { padding-left:18px; padding-right:18px; border-radius:28px 28px 0 0; }
 
             /* Mobile map home: compact destination dock inspired by modern map apps. */
@@ -1632,9 +1641,10 @@
         <h2>Contribute walking path</h2>
         <p id="inline-curator-help">Tap the start, each meaningful turn, then the end. Two points make a straight path. Contributions are reviewed before appearing for riders.</p>
         <input id="inline-curator-name" class="inline-curator-field" placeholder="Optional name, e.g. mall shortcut">
-        <select id="inline-curator-type" class="inline-curator-field" aria-label="Walking path type"><option value="footpath">Footpath</option><option value="covered_walkway">Covered walkway</option><option value="pedestrian_bridge">Pedestrian bridge</option><option value="stairs">Stairs</option><option value="escalator">Escalator</option><option value="mall">Mall connection</option><option value="station">Station access</option><option value="shortcut">Shortcut</option></select>
+        <select id="inline-curator-type" class="inline-curator-field" aria-label="Walking path type"><option value="footpath">Footpath</option><option value="covered_walkway">Covered walkway</option><option value="pedestrian_bridge">Pedestrian bridge</option><option value="stairs">Stairs</option><option value="escalator">Escalator</option><option value="mall_entrance">Mall entrance</option><option value="mall_exit">Mall exit</option><option value="mall">Mall connection</option><option value="station">Station access</option><option value="shortcut">Shortcut</option></select>
         <div class="inline-curator-actions">
             <button id="inline-curator-draw" type="button">Start drawing</button>
+            <button id="inline-curator-add-point" type="button" hidden>Add point</button>
             <button id="inline-curator-undo" type="button" disabled>Undo point</button>
             <button id="inline-curator-reference" type="button" disabled>Show Google walk</button>
             <button id="inline-curator-save" type="button">Submit path</button>
@@ -1643,6 +1653,7 @@
         </div>
         <div id="inline-curator-status" role="status"></div>
     </aside>
+    <div id="walking-path-target" aria-hidden="true"></div>
 
     <nav id="mobile-map-dock" aria-label="Map shortcuts">
         <button class="map-dock-action primary" type="button" onclick="openMobileJourneyPlanner(event)">

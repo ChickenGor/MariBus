@@ -8,6 +8,8 @@ let map, db, user, drawing = false, points = [], line, referenceLine, markers = 
 const isOwner = () => user?.email?.toLowerCase() === OWNER_EMAIL;
 
 function status(message) { $('#inline-curator-status').textContent = message; }
+function isPointFeature() { return ['mall_entrance', 'mall_exit'].includes($('#inline-curator-type').value); }
+function minimumPoints() { return isPointFeature() ? 1 : 2; }
 function clearDrawing() {
   drawing = false;
   points = [];
@@ -15,10 +17,25 @@ function clearDrawing() {
   referenceLine?.remove(); referenceLine = null;
   markers.forEach(marker => marker.remove()); markers = [];
   $('#inline-curator-draw').textContent = 'Start drawing';
+  $('#inline-curator-add-point').hidden = true;
   $('#inline-curator-undo').disabled = true;
   $('#inline-curator-reference').disabled = true;
   $('#inline-curator').classList.remove('drawing');
+  document.body.classList.remove('drawing-walking-path');
   map?.native?.setOptions?.({ draggable:true });
+}
+function decodePolyline(encoded) {
+  let index = 0, lat = 0, lng = 0; const coordinates = [];
+  while (index < encoded.length) {
+    let shift = 0, result = 0, byte;
+    do { byte = encoded.charCodeAt(index++) - 63; result |= (byte & 0x1f) << shift; shift += 5; } while (byte >= 0x20);
+    lat += result & 1 ? ~(result >> 1) : result >> 1;
+    shift = 0; result = 0;
+    do { byte = encoded.charCodeAt(index++) - 63; result |= (byte & 0x1f) << shift; shift += 5; } while (byte >= 0x20);
+    lng += result & 1 ? ~(result >> 1) : result >> 1;
+    coordinates.push([lat / 1e5, lng / 1e5]);
+  }
+  return coordinates;
 }
 function redraw() {
   line?.remove();
@@ -26,7 +43,7 @@ function redraw() {
   markers.forEach(marker => marker.remove());
   markers = points.map((point, index) => L.circleMarker(point, { radius:index ? 4 : 7, color:'#fff', weight:2, fillColor:index === 0 ? '#2563eb' : index === points.length - 1 ? '#d81b76' : '#0f766e', fillOpacity:1 }).addTo(map));
   $('#inline-curator-undo').disabled = points.length === 0;
-  $('#inline-curator-reference').disabled = points.length < 2;
+  $('#inline-curator-reference').disabled = points.length < 2 || isPointFeature();
 }
 async function showGoogleWalkingReference() {
   if (points.length < 2) return status('Add a start and end point first.');
@@ -37,8 +54,8 @@ async function showGoogleWalkingReference() {
     }) });
     const data = await response.json();
     const encoded = data.routes?.[0]?.polyline?.encodedPolyline;
-    if (!response.ok || !encoded || !window.google?.maps?.geometry) throw new Error('No walking reference');
-    const roadPoints = google.maps.geometry.encoding.decodePath(encoded).map(point => [point.lat(), point.lng()]);
+    if (!response.ok || !encoded) throw new Error('No walking reference');
+    const roadPoints = decodePolyline(encoded);
     referenceLine?.remove();
     referenceLine = L.polyline(roadPoints, { color:'#64748b', weight:5, opacity:.78, dashArray:'8 8' }).addTo(map);
     status('Dashed grey line: Google walking route. Green line: your added path.');
@@ -49,6 +66,7 @@ async function showGoogleWalkingReference() {
 }
 function setOpen(open) {
   $('#inline-curator').hidden = !open;
+  document.body.classList.toggle('walking-path-editing', open);
   $('#curate-route-main').setAttribute('aria-expanded', String(open));
   $('#curate-route-main').classList.toggle('active', open);
   if (!open) { clearDrawing(); pathId = undefined; }
@@ -56,21 +74,33 @@ function setOpen(open) {
 function startDrawing() {
   drawing = !drawing;
   $('#inline-curator').classList.toggle('drawing', drawing);
-  map?.native?.setOptions?.({ draggable:!drawing });
+  document.body.classList.toggle('drawing-walking-path', drawing);
+  map?.native?.setOptions?.({ draggable:true });
   if (drawing) {
-    status('Tap start, each turn, then the end. Press Finish drawing when done.');
+    status('Move the map until the centre target is on the path, then press Add point.');
     $('#inline-curator-draw').textContent = 'Finish drawing';
-  } else if (points.length < 2) {
-    status('Add at least two points to save a walking path.');
+    $('#inline-curator-add-point').hidden = false;
+  } else if (points.length < minimumPoints()) {
+    status(isPointFeature() ? 'Add the entrance or exit point first.' : 'Add at least two points to save a walking path.');
     $('#inline-curator-draw').textContent = 'Start drawing';
+    $('#inline-curator-add-point').hidden = true;
   } else {
     status(`${points.length} walking points ready to save.`);
     $('#inline-curator-draw').textContent = 'Edit path';
+    $('#inline-curator-add-point').hidden = true;
   }
+}
+function addPointAtMapCentre() {
+  if (!drawing) return;
+  const centre = map?.native?.getCenter?.();
+  const lat = centre?.lat?.(), lng = centre?.lng?.();
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return status('Map location is still loading. Try again in a moment.');
+  points.push([lat, lng]); redraw();
+  status(`${points.length} point${points.length === 1 ? '' : 's'} added. Move the map and add another point, or finish drawing.`);
 }
 async function save(publish) {
   const name = $('#inline-curator-name').value.trim();
-  if (points.length < 2) return status('Draw at least two points for the walking path.');
+  if (points.length < minimumPoints()) return status(isPointFeature() ? 'Add the entrance or exit point first.' : 'Draw at least two points for the walking path.');
   if (!db || !user) return status('Your curator sign-in is still loading.');
   try {
     const id = pathId || `${name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'walking-path'}-${Date.now().toString(36)}`;
@@ -116,6 +146,7 @@ async function initialize() {
     setOpen($('#inline-curator').hidden);
   });
   $('#inline-curator-draw').addEventListener('click', startDrawing);
+  $('#inline-curator-add-point').addEventListener('click', addPointAtMapCentre);
   $('#inline-curator-reference').addEventListener('click', showGoogleWalkingReference);
   $('#inline-curator-undo').addEventListener('click', () => {
     if (!points.length) return;
@@ -125,15 +156,7 @@ async function initialize() {
   $('#inline-curator-save').addEventListener('click', () => save(false));
   $('#inline-curator-publish').addEventListener('click', () => save(true));
   $('#inline-curator-close').addEventListener('click', () => setOpen(false));
-  map.on('click', event => {
-    if (!drawing) return;
-    const lat = event.latlng?.lat ?? event.latLng?.lat?.();
-    const lng = event.latlng?.lng ?? event.latLng?.lng?.();
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
-    points.push([lat, lng]);
-    redraw();
-    status(`${points.length} point${points.length === 1 ? '' : 's'} added. Continue drawing or finish.`);
-  });
+  $('#inline-curator-type').addEventListener('change', redraw);
 }
 
 if (window.__mariBusMap) initialize();
