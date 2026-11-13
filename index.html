@@ -4075,12 +4075,12 @@
                     const result = await response.json();
                     const routes = (result.data || []).map(route => {
                         const path = google.maps.geometry.encoding.decodePath(route.polyline?.encodedPolyline || '');
-                        const seconds = durationSeconds(route.duration);
+                        const seconds = durationSeconds(route.duration || route.staticDuration);
                         const leg = route.legs?.[0] || {};
                         const steps = (route.legs?.[0]?.steps || []).map(step => {
                             const transit = step.transitDetails, stopDetails = transit?.stopDetails || {};
                             return { travel_mode:step.travelMode === 'WALK' ? google.maps.TravelMode.WALKING : step.travelMode,
-                                path:google.maps.geometry.encoding.decodePath(step.polyline?.encodedPolyline || ''), duration:{ value:durationSeconds(step.duration), text:formatJourneyDuration(durationSeconds(step.duration) / 60) },
+                                path:google.maps.geometry.encoding.decodePath(step.polyline?.encodedPolyline || ''), duration:{ value:durationSeconds(step.staticDuration || step.duration), text:formatJourneyDuration(durationSeconds(step.staticDuration || step.duration) / 60) },
                                 start_location:mapsLocation(step.startLocation?.latLng), end_location:mapsLocation(step.endLocation?.latLng),
                                 transit: transit ? { line:{ short_name:transit.tripShortText || transit.transitLine?.name || '', name:transit.transitLine?.name || '', color:transit.transitLine?.color || '', vehicle:{ type:transit.transitLine?.vehicle?.type || 'BUS' } }, headsign:transit.headsign || '',
                                     departure_stop:{ name:stopDetails.departureStop?.name || '', location:mapsLocation(stopDetails.departureStop?.location?.latLng) }, arrival_stop:{ name:stopDetails.arrivalStop?.name || '', location:mapsLocation(stopDetails.arrivalStop?.location?.latLng) },
@@ -4491,6 +4491,28 @@
             const visibleRoute = line.short_name || route;
             const color = /^#[0-9a-f]{6}$/i.test(line.color || '') ? line.color : '#2563eb';
             return `<span class="journey-route mode-labelled" style="background:${color}" title="${escapeHtml(labelledRoute)}" aria-label="${escapeHtml(labelledRoute)}">${iconSvg(mode.icon, 'inline-icon')}<span>${escapeHtml(visibleRoute)}</span></span>`;
+        }
+
+        function googleTransitSummarySteps(steps) {
+            const summary = [];
+            let walkingSeconds = 0;
+            const flushWalking = () => {
+                if (!walkingSeconds) return;
+                if (walkingSeconds >= 60) {
+                    summary.push({ travel_mode:google.maps.TravelMode.WALKING, duration:{ value:walkingSeconds, text:formatJourneyDuration(walkingSeconds / 60) } });
+                }
+                walkingSeconds = 0;
+            };
+            steps.forEach(step => {
+                if (step.travel_mode === google.maps.TravelMode.WALKING) {
+                    walkingSeconds += Number(step.duration?.value || 0);
+                    return;
+                }
+                flushWalking();
+                summary.push(step);
+            });
+            flushWalking();
+            return summary;
         }
 
         function googleTransitVehicleMode(vehicle = {}) {
@@ -5327,7 +5349,7 @@
                     if (!leg) return '';
                     const steps = leg.steps || [];
                     const transitSteps = steps.filter(step => step.travel_mode === google.maps.TravelMode.TRANSIT);
-                    const routeSteps = steps.map(googleTransitStepLabel).join('<span>&rsaquo;</span>');
+                    const routeSteps = googleTransitSummarySteps(steps).map(googleTransitStepLabel).join('<span>&rsaquo;</span>');
                     const board = transitSteps[0]?.transit?.departure_stop?.name;
                     const exit = transitSteps[transitSteps.length - 1]?.transit?.arrival_stop?.name;
                     const comparisons = [];
