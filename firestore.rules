@@ -16,6 +16,16 @@ service cloud.firestore {
         && profile.subscriptionEnd > request.time;
     }
 
+    function isCurator() {
+      return request.auth != null
+        && request.auth.token.email == 'chickendevstu@gmail.com';
+    }
+
+    match /curatedRoutes/{routeId} {
+      allow read: if resource.data.status == 'published' || isCurator();
+      allow create, update, delete: if isCurator();
+    }
+
     match /appConfig/{document} {
       allow read: if true;
       allow write: if false;
