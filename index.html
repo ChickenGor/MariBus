@@ -328,6 +328,16 @@
         .map-tool-button .ui-icon { width:19px; height:19px; }
         #curate-route-main { color:var(--maribus-teal-deep, #164e63); background:var(--maribus-teal-soft, #e0f2f1); }
         #curate-route-main:hover { color:#fff; background:var(--maribus-teal, #0f766e); }
+        #inline-curator { position:absolute; z-index:2100; top:82px; right:18px; width:min(340px,calc(100vw - 36px)); padding:16px; border:1px solid var(--border-color); border-radius:18px; background:var(--sheet-bg); box-shadow:0 16px 42px var(--shadow-color); color:var(--text-main); }
+        #inline-curator h2 { margin:0 0 5px; font-size:18px; }
+        #inline-curator p { margin:0 0 12px; color:var(--text-muted); font-size:13px; line-height:1.45; }
+        .inline-curator-field { width:100%; box-sizing:border-box; margin:0 0 9px; padding:10px 11px; border:1px solid var(--border-color); border-radius:10px; background:var(--input-bg); color:var(--text-main); font:inherit; }
+        .inline-curator-actions { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+        .inline-curator-actions button { min-height:38px; border:0; border-radius:10px; padding:8px; font:700 13px/1 Manrope,sans-serif; cursor:pointer; }
+        #inline-curator-draw { color:var(--maribus-teal-deep); background:var(--maribus-teal-soft); }
+        #inline-curator-save,#inline-curator-publish { color:#fff; background:var(--maribus-teal); }
+        #inline-curator-close { color:var(--text-main); background:var(--input-bg); }
+        #inline-curator-status { min-height:18px; margin-top:10px; font-size:12px; color:var(--text-muted); }
         .map-tool-divider { width:28px; height:1px; margin:3px auto; background:var(--border-color); }
         .map-view-button.active { color:#2563eb; background:#dbeafe; }
         body.dark-mode .map-view-button.active { color:#fff; background:#2563eb; }
@@ -1590,7 +1600,7 @@
     </div>
 
     <div id="map-view-toggle" role="group" aria-label="Map view">
-        <button id="curate-route-main" class="map-tool-button" type="button" hidden onclick="location.href='/curate-route'" title="Curate routes" aria-label="Curate routes">
+        <button id="curate-route-main" class="map-tool-button" type="button" hidden title="Curate routes" aria-label="Curate routes" aria-expanded="false">
             <svg class="ui-icon" viewBox="0 0 24 24"><path d="M4 19 9 5l4 10 7-6"></path><circle cx="4" cy="19" r="1.5"></circle><circle cx="9" cy="5" r="1.5"></circle><circle cx="13" cy="15" r="1.5"></circle><circle cx="20" cy="9" r="1.5"></circle></svg>
         </button>
         <button class="map-view-button active" type="button" data-map-view="2d" aria-pressed="true">2D</button>
@@ -1606,6 +1616,18 @@
             <svg class="ui-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M12 2v3M12 19v3M2 12h3M19 12h3"></path><circle cx="12" cy="12" r="7"></circle></svg>
         </button>
     </div>
+    <aside id="inline-curator" hidden aria-label="Curate route">
+        <h2>Curate this route</h2>
+        <p id="inline-curator-help">Draw the walking connection directly on the map, then save it as a draft or publish it.</p>
+        <input id="inline-curator-name" class="inline-curator-field" placeholder="Route name">
+        <div class="inline-curator-actions">
+            <button id="inline-curator-draw" type="button">Draw walking leg</button>
+            <button id="inline-curator-save" type="button">Save draft</button>
+            <button id="inline-curator-publish" type="button" hidden>Publish</button>
+            <button id="inline-curator-close" type="button">Exit edit mode</button>
+        </div>
+        <div id="inline-curator-status" role="status"></div>
+    </aside>
 
     <nav id="mobile-map-dock" aria-label="Map shortcuts">
         <button class="map-dock-action primary" type="button" onclick="openMobileJourneyPlanner(event)">
@@ -1781,6 +1803,7 @@
         window.__mariBusSyncSystemBars(document.body.classList.contains('dark-mode'));
     </script>
     <script type="module" src="/static/sidebar-auth.js"></script>
+    <script type="module" src="/static/inline-curator.js"></script>
     <script type="module" src="/static/route-saver.js"></script>
     <script type="module" src="/static/public-config.js"></script>
     <script src="/static/transit-services.js"></script>
@@ -1791,6 +1814,8 @@
         const IS_LOCAL_FRONTEND = ['localhost', '127.0.0.1'].includes(location.hostname) && location.port !== '5000';
         const API_BASE = location.protocol === 'file:' || IS_LOCAL_FRONTEND ? 'http://localhost:5000' : location.origin;
         const map = L.map('map', { zoomControl: false }).setView([3.1390, 101.6869], 12);
+        window.__mariBusMap = map;
+        window.dispatchEvent(new Event('maribus-map-ready'));
         L.control.zoom({ position: 'bottomleft' }).addTo(map);
 
         const GOOGLE_LIGHT_MAP_STYLES = [
