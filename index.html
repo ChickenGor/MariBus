@@ -925,6 +925,13 @@
             #wifi-loader .text::after { display:none; }
         }
         .journey-card.modern { cursor:pointer; padding:10px; margin:6px 0; animation:journey-card-enter .22s cubic-bezier(.2,.8,.2,1) both; transition:border-color .2s, background .2s, transform .16s ease; }
+        .journey-section-title { margin:12px 2px 7px; color:var(--text-muted); font-size:11px; font-weight:900; letter-spacing:.45px; text-transform:uppercase; }
+        .walking-option-card { display:grid; grid-template-columns:72px 1fr; gap:11px; align-items:center; }
+        .walking-option-time { display:grid; min-height:66px; place-items:center; border-radius:10px; background:rgba(37,99,235,.1); color:#1d4ed8; font-size:19px; font-weight:900; line-height:1; text-align:center; }
+        .walking-option-time small { display:block; margin-top:5px; color:var(--text-muted); font-size:9px; font-weight:800; }
+        .walking-option-copy strong,.walking-option-copy span { display:block; }
+        .walking-option-copy strong { font-size:14px; }
+        .walking-option-copy span { margin-top:5px; color:var(--text-muted); font-size:11px; }
         .journey-card.modern:active { transform:scale(.99); }
         .journey-card.modern.selected { border:2px solid #2563eb; background:rgba(37,99,235,.04); }
         .journey-option-top { display:block; }
@@ -4233,6 +4240,15 @@
             });
         }
 
+        function requestGoogleWalkingJourney(fromPlace, toPlace) {
+            const service = new RoutesApiService();
+            return new Promise(resolve => service.route({
+                origin:googleDirectionsLocation(fromPlace),
+                destination:googleDirectionsLocation(toPlace),
+                travelMode:google.maps.TravelMode.WALKING,
+            }, (response, status) => resolve(status === google.maps.DirectionsStatus.OK ? response?.routes?.[0] || null : null)));
+        }
+
         class RoutesApiService {
             async route(request, callback) {
                 const point = value => ({ lat:Number(value?.lat ?? value?.location?.lat), lng:Number(value?.lng ?? value?.location?.lng) });
@@ -5502,7 +5518,7 @@
                 travelMode:google.maps.TravelMode.TRANSIT,
                 provideRouteAlternatives:true,
                 transitOptions,
-            }, (response, status) => {
+            }, async (response, status) => {
                 if (status !== google.maps.DirectionsStatus.OK || !response?.routes?.length) {
                     console.info('Google Transit returned no KL journey', status);
                     resolve(false);
@@ -5520,7 +5536,15 @@
                     : transitJourneyPriority === 'fewer-transfers'
                         ? a.transferCount - b.transferCount || a.arrivalTimestamp - b.arrivalTimestamp || a.walkSeconds - b.walkSeconds
                         : a.arrivalTimestamp - b.arrivalTimestamp || a.durationSeconds - b.durationSeconds || a.walkSeconds - b.walkSeconds);
-                const priorityControl = `<div class="transit-priority" role="group" aria-label="Journey priority">
+                const walkingRoute = await requestGoogleWalkingJourney(fromPlace, toPlace);
+                const walkingLeg = walkingRoute?.legs?.[0];
+                const walkingCard = walkingLeg ? `<section aria-label="Walking route"><h4 class="journey-section-title">Walking route</h4>
+                    <article class="journey-card modern walking-option-card" data-google-walking-option role="button" tabindex="0" aria-label="Walking route, ${escapeHtml(walkingLeg.duration?.text || '')}">
+                        <div class="walking-option-time">${escapeHtml(walkingLeg.duration?.text || '')}<small>walk</small></div>
+                        <div class="walking-option-copy"><strong>${iconSvg('walk')} Walk ${(Number(walkingLeg.distance?.value || 0) / 1000).toFixed(1)} km</strong><span>${walkingRoute?.legs?.[0]?.steps?.some(step => step.contributedPath) ? 'Uses MariBus walking network where available' : 'Google walking route'}</span></div>
+                    </article>
+                </section>` : '';
+                const priorityControl = `<h4 class="journey-section-title">Public transport</h4><div class="transit-priority" role="group" aria-label="Journey priority">
                     <button type="button" data-transit-priority="fastest" class="${transitJourneyPriority === 'fastest' ? 'active' : ''}">Fastest</button>
                     <button type="button" data-transit-priority="less-walking" class="${transitJourneyPriority === 'less-walking' ? 'active' : ''}">Less walking</button>
                     <button type="button" data-transit-priority="fewer-transfers" class="${transitJourneyPriority === 'fewer-transfers' ? 'active' : ''}">Fewer transfers</button>
@@ -5571,7 +5595,11 @@
                 };
                 activeTrackedJourneyIndex = rankedRoutes[0].routeIndex;
                 setActiveJourneyRoutes(googleTransitRouteNames(response.routes[activeTrackedJourneyIndex]));
-                openTransitPanel('', '', priorityControl + cards, preserveSheetState);
+                openTransitPanel('Journey options', 'Compare walking and public transport', walkingCard + priorityControl + cards, preserveSheetState);
+                if (window.innerWidth < 768 && !preserveSheetState) {
+                    document.getElementById('bottom-sheet').classList.add('sheet-half');
+                    updateDetailSheetToggle();
+                }
                 document.getElementById('adjust-transit-modes')?.addEventListener('click', event => {
                     const panel = document.getElementById('transit-mode-panel');
                     const open = panel.classList.toggle('open');
@@ -5615,6 +5643,15 @@
                     };
                     card.addEventListener('click', select);
                     card.addEventListener('keydown', event => { if (event.target === card && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); select(); } });
+                });
+                document.querySelectorAll('[data-google-walking-option]').forEach(card => {
+                    const select = () => {
+                        if (!walkingRoute) return;
+                        renderGoogleTransitRoute({ routes:[walkingRoute] }, 0);
+                        showGoogleTransitJourneyDetails({ routes:[walkingRoute] }, 0);
+                    };
+                    card.addEventListener('click', select);
+                    card.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); select(); } });
                 });
                 document.querySelectorAll('[data-google-transit-show]').forEach(button => button.addEventListener('click', event => {
                     event.stopPropagation();
