@@ -4456,6 +4456,20 @@
                     showWalkingFallback(fromPlace, toPlace, result.notice || 'No scheduled bus journey found');
                     return true;
                 }
+                // A scheduled bus is not automatically the best journey. Compare
+                // its true door-to-door arrival time (including the wait) against
+                // a direct walk before recommending it.
+                const walkingRoute = await requestGoogleWalkingJourney(fromPlace, toPlace);
+                const walkingLeg = walkingRoute?.legs?.[0];
+                const walkingMinutes = walkingLeg ? Math.max(1, Math.ceil(Number(walkingLeg.duration?.value || 0) / 60)) : Infinity;
+                const fastestTransitMinutes = Math.max(1, Number(result.data[0]?.total_minutes || Infinity));
+                const walkingPreferred = walkingRoute && walkingMinutes < fastestTransitMinutes;
+                const walkingCard = walkingLeg ? `<section aria-label="Walking route"><h4 class="journey-section-title">Walking route</h4>
+                    <article class="journey-card modern walking-option-card ${walkingPreferred ? 'selected' : ''}" data-local-walking-option role="button" tabindex="0" aria-pressed="${walkingPreferred}" aria-label="Walking route, ${escapeHtml(formatJourneyDuration(walkingMinutes))}">
+                        <div class="walking-option-time">${escapeHtml(formatJourneyDuration(walkingMinutes))}<small>${walkingPreferred ? 'recommended' : 'walk'}</small></div>
+                        <div class="walking-option-copy"><strong>${iconSvg('walk')} Walk ${(Number(walkingLeg.distance?.value || 0) / 1000).toFixed(1)} km</strong><span>${walkingLeg.steps?.some(step => step.contributedPath) ? 'Uses MariBus walking network where available' : 'Direct walking route'}</span></div>
+                    </article>
+                </section>` : '';
                 const routeBadges = journey => journey.legs
                     ? journey.legs.map(leg => `<span class="journey-route" style="background:${safeRouteColor(leg.route_color)}">${escapeHtml(compactRouteLabel(leg.route_id, leg.route_short_name))}</span>`).join(' &rsaquo; ')
                     : `<span class="journey-route" style="background:${safeRouteColor(journey.route_color)}">${escapeHtml(compactRouteLabel(journey.route_id, journey.route_short_name))}</span>`;
@@ -4492,7 +4506,7 @@
                     to:{ name:toPlace.name, lat:toPlace.lat, lng:toPlace.lng },
                     agency,
                 };
-                openTransitPanel('MariBus route options', result.notice || 'Compared nearby stops and scheduled services', `<h4 class="journey-section-title">Public transport</h4>${html}`);
+                openTransitPanel('MariBus route options', result.notice || 'Compared nearby stops and scheduled services', `${walkingCard}<h4 class="journey-section-title">Public transport</h4>${html}`);
                 if (window.innerWidth < 768) {
                     document.getElementById('bottom-sheet').classList.add('sheet-half');
                     updateDetailSheetToggle();
@@ -4511,6 +4525,18 @@
                     card.addEventListener('click', select);
                     card.addEventListener('keydown', event => { if (event.target === card && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); select(); } });
                 });
+                document.querySelectorAll('[data-local-walking-option]').forEach(card => {
+                    const select = () => {
+                        if (!walkingRoute) return;
+                        document.querySelectorAll('.journey-card.modern').forEach(item => { item.classList.remove('selected'); item.setAttribute('aria-pressed', 'false'); });
+                        card.classList.add('selected'); card.setAttribute('aria-pressed', 'true');
+                        activeTrackedJourneyIndex = -1;
+                        activeJourneyRouteNames.clear();
+                        renderGoogleTransitRoute({ routes:[walkingRoute] }, 0);
+                    };
+                    card.addEventListener('click', select);
+                    card.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); select(); } });
+                });
                 document.querySelectorAll('[data-show-route]').forEach(button => button.addEventListener('click', event => {
                     event.stopPropagation();
                     const journey = result.data[Number(button.dataset.showRoute)];
@@ -4522,10 +4548,16 @@
                     requestJourneySave(button.dataset.saveRoute, button);
                 }));
                 const firstJourney = result.data[0];
-                activeTrackedJourneyIndex = 0;
-                setActiveJourneyRoutes(journeyRouteNames(firstJourney));
-                if (firstJourney.legs) showJourneyRoutes(firstJourney);
-                else showJourneySegment(firstJourney, true);
+                if (walkingPreferred) {
+                    activeTrackedJourneyIndex = -1;
+                    activeJourneyRouteNames.clear();
+                    renderGoogleTransitRoute({ routes:[walkingRoute] }, 0);
+                } else {
+                    activeTrackedJourneyIndex = 0;
+                    setActiveJourneyRoutes(journeyRouteNames(firstJourney));
+                    if (firstJourney.legs) showJourneyRoutes(firstJourney);
+                    else showJourneySegment(firstJourney, true);
+                }
                 startLiveJourneyTracking(result.data);
                 return true;
             } catch (error) {
