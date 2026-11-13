@@ -1,5 +1,5 @@
 import { initializeApp, getApps } from 'https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js';
-import { getFirestore, collection, doc, getDocs, serverTimestamp, setDoc } from 'https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js';
+import { getFirestore, collection, deleteDoc, doc, getDocs, serverTimestamp, setDoc } from 'https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js';
 
 const $ = selector => document.querySelector(selector);
 let map, db, drawing = false, points = [], line, referenceLine, markers = [], pathId;
@@ -31,6 +31,7 @@ function clearDrawing() {
   markers.forEach(marker => marker.remove()); markers = [];
   $('#inline-curator-draw').textContent = 'Start drawing';
   $('#inline-curator-add-point').hidden = true;
+  $('#inline-curator-delete').hidden = true;
   $('#inline-curator-undo').disabled = true;
   $('#inline-curator-reference').disabled = true;
   $('#inline-curator').classList.remove('drawing');
@@ -73,6 +74,7 @@ function selectNetworkPath(id, data) {
   points = (data.points || []).map(asPoint).filter(([lat, lng]) => Number.isFinite(lat) && Number.isFinite(lng));
   if (!points.length) return;
   pathId = id;
+  $('#inline-curator-delete').hidden = false;
   $('#inline-curator-name').value = data.name || '';
   $('#inline-curator-type').value = data.pathType || 'footpath';
   drawing = false;
@@ -226,6 +228,21 @@ async function save() {
     status(`Could not save (${reason}). Please try again.`);
   }
 }
+async function deleteSelectedPath() {
+  if (!pathId) return status('Select a saved path first.');
+  if (!confirm('Delete this walking path? This cannot be undone.')) return;
+  try {
+    await deleteDoc(doc(db, 'walkingPaths', pathId));
+    clearDrawing();
+    pathId = undefined;
+    $('#inline-curator-name').value = '';
+    await loadWalkingPathNetwork(true);
+    status('Walking path deleted.');
+  } catch (error) {
+    console.error('Could not delete walking path', error);
+    status(`Could not delete (${error?.code || error?.message || 'unknown error'}).`);
+  }
+}
 
 async function initialize() {
   map = window.__mariBusMap;
@@ -251,6 +268,7 @@ async function initialize() {
     status(points.length ? `${points.length} point${points.length === 1 ? '' : 's'} remaining.` : 'All points removed.');
   });
   $('#inline-curator-save').addEventListener('click', save);
+  $('#inline-curator-delete').addEventListener('click', deleteSelectedPath);
   $('#inline-curator-close').addEventListener('click', () => setOpen(false));
   $('#inline-curator-type').addEventListener('change', redraw);
   map.native?.addListener?.('idle', previewConnection);

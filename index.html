@@ -338,6 +338,7 @@
         .inline-curator-actions button { min-height:38px; border:0; border-radius:10px; padding:8px; font:700 13px/1 Manrope,sans-serif; cursor:pointer; }
         #inline-curator-draw { color:var(--maribus-teal-deep); background:var(--maribus-teal-soft); }
         #inline-curator-save,#inline-curator-publish { color:#fff; background:var(--maribus-teal); }
+        #inline-curator-delete { color:#fff; background:#b91c1c; }
         #inline-curator-close { color:var(--text-main); background:var(--input-bg); }
         #inline-curator-status { min-height:18px; margin-top:10px; font-size:12px; color:var(--text-muted); }
         #inline-curator.drawing { top:auto; bottom:152px; padding:12px; }
@@ -1661,6 +1662,7 @@
             <button id="inline-curator-undo" type="button" disabled>Undo point</button>
             <button id="inline-curator-reference" type="button" disabled>Show Google walk</button>
             <button id="inline-curator-save" type="button">Publish path</button>
+            <button id="inline-curator-delete" type="button" hidden>Delete path</button>
             <button id="inline-curator-close" type="button">Exit edit mode</button>
         </div>
         <div id="inline-curator-status" role="status"></div>
