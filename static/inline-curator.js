@@ -113,8 +113,12 @@ async function save() {
       updatedAt:serverTimestamp(),
       ...(pathId ? {} : { createdAt:serverTimestamp() }),
     }, { merge:true });
-    pathId = id;
-    status('Walking path published.');
+    // Public contributors can create paths but cannot overwrite an already
+    // published path. Reset so the next contribution always gets a new ID.
+    pathId = undefined;
+    clearDrawing();
+    $('#inline-curator-name').value = '';
+    status('Walking path published. You can now draw another path.');
   } catch (error) {
     console.error('Could not save walking path', error);
     const reason = error?.code || error?.message || 'unknown error';
