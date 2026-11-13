@@ -220,10 +220,13 @@ async function save() {
     // Public contributors can create paths but cannot overwrite an already
     // published path. Reset so the next contribution always gets a new ID.
     pathId = undefined;
-    drawNetworkPath({ points, pathType:$('#inline-curator-type').value }, id);
     clearDrawing();
     $('#inline-curator-name').value = '';
-    status('Walking path published. You can now draw another path.');
+    // The route planner reads this shared in-memory list. Reload after every
+    // save so a contribution is immediately eligible for a new journey search,
+    // not merely visible as a line on the editor map.
+    await loadWalkingPathNetwork(true);
+    status('Walking path published and ready for route searches. You can now draw another path.');
   } catch (error) {
     console.error('Could not save walking path', error);
     const reason = error?.code || error?.message || 'unknown error';

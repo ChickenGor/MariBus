@@ -4167,10 +4167,13 @@
                     previous = current;
                 });
             });
-            // Editor snapping joins paths within 80 m; use the same tolerance in routing.
+            // A point snapped in the editor is saved at the exact target
+            // coordinate. Only join near-identical coordinates here: connecting
+            // every pair within the editor's 80 m pickup radius can invent a
+            // walking connection across roads, buildings, or parallel paths.
             for (let a = 0; a < nodes.length; a += 1) for (let b = a + 1; b < nodes.length; b += 1) {
                 const distance = walkingPathDistance(nodes[a], nodes[b]);
-                if (distance <= 80) link(a, b, distance);
+                if (distance <= 5) link(a, b, distance);
             }
             const shortestPath = source => {
                 const dist = Array(nodes.length).fill(Infinity), previous = Array(nodes.length).fill(-1), used = Array(nodes.length).fill(false);
