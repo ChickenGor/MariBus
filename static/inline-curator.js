@@ -9,6 +9,19 @@ const networkLayers = [];
 function status(message) { $('#inline-curator-status').textContent = message; }
 function isPointFeature() { return ['mall_entrance', 'mall_exit'].includes($('#inline-curator-type').value); }
 function minimumPoints() { return isPointFeature() ? 1 : 2; }
+function pathStyle(type) {
+  const styles = {
+    footpath:{ color:'#67bfc4', weight:8 },
+    covered_walkway:{ color:'#187d86', weight:9 },
+    pedestrian_bridge:{ color:'#2563eb', weight:10 },
+    stairs:{ color:'#f59e0b', weight:9 },
+    escalator:{ color:'#8b5cf6', weight:9 },
+    mall_entrance:{ color:'#d81b76', weight:8 },
+    mall_exit:{ color:'#d81b76', weight:8 },
+    mall:{ color:'#0f766e', weight:9 }, station:{ color:'#475569', weight:9 }, shortcut:{ color:'#22c55e', weight:8 },
+  };
+  return styles[type] || styles.footpath;
+}
 function clearDrawing() {
   drawing = false;
   points = [];
@@ -39,7 +52,8 @@ function decodePolyline(encoded) {
 }
 function redraw() {
   line?.remove();
-  if (points.length > 1) line = L.polyline(points, { color:'#0f766e', weight:6, opacity:.9 }).addTo(map);
+  const style = pathStyle($('#inline-curator-type').value);
+  if (points.length > 1) line = L.polyline(points, { ...style, opacity:.95 }).addTo(map);
   markers.forEach(marker => marker.remove());
   markers = points.map((point, index) => L.circleMarker(point, { radius:index ? 4 : 7, color:'#fff', weight:2, fillColor:index === 0 ? '#2563eb' : index === points.length - 1 ? '#d81b76' : '#0f766e', fillOpacity:1 }).addTo(map));
   $('#inline-curator-undo').disabled = points.length === 0;
@@ -55,14 +69,31 @@ function distanceMetres(a, b) {
   const part = Math.sin(dLat / 2) ** 2 + Math.cos(toRadians(a[0])) * Math.cos(toRadians(b[0])) * Math.sin(dLng / 2) ** 2;
   return 2 * earth * Math.atan2(Math.sqrt(part), Math.sqrt(1 - part));
 }
-function drawNetworkPath(data) {
+function selectNetworkPath(id, data) {
+  points = (data.points || []).map(asPoint).filter(([lat, lng]) => Number.isFinite(lat) && Number.isFinite(lng));
+  if (!points.length) return;
+  pathId = id;
+  $('#inline-curator-name').value = data.name || '';
+  $('#inline-curator-type').value = data.pathType || 'footpath';
+  drawing = false;
+  redraw();
+  status('Path selected. Adjust points or type, then Publish path to save your changes.');
+}
+function drawNetworkPath(data, id = '') {
   const pathPoints = (data.points || []).map(asPoint).filter(([lat, lng]) => Number.isFinite(lat) && Number.isFinite(lng));
   if (!pathPoints.length) return;
-  if (pathPoints.length > 1) networkLayers.push(L.polyline(pathPoints, { color:'#0f766e', weight:5, opacity:.64 }).addTo(map));
+  const style = pathStyle(data.pathType);
+  if (pathPoints.length > 1) {
+    const pathLine = L.polyline(pathPoints, { ...style, opacity:.78 }).addTo(map);
+    pathLine.native?.addListener?.('click', () => selectNetworkPath(id, data));
+    networkLayers.push(pathLine);
+  }
   const endpoints = pathPoints.length === 1 ? pathPoints : [pathPoints[0], pathPoints.at(-1)];
   endpoints.forEach(point => {
     networkEndpoints.push(point);
-    networkLayers.push(L.circleMarker(point, { radius:6, color:'#fff', weight:2, fillColor:'#7c3aed', fillOpacity:1 }).addTo(map));
+    const endpoint = L.circleMarker(point, { radius:7, color:'#fff', weight:2, fillColor:style.color, fillOpacity:1 }).addTo(map);
+    endpoint.native?.addListener?.('click', () => selectNetworkPath(id, data));
+    networkLayers.push(endpoint);
   });
 }
 function clearWalkingPathNetwork() {
@@ -74,7 +105,7 @@ async function loadWalkingPathNetwork(refresh = false) {
   try {
     if (refresh) clearWalkingPathNetwork();
     const snapshot = await getDocs(collection(db, 'walkingPaths'));
-    snapshot.forEach(item => drawNetworkPath(item.data()));
+    snapshot.forEach(item => drawNetworkPath(item.data(), item.id));
     if (refresh && !drawing) status(snapshot.size ? `${snapshot.size} saved path${snapshot.size === 1 ? '' : 's'} ready to connect.` : 'No saved paths found yet.');
   } catch (error) {
     console.warn('Could not load walking path network', error);
@@ -82,7 +113,7 @@ async function loadWalkingPathNetwork(refresh = false) {
   }
 }
 function snapToNetwork(point) {
-  let closest = null, closestDistance = 40;
+  let closest = null, closestDistance = 80;
   networkEndpoints.forEach(endpoint => {
     const distance = distanceMetres(point, endpoint);
     if (distance < closestDistance) { closest = endpoint; closestDistance = distance; }
@@ -176,7 +207,7 @@ async function save() {
     // Public contributors can create paths but cannot overwrite an already
     // published path. Reset so the next contribution always gets a new ID.
     pathId = undefined;
-    drawNetworkPath({ points });
+    drawNetworkPath({ points, pathType:$('#inline-curator-type').value }, id);
     clearDrawing();
     $('#inline-curator-name').value = '';
     status('Walking path published. You can now draw another path.');

@@ -32,8 +32,7 @@ service cloud.firestore {
     }
 
     match /walkingPaths/{pathId} {
-      allow read, create: if true;
-      allow update, delete: if false;
+      allow read, create, update, delete: if true;
     }
 
     match /appConfig/{document} {
