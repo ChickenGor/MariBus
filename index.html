@@ -4218,6 +4218,13 @@
             });
             return savedSeconds;
         }
+        function waitForWalkingPathNetwork() {
+            if (Array.isArray(window.__mariBusWalkingPaths)) return Promise.resolve();
+            return new Promise(resolve => {
+                const timer = setTimeout(resolve, 1800);
+                window.addEventListener('maribus-walking-paths-ready', () => { clearTimeout(timer); resolve(); }, { once:true });
+            });
+        }
 
         class RoutesApiService {
             async route(request, callback) {
@@ -5470,10 +5477,11 @@
             if (!bounds.isEmpty()) map.native.fitBounds(bounds, 64);
         }
 
-        function tryGoogleTransitJourney(preserveSheetState = false) {
+        async function tryGoogleTransitJourney(preserveSheetState = false) {
             const fromPlace = journeySelection.from.place;
             const toPlace = journeySelection.to.place;
-            if (!fromPlace || !toPlace) return Promise.resolve(false);
+            if (!fromPlace || !toPlace) return false;
+            await waitForWalkingPathNetwork();
             const service = new RoutesApiService();
             const transitOptions = { departureTime:new Date() };
             const preferredModes = preferredGoogleTransitModes();
