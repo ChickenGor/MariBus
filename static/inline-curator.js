@@ -104,7 +104,9 @@ async function save(publish) {
   if (!db || !user) return status('Your curator sign-in is still loading.');
   try {
     const id = pathId || `${name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'walking-path'}-${Date.now().toString(36)}`;
-    const statusValue = isOwner() ? (publish ? 'published' : 'draft') : 'pending';
+    // All ordinary saves are submissions awaiting review. This keeps the write
+    // path identical for owners and contributors, while publishing remains owner-only.
+    const statusValue = publish && isOwner() ? 'published' : 'pending';
     await setDoc(doc(db, 'walkingPaths', id), {
       name:name || 'Unnamed walking path',
       pathType:$('#inline-curator-type').value,
@@ -118,10 +120,11 @@ async function save(publish) {
     }, { merge:true });
     pathId = id;
     $('#inline-curator-publish').hidden = !isOwner();
-    status(isOwner() ? (publish ? 'Walking path published.' : 'Draft saved. Review it, then publish when ready.') : 'Thanks — your walking path was submitted for review.');
+    status(publish ? 'Walking path published.' : 'Thanks — your walking path was submitted for review.');
   } catch (error) {
     console.error('Could not save walking path', error);
-    status('Could not save. Check your curator sign-in and try again.');
+    const reason = error?.code || error?.message || 'unknown error';
+    status(`Could not save (${reason}). Please try again.`);
   }
 }
 
