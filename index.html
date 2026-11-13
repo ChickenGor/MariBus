@@ -4194,8 +4194,12 @@
                     access.forEach(end => {
                         if (end.index <= start.index || !Number.isFinite(result.dist[end.node])) return;
                         const googleSection = pathDistance(googlePath.slice(start.index, end.index + 1));
-                        if (result.dist[end.node] >= googleSection - 20) return;
-                        const savedMetres = googleSection - result.dist[end.node];
+                        // Include the access walks from Google’s path into and out of
+                        // the contributed network. Require a clear saving to avoid a
+                        // visually long detour replacing the normal route.
+                        const customSection = result.dist[end.node] + start.distance + end.distance;
+                        if (customSection >= googleSection * 0.85) return;
+                        const savedMetres = googleSection - customSection;
                         if (!best || savedMetres > best.savedMetres) {
                             const routeNodes = []; let current = end.node;
                             while (current >= 0) { routeNodes.unshift(current); if (current === start.node) break; current = result.previous[current]; }
