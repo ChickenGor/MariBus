@@ -4065,7 +4065,13 @@
                     const routes = (result.data || []).map(route => {
                         const path = google.maps.geometry.encoding.decodePath(route.polyline?.encodedPolyline || '');
                         const seconds = Number(String(route.duration || '0s').replace('s', '')) || 0;
-                        return { overview_path:path, legs:[{ distance:{ value:Number(route.distanceMeters || 0), text:`${(Number(route.distanceMeters || 0) / 1000).toFixed(1)} km` }, duration:{ value:seconds, text:formatJourneyDuration(seconds / 60) }, steps:[] }] };
+                        const steps = (route.legs?.[0]?.steps || []).map(step => {
+                            const transit = step.transitDetails, stopDetails = transit?.stopDetails || {};
+                            return { travel_mode:step.travelMode, path:google.maps.geometry.encoding.decodePath(step.polyline?.encodedPolyline || ''), duration:{ value:Number(String(step.duration || '0s').replace('s','')) || 0 },
+                                start_location:step.startLocation?.latLng, end_location:step.endLocation?.latLng,
+                                transit: transit ? { line:{ short_name:transit.tripShortText || transit.transitLine?.name || '', name:transit.transitLine?.name || '', vehicle:{ type:transit.transitLine?.vehicle?.type || 'BUS' } }, headsign:transit.headsign || '', departure_stop:{ name:stopDetails.departureStop?.name || '' }, arrival_stop:{ name:stopDetails.arrivalStop?.name || '' } } : null };
+                        });
+                        return { overview_path:path, legs:[{ distance:{ value:Number(route.distanceMeters || 0), text:`${(Number(route.distanceMeters || 0) / 1000).toFixed(1)} km` }, duration:{ value:seconds, text:formatJourneyDuration(seconds / 60) }, steps }] };
                     });
                     callback({ routes }, routes.length ? google.maps.DirectionsStatus.OK : 'ZERO_RESULTS');
                 } catch (error) { callback(null, 'ERROR'); }

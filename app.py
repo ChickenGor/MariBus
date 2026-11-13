@@ -1203,10 +1203,12 @@ def directions():
     body = {"origin": {"location": {"latLng": {"latitude": origin_lat, "longitude": origin_lng}}},
             "destination": {"location": {"latLng": {"latitude": destination_lat, "longitude": destination_lng}}},
             "travelMode": travel_mode}
+    if travel_mode == "TRANSIT":
+        body["computeAlternativeRoutes"] = True
     try:
         response = requests.post("https://routes.googleapis.com/directions/v2:computeRoutes", json=body, timeout=12,
             headers={"Content-Type": "application/json", "X-Goog-Api-Key": api_key,
-                     "X-Goog-FieldMask": "routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline"})
+                     "X-Goog-FieldMask": "routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline,routes.legs.duration,routes.legs.distanceMeters,routes.legs.steps.travelMode,routes.legs.steps.duration,routes.legs.steps.polyline.encodedPolyline,routes.legs.steps.startLocation,routes.legs.steps.endLocation,routes.legs.steps.transitDetails"})
         response.raise_for_status()
         return jsonify({"success": True, "data": response.json().get("routes", [])})
     except requests.RequestException:
