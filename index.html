@@ -4019,7 +4019,16 @@
             if (kind === 'to') {
                 document.getElementById('header-journey-search').classList.add('expanded');
                 document.getElementById('destination-prefix').textContent = 'B';
-                setTimeout(() => document.getElementById('journey-from').focus(), 0);
+                // Destination-first is the normal mobile journey flow. Use the
+                // rider's location as A automatically; only ask for A when the
+                // device cannot provide it or the rider has already chosen one.
+                if (!journeySelection.from?.place) {
+                    autoPlanAfterLocation = true;
+                    document.getElementById('journey-from').value = 'Finding current location…';
+                    useCurrentLocationForJourney(true);
+                } else {
+                    setTimeout(() => document.getElementById('journey-from').focus(), 0);
+                }
             } else if (kind === 'from' && journeySelection.to?.place) {
                 autoPlanAfterLocation = false;
                 setTimeout(planJourney, 0);
@@ -4108,6 +4117,8 @@
             autoPlanAfterLocation = planWhenReady;
             if (!navigator.geolocation) {
                 document.getElementById('journey-from-match').textContent = 'Location is unavailable on this device';
+                document.getElementById('journey-from').value = '';
+                document.getElementById('journey-from').focus();
                 return;
             }
             document.getElementById('journey-from-match').textContent = 'Getting your location…';
@@ -4116,6 +4127,8 @@
                 matchPlaceToStop('from', { lat:position.coords.latitude, lng:position.coords.longitude, name:'Current location' });
             }, () => {
                 document.getElementById('journey-from-match').textContent = 'Location permission was not granted';
+                document.getElementById('journey-from').value = '';
+                document.getElementById('journey-from').focus();
             }, { enableHighAccuracy:true, timeout:10000 });
         }
 
