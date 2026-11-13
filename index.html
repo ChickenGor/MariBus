@@ -183,6 +183,7 @@
         #journey-location-button { width:34px; height:34px; flex:0 0 34px; border:0; border-radius:50%; background:#2563eb; color:#fff; font-size:17px; cursor:pointer; }
         #journey-swap-button { display:none; width:34px; height:34px; flex:0 0 34px; border:0; border-radius:50%; background:transparent; color:var(--text-main); font-size:20px; cursor:pointer; }
         #header-journey-search.expanded #journey-swap-button { display:block; }
+        #destination-search-close { display:none; position:absolute; top:18px; left:18px; width:42px; height:42px; place-items:center; border:0; border-radius:50%; background:var(--input-bg); color:var(--text-main); font-size:30px; line-height:1; cursor:pointer; }
 
         /* Floating Top Search Bar */
         #top-search-container {
@@ -241,6 +242,7 @@
         .place-suggestions { position:absolute; top:calc(100% + 4px); left:0; right:0; z-index:3000; overflow:hidden; border:1px solid var(--border-color); border-radius:12px; background:var(--sheet-bg); box-shadow:0 10px 24px var(--shadow-color); }
         .place-suggestions button { display:block; width:100%; padding:10px 12px; border:0; border-bottom:1px solid var(--border-color); background:transparent; color:var(--text-main); font:inherit; text-align:left; cursor:pointer; }
         .place-suggestions button:last-child { border-bottom:0; }
+        .place-suggestions .route-search-result { color:var(--maribus-teal-deep); font-weight:800; }
         .pac-item { padding: 10px 12px; cursor: pointer; }
         .pac-item:hover { background: #eef2ff; }
         body.route-code-entry .pac-container { display:none !important; }
@@ -1485,6 +1487,12 @@
             #header-journey-search.expanded #journey-swap-button {
                 width:40px; height:40px; flex-basis:40px; color:var(--maribus-teal-deep); font-size:23px;
             }
+            body.destination-search-open { overflow:hidden; }
+            body.destination-search-open #top-bar { position:fixed; z-index:4000; inset:0; width:100%; height:100dvh; padding:72px 18px 24px; box-sizing:border-box; align-items:flex-start; background:var(--sheet-bg); }
+            body.destination-search-open #menu-button,body.destination-search-open .desktop-brand,body.destination-search-open #theme-toggle-header { display:none; }
+            body.destination-search-open #header-journey-search,body.destination-search-open #header-journey-search.expanded { position:static; display:flex; width:100%; max-width:none; min-height:126px; margin:0; padding:10px 14px; box-sizing:border-box; border-radius:24px; box-shadow:0 10px 28px rgba(19,52,58,.14); }
+            body.destination-search-open #destination-search-close { display:grid; }
+            body.destination-search-open .place-suggestions { position:fixed; top:218px; right:18px; left:18px; max-height:calc(100dvh - 240px); overflow:auto; border:0; box-shadow:none; }
             body:has(#header-journey-search.expanded) #map-view-toggle { bottom:18px; }
             body:not(:has(#bottom-sheet.detail-mode)) #map-view-toggle { bottom:164px; }
             body:not(:has(#bottom-sheet.detail-mode)):has(#header-journey-search.expanded) #map-view-toggle { bottom:18px; }
@@ -1539,6 +1547,7 @@
             <svg class="ui-icon" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"></path></svg>
         </button>
         <span class="desktop-brand">MARIBUS</span>
+        <button id="destination-search-close" type="button" onclick="closeDestinationSearch()" aria-label="Close destination search" hidden>&times;</button>
         <div id="header-journey-search">
             <div id="journey-origin-row" class="journey-input-row">
                 <span class="point-label origin-point-icon" aria-hidden="true"><svg class="ui-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"></circle><circle cx="12" cy="12" r="2.5"></circle></svg></span>
@@ -2115,8 +2124,14 @@
             event?.preventDefault();
             const search = document.getElementById('header-journey-search');
             const input = document.getElementById('journey-to');
+            document.body.classList.add('destination-search-open');
             search.classList.add('expanded');
             requestAnimationFrame(() => input.focus({ preventScroll:true }));
+        }
+
+        function closeDestinationSearch() {
+            document.body.classList.remove('destination-search-open');
+            document.getElementById('journey-to')?.blur();
         }
 
         map.native?.addListener?.('idle', () => {
@@ -3509,34 +3524,12 @@
             });
             ['from', 'to'].forEach(kind => {
                 const input = document.getElementById(`journey-${kind}`);
-                input.addEventListener('keydown', event => {
-                    if (event.key !== 'Enter') return;
-                    const routeCode = input.value.trim().toUpperCase();
-                    if (!/^[A-Z]{1,3}\d{1,4}(?:[A-Z]|\([A-Z]\))?$/.test(routeCode)) return;
-                    event.preventDefault();
-                    event.stopImmediatePropagation();
-                    if (routeCodeSearchTimer) clearTimeout(routeCodeSearchTimer);
-                    document.body.classList.remove('route-code-entry');
-                    input.value = routeCode;
-                    input.blur();
-                    document.getElementById('header-journey-search').classList.remove('expanded');
-                    searchRouteCode(routeCode);
-                });
                 input.addEventListener('input', () => {
                     const hadOrigin = Boolean(journeySelection.from);
                     const routeCode = input.value.trim().toUpperCase();
                     const isRouteCode = /^[A-Z]{1,3}\d{1,4}(?:[A-Z]|\([A-Z]\))?$/.test(routeCode);
                     document.body.classList.toggle('route-code-entry', isRouteCode);
                     if (routeCodeSearchTimer) clearTimeout(routeCodeSearchTimer);
-                    if (isRouteCode) {
-                        routeCodeSearchTimer = setTimeout(() => {
-                            document.body.classList.remove('route-code-entry');
-                            input.value = routeCode;
-                            input.blur();
-                            document.getElementById('header-journey-search').classList.remove('expanded');
-                            searchRouteCode(routeCode);
-                        }, 550);
-                    }
                     journeySelection[kind] = null;
                     document.getElementById(`journey-${kind}-match`).textContent = '';
                     if (kind === 'to') {
@@ -3549,7 +3542,7 @@
                         else document.getElementById('destination-prefix').innerHTML = iconSvg('search');
                     }
                 });
-                let suggestions = [], requestId = 0, sessionToken = null;
+                let suggestions = [], requestId = 0, sessionToken = null, routeCodeSuggestion = '';
                 const suggestionList = document.createElement('div');
                 suggestionList.className = 'place-suggestions';
                 suggestionList.hidden = true;
@@ -3561,21 +3554,35 @@
                     sessionToken = null; suggestions = []; suggestionList.hidden = true;
                     if (!place.location) return;
                     document.body.classList.remove('route-code-entry');
+                    closeDestinationSearch();
                     matchPlaceToStop(kind, { lat:place.location.lat(), lng:place.location.lng(), name:place.displayName || place.formattedAddress || input.value, placeId:place.id || '' });
                 };
                 const renderSuggestions = () => {
-                    suggestionList.replaceChildren(...suggestions.slice(0, 5).flatMap(item => {
+                    const items = [];
+                    if (routeCodeSuggestion) {
+                        const routeButton = document.createElement('button'); routeButton.type = 'button'; routeButton.className = 'route-search-result';
+                        routeButton.textContent = `Bus route ${routeCodeSuggestion}`;
+                        routeButton.addEventListener('click', () => {
+                            suggestionList.hidden = true;
+                            closeDestinationSearch();
+                            searchRouteCode(routeCodeSuggestion);
+                        });
+                        items.push(routeButton);
+                    }
+                    items.push(...suggestions.slice(0, 5).flatMap(item => {
                         const prediction = item.placePrediction; if (!prediction) return [];
                         const button = document.createElement('button'); button.type = 'button';
                         button.textContent = prediction.text.toString();
                         button.addEventListener('click', () => void chooseSuggestion(prediction));
                         return [button];
                     }));
-                    suggestionList.hidden = !suggestionList.childElementCount;
+                    suggestionList.replaceChildren(...items);
+                    suggestionList.hidden = !items.length;
                 };
                 input.addEventListener('input', async () => {
                     const query = input.value.trim();
-                    if (query.length < 3 || /^[A-Z]{1,3}\d{1,4}(?:[A-Z]|\([A-Z]\))?$/i.test(query)) { suggestions = []; renderSuggestions(); return; }
+                    routeCodeSuggestion = /^[A-Z]{1,3}\d{1,4}(?:[A-Z]|\([A-Z]\))?$/i.test(query) ? query.toUpperCase() : '';
+                    if (query.length < 3 || routeCodeSuggestion) { suggestions = []; renderSuggestions(); return; }
                     const currentRequest = ++requestId;
                     try {
                         const { AutocompleteSuggestion, AutocompleteSessionToken } = await google.maps.importLibrary('places');
@@ -5637,7 +5644,7 @@
             startGuidedJourney, advanceGuidedJourney, recenterGuidedJourney, endGuidedJourney,
             selectSidebarRegion, toggleLiveVehicles, recenterMapPosition, backFromGuidedJourney,
             headNorthGuidedJourney, setGetOffAlertPreference, fetchBuses, retrySmartStop,
-            openMobileJourneyPlanner, toggleMobileLiveVehicles
+            openMobileJourneyPlanner, closeDestinationSearch, toggleMobileLiveVehicles
         });
 
         map.on('zoomend', scheduleRouteStopVisibility);
