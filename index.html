@@ -4507,9 +4507,9 @@
         }
 
         function googleDirectionsLocation(place) {
-            return place.placeId
-                ? { placeId:place.placeId }
-                : { lat:Number(place.lat), lng:Number(place.lng) };
+            // Routes API accepts coordinates, not the legacy Directions API's
+            // { placeId } object. Places New has already resolved these values.
+            return { lat:Number(place.lat), lng:Number(place.lng) };
         }
 
         function googleRouteWalkingSeconds(route) {
