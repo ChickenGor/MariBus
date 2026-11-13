@@ -164,6 +164,7 @@ def trip_segment_distance_km(connection, agency, trip_id, from_stop_id, to_stop_
         cached_distance = _segment_distance_cache.get(cache_key)
     if cached_distance is not None:
         return cached_distance
+    response = None
     try:
         official = connection.execute(
             """SELECT
@@ -1205,14 +1206,15 @@ def directions():
             "travelMode": travel_mode}
     if travel_mode == "TRANSIT":
         body["computeAlternativeRoutes"] = True
+    response = None
     try:
         response = requests.post("https://routes.googleapis.com/directions/v2:computeRoutes", json=body, timeout=12,
             headers={"Content-Type": "application/json", "X-Goog-Api-Key": api_key,
-                     "X-Goog-FieldMask": "routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline,routes.legs.duration,routes.legs.distanceMeters,routes.legs.steps.travelMode,routes.legs.steps.duration,routes.legs.steps.polyline.encodedPolyline,routes.legs.steps.startLocation,routes.legs.steps.endLocation,routes.legs.steps.transitDetails"})
+                     "X-Goog-FieldMask": "routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline,routes.legs"})
         response.raise_for_status()
         return jsonify({"success": True, "data": response.json().get("routes", [])})
     except requests.RequestException:
-        app.logger.exception("Google Routes request failed")
+        app.logger.exception("Google Routes request failed: %s", getattr(response, "text", "no response"))
         return jsonify({"success": False, "error": "Google routing is temporarily unavailable"}), 502
 
 
