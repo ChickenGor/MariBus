@@ -4155,24 +4155,53 @@
             const contributed = Array.isArray(window.__mariBusWalkingPaths) ? window.__mariBusWalkingPaths : [];
             let savedSeconds = 0;
             if (!contributed.length) return savedSeconds;
+            const nodes = [], edges = [];
+            const addNode = point => { nodes.push(point); edges.push([]); return nodes.length - 1; };
+            const link = (a, b, cost) => { edges[a].push({ to:b, cost }); edges[b].push({ to:a, cost }); };
+            contributed.forEach(contribution => {
+                const points = (contribution.points || []).map(walkingPathPoint).filter(point => Number.isFinite(point.lat) && Number.isFinite(point.lng));
+                let previous = -1;
+                points.forEach(point => {
+                    const current = addNode(point);
+                    if (previous >= 0) link(previous, current, walkingPathDistance(nodes[previous], point));
+                    previous = current;
+                });
+            });
+            // Editor snapping joins paths within 80 m; use the same tolerance in routing.
+            for (let a = 0; a < nodes.length; a += 1) for (let b = a + 1; b < nodes.length; b += 1) {
+                const distance = walkingPathDistance(nodes[a], nodes[b]);
+                if (distance <= 80) link(a, b, distance);
+            }
+            const shortestPath = source => {
+                const dist = Array(nodes.length).fill(Infinity), previous = Array(nodes.length).fill(-1), used = Array(nodes.length).fill(false);
+                dist[source] = 0;
+                for (let count = 0; count < nodes.length; count += 1) {
+                    let current = -1;
+                    for (let index = 0; index < nodes.length; index += 1) if (!used[index] && (current < 0 || dist[index] < dist[current])) current = index;
+                    if (current < 0 || !Number.isFinite(dist[current])) break;
+                    used[current] = true;
+                    edges[current].forEach(edge => { if (dist[current] + edge.cost < dist[edge.to]) { dist[edge.to] = dist[current] + edge.cost; previous[edge.to] = current; } });
+                }
+                return { dist, previous };
+            };
             steps.forEach(step => {
                 if (step.travel_mode !== google.maps.TravelMode.WALKING || !Array.isArray(step.path) || step.path.length < 3) return;
                 const googlePath = step.path.map(point => ({ lat:point.lat(), lng:point.lng() }));
                 let best = null;
-                contributed.forEach(contribution => {
-                    const contributedPoints = (contribution.points || []).map(walkingPathPoint).filter(point => Number.isFinite(point.lat) && Number.isFinite(point.lng));
-                    if (contributedPoints.length < 2) return;
-                    const first = closestWalkingPathIndex(googlePath, contributedPoints[0]);
-                    const last = closestWalkingPathIndex(googlePath, contributedPoints.at(-1));
-                    if (first.distance > 75 || last.distance > 75 || first.index === last.index) return;
-                    const forward = first.index < last.index;
-                    const start = forward ? first : last, end = forward ? last : first;
-                    const googleSection = pathDistance(googlePath.slice(start.index, end.index + 1));
-                    const customPoints = forward ? contributedPoints : [...contributedPoints].reverse();
-                    const customSection = pathDistance(customPoints);
-                    if (customSection >= googleSection - 20) return;
-                    const savedMetres = googleSection - customSection;
-                    if (!best || savedMetres > best.savedMetres) best = { start, end, customPoints, savedMetres, title:contribution.name || 'Community walking path' };
+                const access = nodes.map((point, node) => ({ node, ...closestWalkingPathIndex(googlePath, point) })).filter(item => item.distance <= 75);
+                access.forEach(start => {
+                    const result = shortestPath(start.node);
+                    access.forEach(end => {
+                        if (end.index <= start.index || !Number.isFinite(result.dist[end.node])) return;
+                        const googleSection = pathDistance(googlePath.slice(start.index, end.index + 1));
+                        if (result.dist[end.node] >= googleSection - 20) return;
+                        const savedMetres = googleSection - result.dist[end.node];
+                        if (!best || savedMetres > best.savedMetres) {
+                            const routeNodes = []; let current = end.node;
+                            while (current >= 0) { routeNodes.unshift(current); if (current === start.node) break; current = result.previous[current]; }
+                            best = { start, end, customPoints:routeNodes.map(index => nodes[index]), savedMetres };
+                        }
+                    });
                 });
                 if (!best) return;
                 const merged = [
@@ -4184,7 +4213,7 @@
                 const reduction = Math.max(0, Math.round(best.savedMetres / 1.25));
                 const seconds = Math.max(30, Number(step.duration?.value || 0) - reduction);
                 step.duration = { value:seconds, text:formatJourneyDuration(seconds / 60) };
-                step.contributedPath = best.title;
+                step.contributedPath = 'MariBus walking network';
                 savedSeconds += reduction;
             });
             return savedSeconds;
