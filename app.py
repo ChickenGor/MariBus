@@ -735,7 +735,7 @@ def favicon():
 PAGE_NAMES = {
     "ad-free", "saved-routes", "notifications", "feedback",
     "share", "rate-us", "about-us", "sign-in", "account",
-    "privacy-policy", "terms",
+    "privacy-policy", "terms", "curate-route",
 }
 
 
