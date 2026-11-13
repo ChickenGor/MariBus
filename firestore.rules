@@ -26,6 +26,11 @@ service cloud.firestore {
       allow create, update, delete: if isCurator();
     }
 
+    match /walkingPaths/{pathId} {
+      allow read: if resource.data.status == 'published' || isCurator();
+      allow create, update, delete: if isCurator();
+    }
+
     match /appConfig/{document} {
       allow read: if true;
       allow write: if false;
