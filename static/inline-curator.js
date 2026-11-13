@@ -1,11 +1,8 @@
 import { initializeApp, getApps } from 'https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js';
-import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js';
 import { getFirestore, doc, serverTimestamp, setDoc } from 'https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js';
 
-const OWNER_EMAIL = 'chickendevstu@gmail.com';
 const $ = selector => document.querySelector(selector);
-let map, db, user, drawing = false, points = [], line, referenceLine, markers = [], pathId;
-const isOwner = () => user?.email?.toLowerCase() === OWNER_EMAIL;
+let map, db, drawing = false, points = [], line, referenceLine, markers = [], pathId;
 
 function status(message) { $('#inline-curator-status').textContent = message; }
 function isPointFeature() { return ['mall_entrance', 'mall_exit'].includes($('#inline-curator-type').value); }
@@ -98,20 +95,16 @@ function addPointAtMapCentre() {
   points.push([lat, lng]); redraw();
   status(`${points.length} point${points.length === 1 ? '' : 's'} added. Move the map and add another point, or finish drawing.`);
 }
-async function save(publish) {
+async function save() {
   const name = $('#inline-curator-name').value.trim();
   if (points.length < minimumPoints()) return status(isPointFeature() ? 'Add the entrance or exit point first.' : 'Draw at least two points for the walking path.');
-  if (!db || !user) return status('Your curator sign-in is still loading.');
+  if (!db) return status('Map contributions are still loading. Try again in a moment.');
   try {
     const id = pathId || `${name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'walking-path'}-${Date.now().toString(36)}`;
-    // All ordinary saves are submissions awaiting review. This keeps the write
-    // path identical for owners and contributors, while publishing remains owner-only.
-    const statusValue = publish && isOwner() ? 'published' : 'pending';
     await setDoc(doc(db, 'walkingPaths', id), {
       name:name || 'Unnamed walking path',
       pathType:$('#inline-curator-type').value,
-      status:statusValue,
-      ownerUid:user.uid,
+      status:'published',
       points:points.map(([lat,lng]) => [Number(lat.toFixed(6)), Number(lng.toFixed(6))]),
       start:{ lat:points[0][0], lng:points[0][1] },
       destination:{ lat:points.at(-1)[0], lng:points.at(-1)[1] },
@@ -119,8 +112,7 @@ async function save(publish) {
       ...(pathId ? {} : { createdAt:serverTimestamp() }),
     }, { merge:true });
     pathId = id;
-    $('#inline-curator-publish').hidden = !isOwner();
-    status(publish ? 'Walking path published.' : 'Thanks — your walking path was submitted for review.');
+    status('Walking path published.');
   } catch (error) {
     console.error('Could not save walking path', error);
     const reason = error?.code || error?.message || 'unknown error';
@@ -136,16 +128,10 @@ async function initialize() {
     const config = await response.json();
     if (!config.firebase_enabled) throw new Error('Firebase unavailable');
     const firebaseApp = getApps()[0] || initializeApp(config.firebase_config);
-    const auth = getAuth(firebaseApp); db = getFirestore(firebaseApp);
-    onAuthStateChanged(auth, currentUser => {
-      user = currentUser;
-      if (!currentUser) setOpen(false);
-      $('#inline-curator-publish').hidden = !isOwner();
-    });
+    db = getFirestore(firebaseApp);
   } catch (error) { console.warn('Inline curator unavailable', error); }
 
   $('#curate-route-main').addEventListener('click', () => {
-    if (!user) return status('Sign in to contribute a walking path.');
     setOpen($('#inline-curator').hidden);
   });
   $('#inline-curator-draw').addEventListener('click', startDrawing);
@@ -156,8 +142,7 @@ async function initialize() {
     points.pop(); redraw();
     status(points.length ? `${points.length} point${points.length === 1 ? '' : 's'} remaining.` : 'All points removed.');
   });
-  $('#inline-curator-save').addEventListener('click', () => save(false));
-  $('#inline-curator-publish').addEventListener('click', () => save(true));
+  $('#inline-curator-save').addEventListener('click', save);
   $('#inline-curator-close').addEventListener('click', () => setOpen(false));
   $('#inline-curator-type').addEventListener('change', redraw);
 }
