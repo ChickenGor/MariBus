@@ -3,7 +3,7 @@ import { getAuth, onAuthStateChanged, signOut } from 'https://www.gstatic.com/fi
 import { getFirestore, doc, getDoc } from 'https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js';
 
 const root=document.querySelector('#sidebar-account');
-const curatorLink=document.querySelector('#sidebar-curate-route');
+const curatorLink=document.querySelector('#curate-route-main');
 const signedOut=document.querySelector('#sidebar-signed-out');
 const signedIn=document.querySelector('#sidebar-signed-in');
 const details=document.querySelector('#sidebar-profile-details');
