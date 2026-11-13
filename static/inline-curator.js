@@ -105,7 +105,9 @@ async function save() {
       name:name || 'Unnamed walking path',
       pathType:$('#inline-curator-type').value,
       status:'published',
-      points:points.map(([lat,lng]) => [Number(lat.toFixed(6)), Number(lng.toFixed(6))]),
+      // Firestore does not support nested arrays, so each coordinate is stored
+      // as a named object instead of [lat, lng].
+      points:points.map(([lat,lng]) => ({ lat:Number(lat.toFixed(6)), lng:Number(lng.toFixed(6)) })),
       start:{ lat:points[0][0], lng:points[0][1] },
       destination:{ lat:points.at(-1)[0], lng:points.at(-1)[1] },
       updatedAt:serverTimestamp(),
