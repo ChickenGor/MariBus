@@ -3725,14 +3725,14 @@
         }
 
         async function drawGoogleTransitRoute(journey, stops, color) {
-            if (stops.length < 2 || !google.maps.DirectionsService) return false;
+            if (stops.length < 2) return false;
             const departure = new Date();
             const [hours, minutes] = String(journey.departure_time || '').split(':').map(Number);
             if (Number.isFinite(hours) && Number.isFinite(minutes)) {
                 departure.setHours(hours, minutes, 0, 0);
                 if (departure.getTime() < Date.now() - 5 * 60 * 1000) departure.setDate(departure.getDate() + 1);
             }
-            const service = new google.maps.DirectionsService();
+            const service = new RoutesApiService();
             try {
                 const directions = await new Promise((resolve, reject) => service.route({
                     origin:{ lat:Number(stops[0].stop_lat), lng:Number(stops[0].stop_lon) },
@@ -3765,7 +3765,7 @@
             const points = stops.map(stop => ({
                 lat:Number(stop.stop_lat), lng:Number(stop.stop_lon),
             })).filter(point => Number.isFinite(point.lat) && Number.isFinite(point.lng));
-            if (points.length < 2 || !google.maps.DirectionsService) return false;
+            if (points.length < 2) return false;
 
             // Use sparse anchors instead of forcing every roadside stop as a waypoint.
             // Stops on opposite carriageways can otherwise create artificial U-turn loops.
@@ -3776,7 +3776,7 @@
             for (let start = 0; start < anchors.length - 1; start++) {
                 chunks.push([anchors[start], anchors[start + 1]]);
             }
-            const service = new google.maps.DirectionsService();
+            const service = new RoutesApiService();
             const bounds = new google.maps.LatLngBounds();
             try {
                 for (const chunk of chunks) {
@@ -3822,7 +3822,7 @@
         }
 
         async function drawVerifiedRouteOnRoads(coordinates, color) {
-            if (coordinates.length < 2 || !google.maps.DirectionsService) return false;
+            if (coordinates.length < 2) return false;
             const points = coordinates.map(point => ({ lat:Number(point[0]), lng:Number(point[1]) }));
             const chunks = [];
             // Directions supports a limited number of waypoints. Twenty-three
@@ -3831,7 +3831,7 @@
             for (let start = 0; start < points.length - 1; start += 22) {
                 chunks.push(points.slice(start, Math.min(start + 23, points.length)));
             }
-            const service = new google.maps.DirectionsService();
+            const service = new RoutesApiService();
             const bounds = new google.maps.LatLngBounds();
             let renderedSegments = 0;
             for (const chunk of chunks) {
@@ -4053,14 +4053,37 @@
             return L.polyline(coordinates, { color, weight:8, opacity:1 }).addTo(activeRouteLayer);
         }
 
-        function showWalkingFallback(fromPlace, toPlace, transitNotice = '') {
-            const service = new google.maps.DirectionsService();
-            service.route({
-                origin: googleDirectionsLocation(fromPlace),
-                destination: googleDirectionsLocation(toPlace),
-                travelMode: google.maps.TravelMode.WALKING,
-            }, (response, status) => {
-                if (status !== google.maps.DirectionsStatus.OK || !response?.routes?.[0]?.legs?.[0]) {
+        class RoutesApiService {
+            async route(request, callback) {
+                const point = value => ({ lat:Number(value?.lat ?? value?.location?.lat), lng:Number(value?.lng ?? value?.location?.lng) });
+                const mode = request.travelMode === google.maps.TravelMode.WALKING ? 'WALK'
+                    : request.travelMode === google.maps.TravelMode.TRANSIT ? 'TRANSIT' : 'DRIVE';
+                try {
+                    const response = await fetch(`${API_BASE}/api/directions`, { method:'POST', headers:{'Content-Type':'application/json'},
+                        body:JSON.stringify({ origin:point(request.origin), destination:point(request.destination), travel_mode:mode }) });
+                    const result = await response.json();
+                    const routes = (result.data || []).map(route => {
+                        const path = google.maps.geometry.encoding.decodePath(route.polyline?.encodedPolyline || '');
+                        const seconds = Number(String(route.duration || '0s').replace('s', '')) || 0;
+                        return { overview_path:path, legs:[{ distance:{ value:Number(route.distanceMeters || 0), text:`${(Number(route.distanceMeters || 0) / 1000).toFixed(1)} km` }, duration:{ value:seconds, text:formatJourneyDuration(seconds / 60) }, steps:[] }] };
+                    });
+                    callback({ routes }, routes.length ? google.maps.DirectionsStatus.OK : 'ZERO_RESULTS');
+                } catch (error) { callback(null, 'ERROR'); }
+            }
+        }
+
+        async function showWalkingFallback(fromPlace, toPlace, transitNotice = '') {
+            try {
+                const response = await fetch(`${API_BASE}/api/directions`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ origin:{lat:fromPlace.lat,lng:fromPlace.lng}, destination:{lat:toPlace.lat,lng:toPlace.lng}, travel_mode:'WALK' }) });
+                const result = await response.json();
+                const route = result.success && result.data?.[0];
+                if (!route?.polyline?.encodedPolyline) throw new Error(result.error || 'No walking route');
+                const path = google.maps.geometry.encoding.decodePath(route.polyline.encodedPolyline);
+                activeRouteLayer.clearLayers();
+                drawOutlinedRoute(path.map(point => [point.lat(), point.lng()]), '#2563eb');
+                const minutes = Math.max(1, Math.round(Number(String(route.duration || '0s').replace('s','')) / 60));
+                openTransitPanel('Walking is the best option', transitNotice, `<article class="journey-card"><div class="journey-summary"><span class="journey-route" style="background:#2563eb">WALK</span><span class="journey-time">About ${minutes} min</span></div><div class="journey-meta"><strong>About ${(Number(route.distanceMeters || 0) / 1000).toFixed(1)} km</strong><br>No scheduled bus travels in this direction.</div></article>`);
+            } catch (error) {
                     const toRadians = value => value * Math.PI / 180;
                     const dLat = toRadians(toPlace.lat - fromPlace.lat);
                     const dLng = toRadians(toPlace.lng - fromPlace.lng);
@@ -4074,23 +4097,7 @@
                             <div class="journey-summary"><span class="journey-route" style="background:#2563eb">WALK</span><span class="journey-time">About ${estimatedMinutes} min</span></div>
                             <div class="journey-meta"><strong>About ${estimatedKm.toFixed(1)} km</strong><br>No scheduled bus travels in this direction. The line shown is an estimate because Google walking directions are unavailable.</div>
                         </article>`);
-                    return;
-                }
-                const leg = response.routes[0].legs[0];
-                if (walkingDirectionsRenderer) walkingDirectionsRenderer.setMap(null);
-                activeRouteLayer.clearLayers();
-                walkingDirectionsRenderer = new google.maps.DirectionsRenderer({
-                    map: map.native,
-                    directions: response,
-                    suppressMarkers: true,
-                    polylineOptions: { strokeColor:'#2563eb', strokeWeight:6, strokeOpacity:.9 },
-                });
-                openTransitPanel('Walking is the best option', transitNotice, `
-                    <article class="journey-card">
-                        <div class="journey-summary"><span class="journey-route" style="background:#2563eb">WALK</span><span class="journey-time">${escapeHtml(leg.duration?.text || '')}</span></div>
-                        <div class="journey-meta"><strong>${escapeHtml(leg.distance?.text || '')}</strong><br>No scheduled bus travels from the selected origin to this destination in that direction.</div>
-                    </article>`);
-            });
+            }
         }
 
         async function planJourney() {
@@ -4936,14 +4943,14 @@
         }
 
         async function rerouteGuidedJourney(position) {
-            if (!guidedJourney || guidedRerouteInFlight || !guidedJourney.destinationLocation || !google.maps.DirectionsService) return;
+            if (!guidedJourney || guidedRerouteInFlight || !guidedJourney.destinationLocation) return;
             const now = Date.now();
             if (now - Number(guidedJourney.lastRerouteAt || 0) < 30000) return;
             guidedRerouteInFlight = true;
             guidedJourney.lastRerouteAt = now;
             showMenuNotice('Finding a better route from your location…');
             try {
-                const service = new google.maps.DirectionsService();
+                const service = new RoutesApiService();
                 const response = await new Promise((resolve, reject) => service.route({
                     origin:position,
                     destination:guidedJourney.destinationLocation,
@@ -5255,8 +5262,8 @@
         function tryGoogleTransitJourney(preserveSheetState = false) {
             const fromPlace = journeySelection.from.place;
             const toPlace = journeySelection.to.place;
-            if (!fromPlace || !toPlace || !google.maps.DirectionsService) return Promise.resolve(false);
-            const service = new google.maps.DirectionsService();
+            if (!fromPlace || !toPlace) return Promise.resolve(false);
+            const service = new RoutesApiService();
             const transitOptions = { departureTime:new Date() };
             const preferredModes = preferredGoogleTransitModes();
             if (preferredModes.length) transitOptions.modes = preferredModes;

@@ -1184,6 +1184,36 @@ def get_route(route_id):
     })
 
 
+@app.post("/api/directions")
+@rate_limited(60, 60, "directions")
+def directions():
+    payload = request.get_json(silent=True) or {}
+    origin, destination = payload.get("origin") or {}, payload.get("destination") or {}
+    try:
+        origin_lat, origin_lng = float(origin["lat"]), float(origin["lng"])
+        destination_lat, destination_lng = float(destination["lat"]), float(destination["lng"])
+    except (KeyError, TypeError, ValueError):
+        return jsonify({"success": False, "error": "origin and destination coordinates are required"}), 400
+    travel_mode = str(payload.get("travel_mode", "WALK")).upper()
+    if travel_mode not in {"WALK", "DRIVE", "TRANSIT"}:
+        return jsonify({"success": False, "error": "Unsupported travel mode"}), 400
+    api_key = os.getenv("GOOGLE_ROUTES_API_KEY", "").strip() or os.getenv("GOOGLE_MAPS_API_KEY", "").strip()
+    if not api_key:
+        return jsonify({"success": False, "error": "Google Routes API key is not configured"}), 503
+    body = {"origin": {"location": {"latLng": {"latitude": origin_lat, "longitude": origin_lng}}},
+            "destination": {"location": {"latLng": {"latitude": destination_lat, "longitude": destination_lng}}},
+            "travelMode": travel_mode}
+    try:
+        response = requests.post("https://routes.googleapis.com/directions/v2:computeRoutes", json=body, timeout=12,
+            headers={"Content-Type": "application/json", "X-Goog-Api-Key": api_key,
+                     "X-Goog-FieldMask": "routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline"})
+        response.raise_for_status()
+        return jsonify({"success": True, "data": response.json().get("routes", [])})
+    except requests.RequestException:
+        app.logger.exception("Google Routes request failed")
+        return jsonify({"success": False, "error": "Google routing is temporarily unavailable"}), 502
+
+
 @app.get("/api/routes/search")
 def search_routes():
     agency = request.args.get("agency", "rapid-bus-kl")
