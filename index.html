@@ -4130,6 +4130,66 @@
             return L.polyline(coordinates, { color, weight:8, opacity:1 }).addTo(activeRouteLayer);
         }
 
+        function walkingPathPoint(value) {
+            if (Array.isArray(value)) return { lat:Number(value[0]), lng:Number(value[1]) };
+            return { lat:Number(value?.lat), lng:Number(value?.lng) };
+        }
+        function walkingPathDistance(a, b) {
+            const radians = value => value * Math.PI / 180;
+            const dLat = radians(b.lat - a.lat), dLng = radians(b.lng - a.lng);
+            const part = Math.sin(dLat / 2) ** 2 + Math.cos(radians(a.lat)) * Math.cos(radians(b.lat)) * Math.sin(dLng / 2) ** 2;
+            return 6371000 * 2 * Math.atan2(Math.sqrt(part), Math.sqrt(1 - part));
+        }
+        function pathDistance(points) {
+            return points.slice(1).reduce((total, point, index) => total + walkingPathDistance(points[index], point), 0);
+        }
+        function closestWalkingPathIndex(routePoints, target) {
+            let index = -1, distance = Infinity;
+            routePoints.forEach((point, candidate) => {
+                const candidateDistance = walkingPathDistance(point, target);
+                if (candidateDistance < distance) { index = candidate; distance = candidateDistance; }
+            });
+            return { index, distance };
+        }
+        function applyContributedWalkingPaths(steps) {
+            const contributed = Array.isArray(window.__mariBusWalkingPaths) ? window.__mariBusWalkingPaths : [];
+            let savedSeconds = 0;
+            if (!contributed.length) return savedSeconds;
+            steps.forEach(step => {
+                if (step.travel_mode !== google.maps.TravelMode.WALKING || !Array.isArray(step.path) || step.path.length < 3) return;
+                const googlePath = step.path.map(point => ({ lat:point.lat(), lng:point.lng() }));
+                let best = null;
+                contributed.forEach(contribution => {
+                    const contributedPoints = (contribution.points || []).map(walkingPathPoint).filter(point => Number.isFinite(point.lat) && Number.isFinite(point.lng));
+                    if (contributedPoints.length < 2) return;
+                    const first = closestWalkingPathIndex(googlePath, contributedPoints[0]);
+                    const last = closestWalkingPathIndex(googlePath, contributedPoints.at(-1));
+                    if (first.distance > 75 || last.distance > 75 || first.index === last.index) return;
+                    const forward = first.index < last.index;
+                    const start = forward ? first : last, end = forward ? last : first;
+                    const googleSection = pathDistance(googlePath.slice(start.index, end.index + 1));
+                    const customPoints = forward ? contributedPoints : [...contributedPoints].reverse();
+                    const customSection = pathDistance(customPoints);
+                    if (customSection >= googleSection - 20) return;
+                    const savedMetres = googleSection - customSection;
+                    if (!best || savedMetres > best.savedMetres) best = { start, end, customPoints, savedMetres, title:contribution.name || 'Community walking path' };
+                });
+                if (!best) return;
+                const merged = [
+                    ...googlePath.slice(0, best.start.index + 1),
+                    ...best.customPoints,
+                    ...googlePath.slice(best.end.index + 1),
+                ];
+                step.path = merged.map(point => new google.maps.LatLng(point.lat, point.lng));
+                const reduction = Math.max(0, Math.round(best.savedMetres / 1.25));
+                const seconds = Math.max(30, Number(step.duration?.value || 0) - reduction);
+                step.duration = { value:seconds, text:formatJourneyDuration(seconds / 60) };
+                step.contributedPath = best.title;
+                savedSeconds += reduction;
+            });
+            return savedSeconds;
+        }
+
         class RoutesApiService {
             async route(request, callback) {
                 const point = value => ({ lat:Number(value?.lat ?? value?.location?.lat), lng:Number(value?.lng ?? value?.location?.lng) });
@@ -4163,7 +4223,9 @@
                                     departure_stop:{ name:stopDetails.departureStop?.name || '', location:mapsLocation(stopDetails.departureStop?.location?.latLng) }, arrival_stop:{ name:stopDetails.arrivalStop?.name || '', location:mapsLocation(stopDetails.arrivalStop?.location?.latLng) },
                                     departure_time:mapsTime(stopDetails.departureTime), arrival_time:mapsTime(stopDetails.arrivalTime), num_stops:Number(transit.stopCount || 0) } : null };
                         });
-                        return { overview_path:path, legs:[{ distance:{ value:Number(route.distanceMeters || 0), text:`${(Number(route.distanceMeters || 0) / 1000).toFixed(1)} km` }, duration:{ value:seconds, text:formatJourneyDuration(seconds / 60) }, departure_time:mapsTime(leg.departureTime), arrival_time:mapsTime(leg.arrivalTime), steps }] };
+                        const shortcutSavedSeconds = applyContributedWalkingPaths(steps);
+                        const adjustedSeconds = Math.max(0, seconds - shortcutSavedSeconds);
+                        return { overview_path:path, legs:[{ distance:{ value:Number(route.distanceMeters || 0), text:`${(Number(route.distanceMeters || 0) / 1000).toFixed(1)} km` }, duration:{ value:adjustedSeconds, text:formatJourneyDuration(adjustedSeconds / 60) }, departure_time:mapsTime(leg.departureTime), arrival_time:mapsTime(leg.arrivalTime), steps }] };
                     });
                     callback({ routes }, routes.length ? google.maps.DirectionsStatus.OK : 'ZERO_RESULTS');
                 } catch (error) { callback(null, 'ERROR'); }
@@ -5287,7 +5349,7 @@
             const steps = route.legs?.[0]?.steps || [];
             return `<button class="start-guidance-button" type="button" onclick="startGuidedJourney(${Number(routeIndex)})">Start journey guidance</button><div class="google-journey-flow">${steps.map(step => {
                 if (step.travel_mode === google.maps.TravelMode.WALKING) {
-                    return `<div class="google-flow-step"><span class="google-flow-icon">${iconSvg('walk')}</span><div class="google-flow-copy"><strong>Walk ${escapeHtml(step.duration?.text || '')}</strong><span>${escapeHtml(plainGoogleInstruction(step.instructions))}${step.distance?.text ? ` · ${escapeHtml(step.distance.text)}` : ''}</span></div></div>`;
+                    return `<div class="google-flow-step"><span class="google-flow-icon">${iconSvg('walk')}</span><div class="google-flow-copy"><strong>Walk ${escapeHtml(step.duration?.text || '')}</strong><span>${step.contributedPath ? `Via ${escapeHtml(step.contributedPath)} · ` : ''}${escapeHtml(plainGoogleInstruction(step.instructions))}${step.distance?.text ? ` · ${escapeHtml(step.distance.text)}` : ''}</span></div></div>`;
                 }
                 const transit = step.transit || {};
                 const line = transit.line || {};
@@ -5357,7 +5419,7 @@
                 if (path.length < 2) return;
                 path.forEach(point => bounds.extend(point));
                 const isTransit = step.travel_mode === google.maps.TravelMode.TRANSIT;
-                const color = isTransit ? googleTransitLineColor(step) : '#94a3b8';
+                const color = isTransit ? googleTransitLineColor(step) : step.contributedPath ? '#0f766e' : '#94a3b8';
                 const outline = new google.maps.Polyline({
                     map:map.native, path, clickable:false,
                     strokeColor:darkenRouteColor(color, isTransit ? .5 : .45), strokeOpacity:.95,

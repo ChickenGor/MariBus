@@ -109,6 +109,8 @@ async function loadWalkingPathNetwork(refresh = false) {
   try {
     if (refresh) clearWalkingPathNetwork();
     const snapshot = await getDocs(collection(db, 'walkingPaths'));
+    window.__mariBusWalkingPaths = snapshot.docs.map(item => ({ id:item.id, ...item.data() }));
+    window.dispatchEvent(new Event('maribus-walking-paths-ready'));
     snapshot.forEach(item => drawNetworkPath(item.data(), item.id));
     if (refresh && !drawing) status(snapshot.size ? `${snapshot.size} saved path${snapshot.size === 1 ? '' : 's'} ready to connect.` : 'No saved paths found yet.');
   } catch (error) {
