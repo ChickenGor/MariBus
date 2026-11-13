@@ -4334,12 +4334,16 @@
                     const multimodalHandled = await tryMultimodalJourney();
                     if (multimodalHandled) return;
                 }
-                // Google Transit is independent of the selected local operator. Always
-                // try it before falling back to the local GTFS-only planner.
-                const googleTransitHandled = await tryGoogleTransitJourney();
-                if (googleTransitHandled) return;
+                // MariBus plans from its own GTFS schedules and all nearby stops
+                // before asking Google. This lets us compare the local boarding
+                // choices (including routes Google may not prefer) in the same
+                // way a transit-first planner such as Moovit does.
                 const nearbyHandled = await tryNearbyStopJourneys();
                 if (nearbyHandled) return;
+                // Google remains a useful broad fallback if the selected local
+                // agency has no scheduled door-to-door option.
+                const googleTransitHandled = await tryGoogleTransitJourney();
+                if (googleTransitHandled) return;
             }
             if (!journeySelection.from.stop_id || !journeySelection.to.stop_id) {
                 openTransitPanel('No scheduled journey found', '', '<p class="panel-message">No direct or one-transfer service was found for the selected date and time. Try a later time, another operator, or a nearby starting point.</p>');
@@ -4442,7 +4446,11 @@
                     to:{ name:toPlace.name, lat:toPlace.lat, lng:toPlace.lng },
                     agency,
                 };
-                openTransitPanel('', '', html);
+                openTransitPanel('MariBus route options', result.notice || 'Compared nearby stops and scheduled services', `<h4 class="journey-section-title">Public transport</h4>${html}`);
+                if (window.innerWidth < 768) {
+                    document.getElementById('bottom-sheet').classList.add('sheet-half');
+                    updateDetailSheetToggle();
+                }
                 document.querySelectorAll('[data-nearby-index]').forEach(card => {
                     const select = () => {
                     document.querySelectorAll('.journey-card.modern').forEach(item => { item.classList.remove('selected'); item.setAttribute('aria-pressed','false'); });
