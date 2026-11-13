@@ -1488,11 +1488,15 @@
                 width:40px; height:40px; flex-basis:40px; color:var(--maribus-teal-deep); font-size:23px;
             }
             body.destination-search-open { overflow:hidden; }
-            body.destination-search-open #top-bar { position:fixed; z-index:4000; inset:0; width:100%; height:100dvh; padding:72px 18px 24px; box-sizing:border-box; align-items:flex-start; background:var(--sheet-bg); }
+            body.destination-search-open #top-bar { position:fixed !important; z-index:4000; inset:0; width:100%; height:100dvh !important; padding:72px 18px 24px; box-sizing:border-box; align-items:flex-start; background:var(--sheet-bg); }
             body.destination-search-open #menu-button,body.destination-search-open .desktop-brand,body.destination-search-open #theme-toggle-header { display:none; }
-            body.destination-search-open #header-journey-search,body.destination-search-open #header-journey-search.expanded { position:static; display:flex; width:100%; max-width:none; min-height:126px; margin:0; padding:10px 14px; box-sizing:border-box; border-radius:24px; box-shadow:0 10px 28px rgba(19,52,58,.14); }
+            body.destination-search-open #header-journey-search,body.destination-search-open #header-journey-search.expanded { position:static; display:flex; width:100%; max-width:none; min-height:58px; margin:0; padding:0 14px; box-sizing:border-box; border-radius:30px; box-shadow:none; }
+            body.destination-search-open #journey-origin-row,body.destination-search-open .journey-divider,body.destination-search-open #journey-swap-button,body.destination-search-open #journey-location-button { display:none !important; }
+            body.destination-search-open #header-journey-search .journey-input-row { min-height:58px; }
+            body.destination-search-open #journey-to { font-size:20px; font-weight:700; }
             body.destination-search-open #destination-search-close { display:grid; }
-            body.destination-search-open .place-suggestions { position:fixed; top:218px; right:18px; left:18px; max-height:calc(100dvh - 240px); overflow:auto; border:0; box-shadow:none; }
+            body.destination-search-open .place-suggestions { position:fixed; top:148px; right:18px; left:18px; max-height:calc(100dvh - 170px); overflow:auto; border:0; border-radius:0; box-shadow:none; }
+            body.destination-search-open .place-suggestions button { min-height:72px; padding:14px 8px; font-size:16px; font-weight:700; }
             body:has(#header-journey-search.expanded) #map-view-toggle { bottom:18px; }
             body:not(:has(#bottom-sheet.detail-mode)) #map-view-toggle { bottom:164px; }
             body:not(:has(#bottom-sheet.detail-mode)):has(#header-journey-search.expanded) #map-view-toggle { bottom:18px; }
@@ -2125,12 +2129,14 @@
             const search = document.getElementById('header-journey-search');
             const input = document.getElementById('journey-to');
             document.body.classList.add('destination-search-open');
+            document.getElementById('destination-search-close').hidden = false;
             search.classList.add('expanded');
             requestAnimationFrame(() => input.focus({ preventScroll:true }));
         }
 
         function closeDestinationSearch() {
             document.body.classList.remove('destination-search-open');
+            document.getElementById('destination-search-close').hidden = true;
             document.getElementById('journey-to')?.blur();
         }
 
@@ -3524,6 +3530,11 @@
             });
             ['from', 'to'].forEach(kind => {
                 const input = document.getElementById(`journey-${kind}`);
+                if (kind === 'to') input.addEventListener('focus', () => {
+                    if (window.innerWidth < 768 && !document.body.classList.contains('destination-search-open')) {
+                        openMobileJourneyPlanner();
+                    }
+                });
                 input.addEventListener('input', () => {
                     const hadOrigin = Boolean(journeySelection.from);
                     const routeCode = input.value.trim().toUpperCase();
