@@ -3669,7 +3669,9 @@
                 const brandColor = safeRouteColor(journey.route_color, agency);
                 const transitRouteDrawn = await drawGoogleTransitRoute(journey, stops, brandColor);
                 if (!transitRouteDrawn && stops.length) {
-                    const line = drawOutlinedRoute(stops.map(stop => [Number(stop.stop_lat), Number(stop.stop_lon)]), brandColor);
+                    const gtfsSegment = sliceShapeThroughStops(result.data.shape, stops);
+                    const coordinates = gtfsSegment.length ? gtfsSegment : stops.map(stop => [Number(stop.stop_lat), Number(stop.stop_lon)]);
+                    const line = drawOutlinedRoute(coordinates, brandColor);
                     map.fitBounds(line.getBounds(), { padding:[45,45] });
                 }
                 stops.forEach(stop => createStopMarker(stop, brandColor).addTo(activeRouteLayer));
@@ -3826,12 +3828,28 @@
                     provideRouteAlternatives:true,
                 }, (response, status) => status === google.maps.DirectionsStatus.OK ? resolve(response) : reject(new Error(status))));
                 const expectedRoute = compactRouteLabel(journey.route_id, journey.route_short_name).toUpperCase();
-                const matchingRoute = directions.routes.find(route => route.legs.some(leg => leg.steps.some(step => {
-                    const line = step.transit?.line;
-                    return String(line?.short_name || line?.name || '').toUpperCase().includes(expectedRoute);
-                })));
-                if (!matchingRoute) return false;
-                const path = matchingRoute.overview_path;
+                const matchingRoute = directions.routes
+                    .map(route => {
+                        const transitSteps = route.legs.flatMap(leg => leg.steps).filter(step => step.travel_mode === google.maps.TravelMode.TRANSIT);
+                        const matchingStep = transitSteps.find(step => {
+                            const line = step.transit?.line;
+                            return String(line?.short_name || line?.name || '').toUpperCase().includes(expectedRoute);
+                        });
+                        if (!matchingStep) return null;
+                        const coordinate = location => ({
+                            lat:typeof location?.lat === 'function' ? location.lat() : Number(location?.lat),
+                            lng:typeof location?.lng === 'function' ? location.lng() : Number(location?.lng),
+                        });
+                        const boardDistance = distanceMetres(coordinate(matchingStep.transit?.departure_stop?.location), stops[0]);
+                        const exitDistance = distanceMetres(coordinate(matchingStep.transit?.arrival_stop?.location), stops.at(-1));
+                        return { route, boardDistance, exitDistance, score:boardDistance + exitDistance };
+                    })
+                    .filter(Boolean)
+                    .sort((a, b) => a.score - b.score)[0];
+                // A route number alone is not enough: the same route can have
+                // loop, short-turn, and opposite-direction variants.
+                if (!matchingRoute || matchingRoute.boardDistance > 350 || matchingRoute.exitDistance > 350) return false;
+                const path = matchingRoute.route.overview_path;
                 const outline = new google.maps.Polyline({ map:map.native, path, strokeColor:'#7a163f', strokeWeight:12, strokeOpacity:.95, zIndex:4 });
                 const routeLine = new google.maps.Polyline({ map:map.native, path, strokeColor:color, strokeWeight:8, strokeOpacity:1, zIndex:5 });
                 routeDirectionsRenderers.push(outline, routeLine);
@@ -4422,9 +4440,9 @@
                         .map(other => other.departure_time))].slice(0, 2);
                     return `<article class="journey-card modern ${index === 0 ? 'selected' : ''}" data-nearby-index="${index}" role="button" tabindex="0" aria-pressed="${index === 0 ? 'true' : 'false'}" aria-label="Journey option ${index + 1}, ${escapeHtml(formatJourneyDuration(journey.total_minutes))}">
                         <div class="journey-option-top">
-                            <div class="journey-option-head"><div class="journey-total">${escapeHtml(formatJourneyDuration(journey.total_minutes))}</div><div class="journey-main-time">${escapeHtml(journey.departure_time)} &ndash; ${escapeHtml(journey.arrival_time)}</div></div>
+                            <div class="journey-option-head"><div class="journey-total">${escapeHtml(formatJourneyDuration(journey.total_minutes))}<small>from now</small></div><div class="journey-main-time">${escapeHtml(journey.departure_time)} &ndash; ${escapeHtml(journey.arrival_time)}</div></div>
                             <div class="journey-steps"><span>${iconSvg('walk', 'inline-icon')} ${journey.walk_minutes} min</span><span>&rsaquo;</span>${routeBadges(journey)}<span>&rsaquo;</span><span>${journey.transfers ? `${journey.transfers} change` : 'Direct'}</span></div>
-                            <div class="journey-board">Board at <strong>${escapeHtml(journey.from_stop.stop_name)}</strong><br>Exit at ${escapeHtml(journey.to_stop.stop_name)}</div>
+                            <div class="journey-board">${journey.wait_minutes ? `Leave now · wait about ${journey.wait_minutes} min<br>` : ''}Board at <strong>${escapeHtml(journey.from_stop.stop_name)}</strong><br>Exit at ${escapeHtml(journey.to_stop.stop_name)}</div>
                             ${journey.fare ? `<div class="journey-fare"><strong>Estimated adult fare RM${Number(journey.fare.adult_rm).toFixed(2)}</strong><span class="journey-fare-note">${Number(journey.fare.distance_km).toFixed(1)} km</span></div><div class="journey-fare-detail">Estimated concession RM${Number(journey.fare.concession_rm).toFixed(2)} · distance-band calculation, confirm with the operator</div>` : ''}
                             <div class="journey-live-progress" id="journey-progress-${index}">
                                 <div class="journey-progress-labels"><span>A</span><span>B</span></div>
