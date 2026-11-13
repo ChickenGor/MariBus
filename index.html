@@ -932,6 +932,16 @@
         .walking-option-copy strong,.walking-option-copy span { display:block; }
         .walking-option-copy strong { font-size:14px; }
         .walking-option-copy span { margin-top:5px; color:var(--text-muted); font-size:11px; }
+        .route-hero { padding:8px 2px 12px; }
+        .route-hero-time { color:var(--text-main); font-size:34px; font-weight:950; letter-spacing:-1.2px; line-height:1; }
+        .route-hero-arrival { margin-top:7px; color:var(--text-muted); font-size:18px; font-weight:800; }
+        .route-hero-progress { display:flex; align-items:center; gap:7px; margin:26px 0 19px; overflow:hidden; }
+        .route-hero-progress::before,.route-hero-progress::after { content:''; width:13px; height:28px; flex:0 0 13px; border-radius:999px; background:#d8dee5; }
+        .route-hero-dot { width:12px; height:12px; flex:0 0 12px; border-radius:50%; background:#d8dee5; }
+        .route-hero-dot.active { background:var(--maribus-teal); box-shadow:0 0 0 4px color-mix(in srgb,var(--maribus-teal) 16%,transparent); }
+        .route-hero-step { display:flex; align-items:flex-start; gap:10px; padding:10px 0 2px; border-top:1px solid var(--border-color); color:var(--text-muted); font-size:12px; line-height:1.35; }
+        .route-hero-step .journey-route { flex:0 0 auto; }
+        .route-hero-step strong { color:var(--text-main); }
         .journey-card.modern:active { transform:scale(.99); }
         .journey-card.modern.selected { border:2px solid #2563eb; background:rgba(37,99,235,.04); }
         .journey-option-top { display:block; }
@@ -3677,7 +3687,10 @@
                 stops.forEach(stop => createStopMarker(stop, brandColor).addTo(activeRouteLayer));
                 updateJourneyPlaceMarkers();
                 if (!preservePanel) {
-                    openTransitPanel(compactRouteLabel(journey.route_id, journey.route_short_name), `${stops.length} stops from A to B`, renderJourneyStopList(fullStops, journey.from_stop, journey.to_stop));
+                    openTransitPanel('', '', transitStyleRouteHero(journey, stops));
+                    const sheet = document.getElementById('bottom-sheet');
+                    sheet.classList.remove('sheet-half', 'sheet-expanded');
+                    updateDetailSheetToggle();
                     if (currentJourneyOptions.length) updateLiveJourneyTracking(currentJourneyOptions);
                 }
             } catch (error) {
@@ -3808,6 +3821,21 @@
                 const label = index === 0 ? 'A' : index === journeyStops.length - 1 ? 'B' : index + 1;
                 return `<div class="stop-row" data-stop-id="${escapeHtml(stop.stop_id)}"><strong class="journey-stop-label">${label}</strong><span class="stop-name">${escapeHtml(stop.stop_name)}</span></div>`;
             }).join('')}${hiddenSection(after, 'Show stops after B')}`;
+        }
+
+        function transitStyleRouteHero(journey, stops) {
+            const totalMinutes = Math.max(1, Number(journey.total_minutes || journey.duration_minutes || 0));
+            const arrival = journey.arrival_time ? `Arrive at ${journey.arrival_time}` : 'Arrival time updating';
+            const dotCount = Math.max(8, Math.min(18, Number(stops?.length || journey.stop_count || 8)));
+            const dots = Array.from({ length:dotCount }, (_, index) => `<span class="route-hero-dot${index === 0 ? ' active' : ''}"></span>`).join('');
+            const routeLabel = compactRouteLabel(journey.route_id, journey.route_short_name);
+            return `<article class="route-hero" aria-label="Selected route">
+                <div class="route-hero-time">${escapeHtml(formatJourneyDuration(totalMinutes))}</div>
+                <div class="route-hero-arrival">${escapeHtml(arrival)}</div>
+                <div class="route-hero-progress" aria-hidden="true">${dots}</div>
+                <div class="route-hero-step"><span>${iconSvg('walk', 'inline-icon')}</span><div><strong>Walk ${escapeHtml(String(journey.walk_minutes || 0))} min</strong><br>to ${escapeHtml(journey.from_stop?.stop_name || 'your boarding stop')}</div></div>
+                <div class="route-hero-step"><span class="journey-route" style="background:${safeRouteColor(journey.route_color)}">${escapeHtml(routeLabel)}</span><div><strong>Ride to ${escapeHtml(journey.to_stop?.stop_name || 'your destination stop')}</strong><br>${escapeHtml(String(stops?.length || journey.stop_count || 0))} stops</div></div>
+            </article>`;
         }
 
         async function drawGoogleTransitRoute(journey, stops, color) {
