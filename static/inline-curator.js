@@ -21,6 +21,7 @@ function clearDrawing() {
   $('#inline-curator-reference').disabled = true;
   $('#inline-curator').classList.remove('drawing');
   document.body.classList.remove('drawing-walking-path');
+  document.getElementById('walking-path-target')?.classList.remove('snapped');
   map?.native?.setOptions?.({ draggable:true });
 }
 function decodePolyline(encoded) {
@@ -74,17 +75,26 @@ async function loadWalkingPathNetwork(refresh = false) {
     if (refresh) clearWalkingPathNetwork();
     const snapshot = await getDocs(collection(db, 'walkingPaths'));
     snapshot.forEach(item => drawNetworkPath(item.data()));
+    if (refresh && !drawing) status(snapshot.size ? `${snapshot.size} saved path${snapshot.size === 1 ? '' : 's'} ready to connect.` : 'No saved paths found yet.');
   } catch (error) {
     console.warn('Could not load walking path network', error);
+    if (refresh && !drawing) status(`Could not load saved paths (${error?.code || 'unknown error'}).`);
   }
 }
 function snapToNetwork(point) {
-  let closest = null, closestDistance = 25;
+  let closest = null, closestDistance = 40;
   networkEndpoints.forEach(endpoint => {
     const distance = distanceMetres(point, endpoint);
     if (distance < closestDistance) { closest = endpoint; closestDistance = distance; }
   });
   return closest ? { point:[...closest], distance:Math.round(closestDistance) } : null;
+}
+function previewConnection() {
+  if (!drawing) return;
+  const centre = map?.native?.getCenter?.();
+  const lat = centre?.lat?.(), lng = centre?.lng?.();
+  const snapped = Number.isFinite(lat) && Number.isFinite(lng) ? snapToNetwork([lat, lng]) : null;
+  document.getElementById('walking-path-target')?.classList.toggle('snapped', Boolean(snapped));
 }
 async function showGoogleWalkingReference() {
   if (points.length < 2) return status('Add a start and end point first.');
@@ -122,6 +132,7 @@ function startDrawing() {
     status('Move the map until the centre target is on the path, then press Add point.');
     $('#inline-curator-draw').textContent = 'Finish drawing';
     $('#inline-curator-add-point').hidden = false;
+    previewConnection();
   } else if (points.length < minimumPoints()) {
     status(isPointFeature() ? 'Add the entrance or exit point first.' : 'Add at least two points to save a walking path.');
     $('#inline-curator-draw').textContent = 'Start drawing';
@@ -131,6 +142,7 @@ function startDrawing() {
     $('#inline-curator-draw').textContent = 'Edit path';
     $('#inline-curator-add-point').hidden = true;
   }
+  if (!drawing) document.getElementById('walking-path-target')?.classList.remove('snapped');
 }
 function addPointAtMapCentre() {
   if (!drawing) return;
@@ -201,6 +213,7 @@ async function initialize() {
   $('#inline-curator-save').addEventListener('click', save);
   $('#inline-curator-close').addEventListener('click', () => setOpen(false));
   $('#inline-curator-type').addEventListener('change', redraw);
+  map.native?.addListener?.('idle', previewConnection);
 }
 
 if (window.__mariBusMap) initialize();
