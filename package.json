@@ -7,6 +7,7 @@
     "android:sync": "cap sync android",
     "android:open": "cap open android",
     "test:transit": "node tests/transit-services.test.js",
+    "test:journey-regression": "node tests/journey-regression.test.js",
     "test:smoke": "playwright test"
   },
   "dependencies": {

@@ -1,0 +1,62 @@
+[
+  {
+    "id": "kv-pfcc-to-lotus-puchong",
+    "region": "klang-valley",
+    "origin": { "name": "PFCC Tower 4&5 lobby", "lat": null, "lng": null, "precision": "entrance" },
+    "destination": { "name": "Lotus's Puchong", "lat": null, "lng": null, "precision": "entrance" },
+    "departure": { "day_type": "weekday", "time": "17:30", "timezone": "Asia/Kuala_Lumpur" },
+    "scenario": ["direct-transit", "walking-comparison", "user-reported"],
+    "expected": { "preferred_mode": "transit", "max_transfers": 1, "notes": "Compare practical nearby stops and the final entrance, not a broad place pin." },
+    "status": "needs_field_verification"
+  },
+  {
+    "id": "kv-pfcc-to-118-mall",
+    "region": "klang-valley",
+    "origin": { "name": "PFCC Tower 4&5 lobby", "lat": null, "lng": null, "precision": "entrance" },
+    "destination": { "name": "118 Mall", "lat": null, "lng": null, "precision": "entrance" },
+    "departure": { "day_type": "weekday", "time": "17:30", "timezone": "Asia/Kuala_Lumpur" },
+    "scenario": ["multi-transfer", "walking-comparison", "user-reported"],
+    "expected": { "preferred_mode": "transit", "min_transfers": 1, "notes": "Verify the actual interchange and last walking leg." },
+    "status": "needs_field_verification"
+  },
+  {
+    "id": "kv-sunway-pyramid-to-puchong",
+    "region": "klang-valley",
+    "origin": { "name": "Sunway Pyramid Shopping Mall", "lat": null, "lng": null, "precision": "entrance" },
+    "destination": { "name": "Puchong town centre", "lat": null, "lng": null, "precision": "place" },
+    "departure": { "day_type": "weekday", "time": "08:00", "timezone": "Asia/Kuala_Lumpur" },
+    "scenario": ["transfer", "walking-comparison"],
+    "expected": { "preferred_mode": "transit", "min_transfers": 1, "notes": "Use a confirmed Sunway Pyramid entrance." },
+    "status": "needs_field_verification"
+  },
+  {
+    "id": "kv-short-walk-beats-wait",
+    "region": "klang-valley",
+    "origin": { "name": "Puchong town centre short-trip origin", "lat": null, "lng": null, "precision": "field-point" },
+    "destination": { "name": "Puchong town centre short-trip destination", "lat": null, "lng": null, "precision": "field-point" },
+    "departure": { "day_type": "weekday", "time": "12:00", "timezone": "Asia/Kuala_Lumpur" },
+    "scenario": ["walking-wins"],
+    "expected": { "preferred_mode": "walk", "notes": "Select two points under 1.2 km where waiting makes transit slower." },
+    "status": "needs_field_verification"
+  },
+  {
+    "id": "kv-covered-walkway-shortcut",
+    "region": "klang-valley",
+    "origin": { "name": "Verified covered-walkway origin", "lat": null, "lng": null, "precision": "field-point" },
+    "destination": { "name": "Verified covered-walkway destination", "lat": null, "lng": null, "precision": "field-point" },
+    "departure": { "day_type": "weekday", "time": "12:00", "timezone": "Asia/Kuala_Lumpur" },
+    "scenario": ["walking-shortcut", "covered-walkway"],
+    "expected": { "preferred_mode": "walk", "notes": "Use after a contributed/OSM path is verified and available to OTP." },
+    "status": "needs_field_verification"
+  },
+  {
+    "id": "kv-stairs-avoidance",
+    "region": "klang-valley",
+    "origin": { "name": "Accessible station entrance", "lat": null, "lng": null, "precision": "entrance" },
+    "destination": { "name": "Accessible destination entrance", "lat": null, "lng": null, "precision": "entrance" },
+    "departure": { "day_type": "weekday", "time": "09:00", "timezone": "Asia/Kuala_Lumpur" },
+    "scenario": ["accessibility", "avoid-stairs"],
+    "expected": { "preferred_mode": "transit", "notes": "Add once elevator/lift availability can be verified." },
+    "status": "needs_field_verification"
+  }
+]
