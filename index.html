@@ -3585,7 +3585,7 @@
                         else document.getElementById('destination-prefix').innerHTML = iconSvg('search');
                     }
                 });
-                let suggestions = [], requestId = 0, sessionToken = null;
+                let suggestions = [], requestId = 0, sessionToken = null, pendingSuggestionRequest = Promise.resolve();
                 const suggestionList = document.createElement('div');
                 suggestionList.className = 'place-suggestions';
                 suggestionList.hidden = true;
@@ -3612,21 +3612,32 @@
                     suggestionList.replaceChildren(...items);
                     suggestionList.hidden = !items.length;
                 };
-                input.addEventListener('input', async () => {
+                const fetchSuggestions = async () => {
                     const query = input.value.trim();
-                    if (query.length < 3) { suggestions = []; renderSuggestions(); return; }
                     const currentRequest = ++requestId;
+                    if (query.length < 3) { suggestions = []; renderSuggestions(); return; }
                     try {
                         const { AutocompleteSuggestion, AutocompleteSessionToken } = await google.maps.importLibrary('places');
                         sessionToken ||= new AutocompleteSessionToken();
                         const result = await AutocompleteSuggestion.fetchAutocompleteSuggestions({ input:query, includedRegionCodes:['my'], sessionToken });
                         if (currentRequest === requestId) { suggestions = result.suggestions || []; renderSuggestions(); }
                     } catch { suggestions = []; renderSuggestions(); }
+                };
+                input.addEventListener('input', () => {
+                    // Keep a handle to the live request. On a phone it is common
+                    // to press Enter before autocomplete has returned; Enter
+                    // must wait briefly and use the first real place result.
+                    pendingSuggestionRequest = fetchSuggestions();
                 });
                 input.addEventListener('keydown', async event => {
-                    if (event.key !== 'Enter' || !suggestions[0]?.placePrediction) return;
+                    if (event.key !== 'Enter') return;
                     event.preventDefault();
-                    await chooseSuggestion(suggestions[0].placePrediction);
+                    await pendingSuggestionRequest;
+                    if (suggestions[0]?.placePrediction) {
+                        await chooseSuggestion(suggestions[0].placePrediction);
+                        return;
+                    }
+                    document.getElementById(`journey-${kind}-match`).textContent = 'Choose a place from the suggestions, or enter more of its name.';
                 });
             });
         }
