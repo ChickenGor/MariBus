@@ -4,6 +4,7 @@ import { getFirestore, doc, getDoc } from 'https://www.gstatic.com/firebasejs/12
 
 const root=document.querySelector('#sidebar-account');
 const curatorLink=document.querySelector('#curate-route-main');
+const contributeButton=document.querySelector('#sidebar-contribute-path');
 const signedOut=document.querySelector('#sidebar-signed-out');
 const signedIn=document.querySelector('#sidebar-signed-in');
 const details=document.querySelector('#sidebar-profile-details');
@@ -15,10 +16,10 @@ try{
   if(!config.firebase_enabled)throw new Error('Firebase is not configured');
   const app=getApps()[0]||initializeApp(config.firebase_config);const auth=getAuth(app);const db=getFirestore(app);
   onAuthStateChanged(auth,async user=>{
-    if(!user){signedOut.hidden=false;signedIn.hidden=true;details.hidden=true;curatorLink.hidden=false;updateAdVisibility(false);document.querySelector('#sidebar-plus-title').textContent='Upgrade to Plus';document.querySelector('#sidebar-plus-copy').textContent='Unlock more routes, alerts and an ad-free experience';return;}
+    if(!user){signedOut.hidden=false;signedIn.hidden=true;details.hidden=true;curatorLink.hidden=true;updateAdVisibility(false);document.querySelector('#sidebar-plus-title').textContent='Upgrade to Plus';document.querySelector('#sidebar-plus-copy').textContent='Unlock more routes, alerts and an ad-free experience';return;}
     let profile={};try{const snapshot=await getDoc(doc(db,'users',user.uid));if(snapshot.exists())profile=snapshot.data();}catch(error){console.warn('MariBus profile unavailable',error);}
     const username=profile.username||user.displayName||user.email?.split('@')[0]||'MariBus rider';
-    curatorLink.hidden=false;
+    curatorLink.hidden=true;
     signedOut.hidden=true;signedIn.hidden=false;
     const avatar=document.querySelector('#sidebar-profile-avatar');
     const photo=profile.photoURL||user.photoURL;
@@ -45,3 +46,9 @@ try{
   });
   document.querySelector('#profile-logout').addEventListener('click',async()=>{await signOut(auth);details.hidden=true;});
 }catch(error){root.dataset.authUnavailable='true';signedOut.hidden=false;signedIn.hidden=true;updateAdVisibility(false);}
+
+contributeButton?.addEventListener('click',()=>{
+  window.toggleSidebar?.(false);
+  if(typeof window.openMariBusContributorMode==='function') window.openMariBusContributorMode();
+  else window.addEventListener('maribus-contributor-ready',()=>window.openMariBusContributorMode?.(),{once:true});
+});

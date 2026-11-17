@@ -74,6 +74,20 @@ test('mobile journey planner stays open while typing a destination', async ({ pa
   await expect(page.getByRole('button', { name: 'Use current location' })).toBeVisible();
 });
 
+test('contributor mode is separate from the normal rider map', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Open menu' }).click();
+  await page.getByRole('button', { name: 'Contribute a walking path' }).click();
+
+  await expect(page.locator('body')).toHaveClass(/walking-path-editing/);
+  await expect(page.getByRole('complementary', { name: 'Contribute walking path' })).toBeVisible();
+  await expect(page.locator('#mobile-map-dock')).toBeHidden();
+  await page.getByRole('button', { name: 'Exit edit mode' }).click();
+  await expect(page.locator('body')).not.toHaveClass(/walking-path-editing/);
+});
+
 test('reduced motion disables repeating loader animation', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('/');

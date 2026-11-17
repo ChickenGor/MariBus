@@ -161,12 +161,25 @@ async function showGoogleWalkingReference() {
   }
 }
 function setOpen(open) {
+  if (open) {
+    document.body.classList.remove('destination-search-open');
+    $('#destination-search-close').hidden = true;
+    $('#journey-to')?.blur();
+  }
   $('#inline-curator').hidden = !open;
   document.body.classList.toggle('walking-path-editing', open);
   $('#curate-route-main').setAttribute('aria-expanded', String(open));
   $('#curate-route-main').classList.toggle('active', open);
   if (open && db) void loadWalkingPathNetwork(true);
   if (!open) { clearDrawing(); pathId = undefined; }
+}
+
+// The editor is intentionally opened only from the main menu. Normal riders
+// stay in the destination-first journey flow and never have to work around
+// map-editing controls.
+function openContributorMode() {
+  setOpen(true);
+  status('Contributor mode. Draw or edit a walking path, then exit to return to route planning.');
 }
 function startDrawing() {
   drawing = !drawing;
@@ -261,9 +274,9 @@ async function initialize() {
     await loadWalkingPathNetwork();
   } catch (error) { console.warn('Inline curator unavailable', error); }
 
-  $('#curate-route-main').addEventListener('click', () => {
-    setOpen($('#inline-curator').hidden);
-  });
+  window.openMariBusContributorMode = openContributorMode;
+  window.dispatchEvent(new Event('maribus-contributor-ready'));
+  $('#curate-route-main').addEventListener('click', openContributorMode);
   $('#inline-curator-draw').addEventListener('click', startDrawing);
   $('#inline-curator-add-point').addEventListener('click', addPointAtMapCentre);
   $('#inline-curator-reference').addEventListener('click', showGoogleWalkingReference);
