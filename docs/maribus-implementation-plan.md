@@ -248,16 +248,91 @@ Cost controls:
 - Set Google budget alerts and quotas.
 - Make satellite opt-in rather than default.
 
-## Delivery sequence
+## Revised delivery roadmap
 
-1. Deploy OTP and configure `OTP_GRAPHQL_URL`.
-2. Automate GTFS and real-time ingestion.
-3. Route all A-to-B searches through OTP.
-4. Add reviewed local walking paths to the routing graph.
-5. Complete destination-first search and Transit-style route detail UI.
-6. Move the normal map to MapLibre/OSM.
-7. Add nationwide feeds after Klang Valley routing is reliable.
+The delivery order below replaces the earlier sequence. It intentionally delays a React Native rewrite and a map-provider migration: neither fixes the current A-to-B journey quality problem.
 
-## First implementation task
+### Phase 0 — Measure and protect routing quality (now, about one week)
 
-Deploy OpenTripPlanner using Klang Valley GTFS plus OSM data, then configure production `OTP_GRAPHQL_URL`. This is the dependency that turns MariBus from a collection of route fallbacks into a single real multimodal journey planner.
+1. Freeze new map/editor features while the planner is stabilised.
+2. Create a Klang Valley regression catalogue of 30–50 real journeys, including the PFCC Tower 4&5 lobby → Lotus's Puchong example, short walks, buses, rail, transfers, and inaccessible routes.
+3. Record the expected best option, total time, walking time, transfers, and the evidence source (operator timetable, actual trip, or a trusted competitor for comparison only).
+4. Audit every GTFS feed with a validator before it enters routing; flag invalid stop locations, malformed times, duplicate trips, missing shapes, and stale feeds.
+5. Define launch measurements: successful search rate, p95 response time, itinerary mismatch rate, and the percentage of searches where walking beats transit.
+
+**Exit gate:** MariBus has a repeatable way to prove that a routing change improves, rather than accidentally worsens, its important journeys.
+
+### Phase 1 — Build and validate OTP privately (one to two weeks)
+
+1. Build an OpenTripPlanner graph locally from the audited Klang Valley GTFS feeds and Malaysian OSM data already in `otp/`.
+2. Run the regression catalogue against OTP and inspect complete walk → transit → walk itineraries.
+3. Fix data/configuration issues first: stop snapping, walk speed, transfer time, boarding cost, service calendars, and route shapes.
+4. Keep the current production planner untouched while these results are compared.
+
+**Exit gate:** OTP returns sensible results for the catalogue and does not select a slower transit journey when walking is genuinely faster.
+
+### Phase 2 — Operate OTP safely in production (one to two weeks)
+
+1. Deploy the MariBus API and OTP in the same low-latency region, with enough memory for graph building and serving (normally at least 8 GB for the builder).
+2. Separate graph building from the live router. Download and validate new data, build a candidate graph, run canary journeys, then atomically swap it into service only when it passes.
+3. Keep the previous graph for immediate rollback.
+4. Configure `OTP_GRAPHQL_URL` only after the production health check and canary queries pass.
+
+**Exit gate:** normal route searches have a p95 response time below 1.5 seconds; a Google fallback appears within three seconds if OTP fails.
+
+### Phase 3 — One reliable planner pipeline (one to two weeks)
+
+```text
+Rider app → MariBus API → OTP → MariBus ranker → rider app
+                         └→ Google fallback only when OTP is unavailable
+```
+
+1. Give OTP, the fallback, and the app one shared journey-result format.
+2. Make OTP the only normal A-to-B decision engine; do not mix local approximations and Google results in the same recommendation without labelling them.
+3. Treat live vehicle positions as map/status information until trustworthy trip updates are available; positions alone must not rewrite ETA or routing.
+4. Rank OTP alternatives for fastest, less walking, fewer transfers, covered route, avoid stairs, and wheelchair-friendly.
+
+**Exit gate:** every option clearly says whether it is scheduled, live, stale, or fallback, and its total time includes walking, waiting, transfers, and riding.
+
+### Phase 4 — Simplify the rider experience (one to two weeks)
+
+1. Make the opening screen map-first with one clear “Where to?” action.
+2. Keep destination search as a full-screen task, then return to one clean list of journey options.
+3. Present walking and transit alternatives separately; show why the recommended choice won.
+4. Make route detail map-first, with a compact timeline for walk, wait, board, transfer, alight, and final walk.
+5. Add regression checks for the end-to-end search and selected-route flows before each release.
+
+**Exit gate:** a rider can search, compare, understand, and start a journey without entering the path-editor flow.
+
+### Phase 5 — Local walking-network overlay (after OTP is trusted, two to four weeks)
+
+1. Decide each path's status: public/permanent/verifiable paths should be contributed upstream to OpenStreetMap where appropriate; private, temporary, indoor, or uncertain paths remain a MariBus overlay.
+2. Store the overlay in PostGIS with revisions, reports, and a clear access policy.
+3. Feed approved overlay paths into a tested OTP graph-build workflow; they must change a real OTP itinerary, not only draw a line on the map.
+4. Before public release, change broad public editing into submit/review/publish with audit history and abuse controls.
+
+**Exit gate:** a verified shortcut demonstrably improves a controlled A-to-B OTP journey and has a rollback path if it is wrong.
+
+### Phase 6 — App delivery: web first, native only when it adds value
+
+| Audience | Recommended delivery | Why |
+|---|---|---|
+| Android now | Keep the existing Capacitor Android wrapper | It reuses the working web application and does not require a React Native rewrite. |
+| iPhone now | Keep the responsive web app/PWA as the supported fallback | Riders can use it in Safari and add it to their Home Screen without MariBus shipping a native iOS app. |
+| iPhone later | Add a Capacitor iOS wrapper after obtaining an Apple Developer account | It preserves one codebase and enables App Store distribution. |
+| React Native | Reconsider only if a later product need requires substantially native features, such as robust background navigation, offline maps, or deep platform integrations | A rewrite now would delay the journey-planner work without improving route quality. |
+
+There is no need to migrate to React Native now. The web application should remain the canonical product even after Android and, later, iOS wrappers exist. This gives iPhone users a usable service immediately and lets all platforms benefit from the same routing fixes.
+
+**Exit gate:** the same production API and route results work in the browser, Android wrapper, and any later iOS wrapper.
+
+### Phase 7 — Scale, maps, and nationwide expansion (after the above)
+
+1. Add additional Malaysian feeds only after Klang Valley quality is consistently good.
+2. Add cost dashboards, caching, alerts, and failure monitoring.
+3. Evaluate MapLibre plus managed OSM vector tiles for the normal map only after its data/style quality has been measured. Keep Google Places and optional satellite imagery where they genuinely help.
+4. Do not use the public `tile.openstreetmap.org` service directly for production rider traffic.
+
+## Immediate next step
+
+Start **Phase 0**: create the routing regression catalogue and GTFS audit report, then use them to validate the local OTP graph. Do not begin a React Native migration or change the production routing engine until that evidence exists.
