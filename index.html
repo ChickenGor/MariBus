@@ -2082,7 +2082,6 @@
         const journeySelection = { from: null, to: null };
         const journeySearchTimers = {};
         let autoPlanAfterLocation = false;
-        let transitJourneyPriority = ['less-walking','fewer-transfers'].includes(localStorage.getItem('maribus-transit-priority')) ? localStorage.getItem('maribus-transit-priority') : 'fastest';
         let transitModePreferences = new Set((() => {
             try {
                 const saved = JSON.parse(localStorage.getItem('maribus-transit-modes') || '[]');
@@ -4477,7 +4476,7 @@
                 const walkingMinutes = walkingLeg ? Math.max(1, Math.ceil(Number(walkingLeg.duration?.value || 0) / 60)) : Infinity;
                 const fastestTransitMinutes = Math.max(1, Number(result.data[0]?.total_minutes || Infinity));
                 const walkingPreferred = walkingRoute && walkingMinutes < fastestTransitMinutes;
-                const walkingCard = walkingLeg ? `<section aria-label="Walking route"><h4 class="journey-section-title">Walking route</h4>
+                const walkingCard = walkingLeg ? `<section aria-label="Walking route">
                     <article class="journey-card modern walking-option-card ${walkingPreferred ? 'selected' : ''}" data-local-walking-option role="button" tabindex="0" aria-pressed="${walkingPreferred}" aria-label="Walking route, ${escapeHtml(formatJourneyDuration(walkingMinutes))}">
                         <div class="walking-option-time">${escapeHtml(formatJourneyDuration(walkingMinutes))}<small>${walkingPreferred ? 'recommended' : 'walk'}</small></div>
                         <div class="walking-option-copy"><strong>${iconSvg('walk')} Walk ${(Number(walkingLeg.distance?.value || 0) / 1000).toFixed(1)} km</strong><span>${walkingLeg.steps?.some(step => step.contributedPath) ? 'Uses MariBus walking network where available' : 'Direct walking route'}</span></div>
@@ -4495,6 +4494,7 @@
                         .map(other => other.departure_time))].slice(0, 2);
                     return `<article class="journey-card modern ${index === 0 ? 'selected' : ''}" data-nearby-index="${index}" role="button" tabindex="0" aria-pressed="${index === 0 ? 'true' : 'false'}" aria-label="Journey option ${index + 1}, ${escapeHtml(formatJourneyDuration(journey.total_minutes))}">
                         <div class="journey-option-top">
+                            <span class="journey-rank-label">${index === 0 ? 'Recommended' : 'Alternative'}</span>
                             <div class="journey-option-head"><div class="journey-total">${escapeHtml(formatJourneyDuration(journey.total_minutes))}<small>from now</small></div><div class="journey-main-time">${escapeHtml(journey.departure_time)} &ndash; ${escapeHtml(journey.arrival_time)}</div></div>
                             <div class="journey-steps"><span>${iconSvg('walk', 'inline-icon')} ${journey.walk_minutes} min</span><span>&rsaquo;</span>${routeBadges(journey)}<span>&rsaquo;</span><span>${journey.transfers ? `${journey.transfers} change` : 'Direct'}</span></div>
                             <div class="journey-board">${journey.wait_minutes ? `Leave now · wait about ${journey.wait_minutes} min<br>` : ''}Board at <strong>${escapeHtml(journey.from_stop.stop_name)}</strong><br>Exit at ${escapeHtml(journey.to_stop.stop_name)}</div>
@@ -4507,7 +4507,7 @@
                             ${alternatives.length ? `<div class="journey-alternatives">Also departs at ${alternatives.map(escapeHtml).join(', ')}</div>` : ''}
                         </div>
                         <div class="journey-actions">
-                            <button class="route-action" data-show-route="${index}" style="background:${safeRouteColor(journey.route_color)}">Show route</button>
+                            <button class="route-action" data-show-route="${index}" style="background:${safeRouteColor(journey.route_color)}">View details</button>
                             <button class="route-action save-route-action icon-only" data-save-route="${index}" title="Save route" aria-label="Save route">${iconSvg('bookmark')}</button>
                         </div>
                     </article>`;
@@ -4519,7 +4519,9 @@
                     to:{ name:toPlace.name, lat:toPlace.lat, lng:toPlace.lng },
                     agency,
                 };
-                openTransitPanel('MariBus route options', result.notice || 'Compared nearby stops and scheduled services', `${walkingCard}<h4 class="journey-section-title">Public transport</h4>${html}`);
+                const transitOptionsHtml = `<h4 class="journey-section-title">${walkingPreferred ? 'Public transport' : 'Best option'}</h4>${html}`;
+                const walkingOptionHtml = `<h4 class="journey-section-title">${walkingPreferred ? 'Best option' : 'Walking'}</h4>${walkingCard || '<p class="panel-message">Walking directions are unavailable for this journey.</p>'}`;
+                openTransitPanel('Journey options', result.notice || 'Choose a route, then view every step', walkingPreferred ? `${walkingOptionHtml}${transitOptionsHtml}` : `${transitOptionsHtml}${walkingOptionHtml}`);
                 if (window.innerWidth < 768) {
                     document.getElementById('bottom-sheet').classList.add('sheet-half');
                     updateDetailSheetToggle();
@@ -5608,9 +5610,6 @@
             const transitOptions = { departureTime:new Date() };
             const preferredModes = preferredGoogleTransitModes();
             if (preferredModes.length) transitOptions.modes = preferredModes;
-            if (transitJourneyPriority === 'less-walking' && google.maps.TransitRoutePreference?.LESS_WALKING) {
-                transitOptions.routingPreference = google.maps.TransitRoutePreference.LESS_WALKING;
-            }
             return new Promise(resolve => service.route({
                 origin:googleDirectionsLocation(fromPlace),
                 destination:googleDirectionsLocation(toPlace),
@@ -5630,27 +5629,26 @@
                     transferCount:Math.max(0, (route.legs?.[0]?.steps || []).filter(step => step.travel_mode === google.maps.TravelMode.TRANSIT).length - 1),
                     durationSeconds:Number(route.legs?.[0]?.duration?.value || Number.MAX_SAFE_INTEGER),
                     arrivalTimestamp:Number(route.legs?.[0]?.arrival_time?.value?.getTime?.() || Number.MAX_SAFE_INTEGER),
-                })).sort((a, b) => transitJourneyPriority === 'less-walking'
-                    ? a.walkSeconds - b.walkSeconds || a.arrivalTimestamp - b.arrivalTimestamp
-                    : transitJourneyPriority === 'fewer-transfers'
-                        ? a.transferCount - b.transferCount || a.arrivalTimestamp - b.arrivalTimestamp || a.walkSeconds - b.walkSeconds
-                        : a.arrivalTimestamp - b.arrivalTimestamp || a.durationSeconds - b.durationSeconds || a.walkSeconds - b.walkSeconds);
+                })).sort((a, b) => a.arrivalTimestamp - b.arrivalTimestamp || a.durationSeconds - b.durationSeconds || a.walkSeconds - b.walkSeconds);
+                const recommended = rankedRoutes[0];
                 const walkingRoute = await requestGoogleWalkingJourney(fromPlace, toPlace);
                 const walkingLeg = walkingRoute?.legs?.[0];
-                const walkingCard = walkingLeg ? `<section aria-label="Walking route"><h4 class="journey-section-title">Walking route</h4>
-                    <article class="journey-card modern walking-option-card" data-google-walking-option role="button" tabindex="0" aria-label="Walking route, ${escapeHtml(walkingLeg.duration?.text || '')}">
-                        <div class="walking-option-time">${escapeHtml(walkingLeg.duration?.text || '')}<small>walk</small></div>
+                const walkingPreferred = Boolean(walkingLeg && Number(walkingLeg.duration?.value || Infinity) < recommended.durationSeconds);
+                const walkingCard = walkingLeg ? `<section aria-label="Walking route">
+                    <article class="journey-card modern walking-option-card ${walkingPreferred ? 'selected' : ''}" data-google-walking-option role="button" tabindex="0" aria-pressed="${walkingPreferred}" aria-label="Walking route, ${escapeHtml(walkingLeg.duration?.text || '')}">
+                        <div class="walking-option-time">${escapeHtml(walkingLeg.duration?.text || '')}<small>${walkingPreferred ? 'recommended' : 'walk'}</small></div>
                         <div class="walking-option-copy"><strong>${iconSvg('walk')} Walk ${(Number(walkingLeg.distance?.value || 0) / 1000).toFixed(1)} km</strong><span>${walkingRoute?.legs?.[0]?.steps?.some(step => step.contributedPath) ? 'Uses MariBus walking network where available' : 'Google walking route'}</span></div>
                     </article>
                 </section>` : '';
-                const priorityControl = `<h4 class="journey-section-title">Public transport</h4><div class="transit-priority" role="group" aria-label="Journey priority">
-                    <button type="button" data-transit-priority="fastest" class="${transitJourneyPriority === 'fastest' ? 'active' : ''}">Fastest</button>
-                    <button type="button" data-transit-priority="less-walking" class="${transitJourneyPriority === 'less-walking' ? 'active' : ''}">Less walking</button>
-                    <button type="button" data-transit-priority="fewer-transfers" class="${transitJourneyPriority === 'fewer-transfers' ? 'active' : ''}">Fewer transfers</button>
-                    <button type="button" class="adjust-transit-button ${transitModePreferences.size ? 'active' : ''}" id="adjust-transit-modes" title="Preferred transport" aria-label="Adjust preferred transport" aria-expanded="false">${iconSvg('adjust')}</button>
-                </div>${transitModeControlsHtml()}`;
-                const recommended = rankedRoutes[0];
-                const cards = rankedRoutes.map(({ route, routeIndex, walkSeconds, transferCount, durationSeconds }, displayIndex) => {
+                // Keep choices meaningful. A rider sees one best journey plus
+                // genuinely different less-walking/fewer-transfer alternatives,
+                // rather than a long list of near-identical schedules.
+                const optionSpecs = [
+                    { key:'recommended', label:'Recommended', route:recommended },
+                    { key:'less-walking', label:'Less walking', route:[...rankedRoutes].sort((a,b) => a.walkSeconds - b.walkSeconds || a.arrivalTimestamp - b.arrivalTimestamp)[0] },
+                    { key:'fewer-transfers', label:'Fewer transfers', route:[...rankedRoutes].sort((a,b) => a.transferCount - b.transferCount || a.arrivalTimestamp - b.arrivalTimestamp || a.walkSeconds - b.walkSeconds)[0] },
+                ].filter((option, index, options) => option.route && options.findIndex(other => other.route?.routeIndex === option.route.routeIndex) === index);
+                const cards = optionSpecs.map(({ key, label, route:{ route, routeIndex, walkSeconds, transferCount, durationSeconds } }, displayIndex) => {
                     const leg = route.legs?.[0];
                     if (!leg) return '';
                     const steps = leg.steps || [];
@@ -5667,9 +5665,9 @@
                         if (walkingDifference <= -2) comparisons.push(`${Math.abs(walkingDifference)} min less walking`);
                         if (transferCount < recommended.transferCount) comparisons.push(`${recommended.transferCount - transferCount} fewer transfer${recommended.transferCount - transferCount === 1 ? '' : 's'}`);
                     }
-                    return `<article class="journey-card modern ${displayIndex === 0 ? 'selected' : ''}" data-google-transit-index="${routeIndex}" role="button" tabindex="0" aria-pressed="${displayIndex === 0 ? 'true' : 'false'}" aria-label="${displayIndex === 0 ? 'Recommended journey' : `Alternative journey ${displayIndex}`}, ${escapeHtml(leg.duration?.text || '')}">
+                    return `<article class="journey-card modern ${displayIndex === 0 && !walkingPreferred ? 'selected' : ''}" data-google-transit-index="${routeIndex}" role="button" tabindex="0" aria-pressed="${displayIndex === 0 && !walkingPreferred ? 'true' : 'false'}" aria-label="${escapeHtml(label)} journey, ${escapeHtml(leg.duration?.text || '')}">
                         <div class="journey-option-top">
-                            <span class="journey-rank-label">${displayIndex === 0 ? 'Recommended' : `Alternative ${displayIndex}`}</span>
+                            <span class="journey-rank-label">${escapeHtml(label)}</span>
                             <div class="journey-option-head"><div class="journey-total">${escapeHtml(leg.duration?.text || '')}</div><div class="journey-main-time">${escapeHtml(leg.departure_time?.text || '')} &ndash; ${escapeHtml(leg.arrival_time?.text || '')}</div></div>
                             <div class="journey-steps">${routeSteps}</div>
                             <div class="journey-board">${board ? `Board at <strong>${escapeHtml(board)}</strong>` : ''}${board && exit ? '<br>' : ''}${exit ? `Exit at ${escapeHtml(exit)}` : ''}</div>
@@ -5679,7 +5677,7 @@
                             ${googleTransitLiveStatus(transitSteps)}
                         </div>
                         <div class="journey-actions">
-                            <button class="route-action" data-google-transit-show="${routeIndex}">Show journey</button>
+                            <button class="route-action" data-google-transit-show="${routeIndex}">View details</button>
                             <button class="route-action start-guidance-action" data-google-transit-start="${routeIndex}">${iconSvg('navigation')}<span>Start</span></button>
                             <button class="route-action save-route-action icon-only" data-google-transit-save="${routeIndex}" title="Save route" aria-label="Save route">${iconSvg('bookmark')}</button>
                         </div>
@@ -5692,9 +5690,16 @@
                     to:{ name:toPlace.name, lat:toPlace.lat, lng:toPlace.lng },
                     agency:'google-transit',
                 };
-                activeTrackedJourneyIndex = rankedRoutes[0].routeIndex;
-                setActiveJourneyRoutes(googleTransitRouteNames(response.routes[activeTrackedJourneyIndex]));
-                openTransitPanel('Journey options', 'Compare walking and public transport', walkingCard + priorityControl + cards, preserveSheetState);
+                if (walkingPreferred) {
+                    activeTrackedJourneyIndex = -1;
+                    activeJourneyRouteNames.clear();
+                } else {
+                    activeTrackedJourneyIndex = rankedRoutes[0].routeIndex;
+                    setActiveJourneyRoutes(googleTransitRouteNames(response.routes[activeTrackedJourneyIndex]));
+                }
+                const transitOptionsHtml = `<h4 class="journey-section-title">${walkingPreferred ? 'Public transport' : 'Best option'}</h4>${cards}`;
+                const walkingOptionHtml = `<h4 class="journey-section-title">${walkingPreferred ? 'Best option' : 'Walking'}</h4>${walkingCard || '<p class="panel-message">Walking directions are unavailable for this journey.</p>'}`;
+                openTransitPanel('Journey options', 'Choose a route, then view every step', walkingPreferred ? `${walkingOptionHtml}${transitOptionsHtml}` : `${transitOptionsHtml}${walkingOptionHtml}`, preserveSheetState);
                 if (window.innerWidth < 768 && !preserveSheetState) {
                     document.getElementById('bottom-sheet').classList.add('sheet-half');
                     updateDetailSheetToggle();
@@ -5725,13 +5730,6 @@
                     localStorage.setItem('maribus-transit-modes', JSON.stringify([...transitModePreferences]));
                     tryGoogleTransitJourney(true);
                 });
-                document.querySelectorAll('[data-transit-priority]').forEach(button => button.addEventListener('click', () => {
-                    const priority = button.dataset.transitPriority;
-                    if (priority === transitJourneyPriority) return;
-                    transitJourneyPriority = priority;
-                    localStorage.setItem('maribus-transit-priority', priority);
-                    tryGoogleTransitJourney(true);
-                }));
                 document.querySelectorAll('[data-google-transit-index]').forEach(card => {
                     const select = () => {
                     document.querySelectorAll('.journey-card.modern').forEach(item => { item.classList.remove('selected'); item.setAttribute('aria-pressed','false'); });
@@ -5764,7 +5762,8 @@
                     event.stopPropagation();
                     requestJourneySave(button.dataset.googleTransitSave, button);
                 }));
-                renderGoogleTransitRoute(response, rankedRoutes[0].routeIndex);
+                if (walkingPreferred) renderGoogleTransitRoute({ routes:[walkingRoute] }, 0);
+                else renderGoogleTransitRoute(response, rankedRoutes[0].routeIndex);
                 resolve(true);
             }));
         }
