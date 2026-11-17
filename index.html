@@ -1020,6 +1020,12 @@
         .google-journey-flow { display:grid; gap:0; padding:2px 0 8px; }
         .google-flow-step { position:relative; display:grid; grid-template-columns:34px 1fr; gap:10px; min-height:54px; padding:7px 0; }
         .google-flow-step:not(:last-child)::after { content:""; position:absolute; top:37px; bottom:-8px; left:16px; width:2px; background:var(--border-color); }
+        .journey-detail-summary { display:grid; grid-template-columns:1.35fr 1fr; gap:8px; margin:0 0 14px; }
+        .journey-detail-summary-main,.journey-detail-summary-stat { padding:12px; border:1px solid var(--border-color); border-radius:14px; background:var(--input-bg); }
+        .journey-detail-summary-main strong { display:block; color:var(--text-main); font-size:27px; line-height:1; letter-spacing:-.8px; }
+        .journey-detail-summary-main span,.journey-detail-summary-stat span { display:block; margin-top:5px; color:var(--text-muted); font-size:10px; font-weight:750; }
+        .journey-detail-summary-stat { display:grid; grid-template-columns:1fr 1fr; gap:7px; }
+        .journey-detail-summary-stat strong { display:block; color:var(--text-main); font-size:15px; }
         .google-flow-icon { width:32px; height:32px; display:grid; place-items:center; z-index:1; border-radius:50%; background:var(--input-bg); color:#2563eb; }
         .google-flow-icon .ui-icon { width:17px; height:17px; }
         .google-flow-copy strong,.google-flow-copy span { display:block; }
@@ -5507,7 +5513,15 @@
 
         function googleJourneyFlowHtml(route, routeIndex) {
             const steps = route.legs?.[0]?.steps || [];
-            return `<button class="start-guidance-button" type="button" onclick="startGuidedJourney(${Number(routeIndex)})">Start journey guidance</button><div class="google-journey-flow">${steps.map(step => {
+            const leg = route.legs?.[0] || {};
+            const walkingMinutes = Math.max(0, Math.ceil(googleRouteWalkingSeconds(route) / 60));
+            const transitLegs = steps.filter(step => step.travel_mode === google.maps.TravelMode.TRANSIT);
+            const transfers = Math.max(0, transitLegs.length - 1);
+            const summary = `<section class="journey-detail-summary" aria-label="Journey summary">
+                <div class="journey-detail-summary-main"><strong>${escapeHtml(leg.duration?.text || 'Journey')}</strong><span>${escapeHtml(leg.arrival_time?.text ? `Arrive ${leg.arrival_time.text}` : 'Arrival time updating')}</span></div>
+                <div class="journey-detail-summary-stat"><div><strong>${walkingMinutes} min</strong><span>walking</span></div><div><strong>${transfers}</strong><span>${transfers === 1 ? 'transfer' : 'transfers'}</span></div></div>
+            </section>`;
+            return `${summary}<button class="start-guidance-button" type="button" onclick="startGuidedJourney(${Number(routeIndex)})">Start guidance</button><div class="google-journey-flow">${steps.map(step => {
                 if (step.travel_mode === google.maps.TravelMode.WALKING) {
                     return `<div class="google-flow-step"><span class="google-flow-icon">${iconSvg('walk')}</span><div class="google-flow-copy"><strong>Walk ${escapeHtml(step.duration?.text || '')}</strong><span>${step.contributedPath ? `Via ${escapeHtml(step.contributedPath)} · ` : ''}${escapeHtml(plainGoogleInstruction(step.instructions))}${step.distance?.text ? ` · ${escapeHtml(step.distance.text)}` : ''}</span></div></div>`;
                 }
@@ -5518,7 +5532,7 @@
                 const from = transit.departure_stop?.name || 'boarding stop';
                 const to = transit.arrival_stop?.name || 'exit stop';
                 const stopCount = Number(transit.num_stops || 0);
-                return `<div class="google-flow-step"><span class="google-flow-icon">${iconSvg(mode.icon)}</span><div class="google-flow-copy"><strong>${escapeHtml(mode.label)} ${escapeHtml(routeName)} · ${escapeHtml(from)} → ${escapeHtml(to)}</strong><span>${escapeHtml(transit.departure_time?.text || '')}${stopCount ? ` · ${stopCount} stop${stopCount === 1 ? '' : 's'}` : ''}${transit.arrival_time?.text ? ` · arrive ${escapeHtml(transit.arrival_time.text)}` : ''}${transit.headsign ? ` · towards ${escapeHtml(transit.headsign)}` : ''}</span></div></div>`;
+                return `<div class="google-flow-step"><span class="google-flow-icon">${iconSvg(mode.icon)}</span><div class="google-flow-copy"><strong>Ride ${escapeHtml(mode.label)} ${escapeHtml(routeName)}</strong><span>Board at ${escapeHtml(from)}${stopCount ? ` · ${stopCount} stop${stopCount === 1 ? '' : 's'}` : ''}<br>Get off at ${escapeHtml(to)}${transit.headsign ? ` · towards ${escapeHtml(transit.headsign)}` : ''}</span></div></div>`;
             }).join('')}</div>`;
         }
 
