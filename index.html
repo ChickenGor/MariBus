@@ -4511,6 +4511,16 @@
                     showWalkingFallback(fromPlace, toPlace, result.notice || 'No scheduled bus journey found');
                     return true;
                 }
+                // Static GTFS is the local planner's baseline, but its
+                // published timetable can lag a service change. Do not make a
+                // rider wait a long time when Google Transit has a chance to
+                // supply a newer viable departure. Returning false lets the
+                // normal Google fallback compare that alternative.
+                const earliestStaticWait = Math.max(0, Number(result.data[0]?.wait_minutes || 0));
+                if (earliestStaticWait >= 25) {
+                    console.info('Local timetable wait is too long; checking Google Transit fallback.', { earliestStaticWait });
+                    return false;
+                }
                 // A scheduled bus is not automatically the best journey. Compare
                 // its true door-to-door arrival time (including the wait) against
                 // a direct walk before recommending it.
