@@ -1210,7 +1210,15 @@ def directions():
     try:
         response = requests.post("https://routes.googleapis.com/directions/v2:computeRoutes", json=body, timeout=12,
             headers={"Content-Type": "application/json", "X-Goog-Api-Key": api_key,
-                     "X-Goog-FieldMask": "routes.duration,routes.staticDuration,routes.distanceMeters,routes.polyline.encodedPolyline,routes.legs"})
+                     "X-Goog-FieldMask": (
+                         "routes.duration,routes.staticDuration,routes.distanceMeters,"
+                         "routes.polyline.encodedPolyline,routes.legs,"
+                         "routes.legs.steps.transitDetails.transitLine.nameShort,"
+                         "routes.legs.steps.transitDetails.transitLine.name,"
+                         "routes.legs.steps.transitDetails.transitLine.color,"
+                         "routes.legs.steps.transitDetails.transitLine.vehicle,"
+                         "routes.legs.steps.transitDetails.tripShortText"
+                     )})
         response.raise_for_status()
         return jsonify({"success": True, "data": response.json().get("routes", [])})
     except requests.RequestException:

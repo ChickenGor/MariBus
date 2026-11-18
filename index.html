@@ -4473,7 +4473,10 @@
                             return { travel_mode:step.travelMode === 'WALK' ? google.maps.TravelMode.WALKING : step.travelMode,
                                 path:google.maps.geometry.encoding.decodePath(step.polyline?.encodedPolyline || ''), duration:{ value:durationSeconds(step.staticDuration || step.duration), text:formatJourneyDuration(durationSeconds(step.staticDuration || step.duration) / 60) },
                                 start_location:mapsLocation(step.startLocation?.latLng), end_location:mapsLocation(step.endLocation?.latLng),
-                                transit: transit ? { line:{ short_name:transit.tripShortText || transit.transitLine?.name || '', name:transit.transitLine?.name || '', color:transit.transitLine?.color || '', vehicle:{ type:transit.transitLine?.vehicle?.type || 'BUS' } }, headsign:transit.headsign || '',
+                                // nameShort is the rider-facing route code (for example
+                                // SJ02). tripShortText identifies a particular trip and
+                                // transitLine.name is often a long service description.
+                                transit: transit ? { line:{ short_name:transit.transitLine?.nameShort || transit.tripShortText || transit.transitLine?.name || '', name:transit.transitLine?.name || '', color:transit.transitLine?.color || '', vehicle:{ type:transit.transitLine?.vehicle?.type || 'BUS' } }, headsign:transit.headsign || '',
                                     departure_stop:{ name:stopDetails.departureStop?.name || '', location:mapsLocation(stopDetails.departureStop?.location?.latLng) }, arrival_stop:{ name:stopDetails.arrivalStop?.name || '', location:mapsLocation(stopDetails.arrivalStop?.location?.latLng) },
                                     departure_time:mapsTime(stopDetails.departureTime), arrival_time:mapsTime(stopDetails.arrivalTime), num_stops:Number(transit.stopCount || 0) } : null };
                         });
