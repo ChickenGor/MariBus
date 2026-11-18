@@ -1973,6 +1973,27 @@
         const API_BASE = location.protocol === 'file:' || IS_LOCAL_FRONTEND ? 'http://localhost:5000' : location.origin;
         const map = L.map('map', { zoomControl: false }).setView([3.1390, 101.6869], 12);
         window.__mariBusMap = map;
+        // The packaged GTFS feed currently contains bus services, not the full
+        // Rapid Rail network geometry. Google renders its maintained rail lines
+        // through TransitLayer, keeping the idle map useful without showing a
+        // stale hand-drawn network. Keep it strictly on the home map so it does
+        // not compete with a rider's selected journey.
+        const homeTransitLayer = window.google?.maps?.TransitLayer
+            ? new google.maps.TransitLayer()
+            : null;
+        const updateHomeTransitLayer = () => {
+            const hasJourney = document.getElementById('bottom-sheet')?.classList.contains('detail-mode');
+            const isSearching = document.body.classList.contains('destination-search-open');
+            homeTransitLayer?.setMap(!hasJourney && !isSearching ? map.native : null);
+        };
+        window.__mariBusRefreshHomeTransitLayer = updateHomeTransitLayer;
+        updateHomeTransitLayer();
+        new MutationObserver(updateHomeTransitLayer).observe(document.getElementById('bottom-sheet'), {
+            attributes:true, attributeFilter:['class'],
+        });
+        new MutationObserver(updateHomeTransitLayer).observe(document.body, {
+            attributes:true, attributeFilter:['class'],
+        });
         window.dispatchEvent(new Event('maribus-map-ready'));
         L.control.zoom({ position: 'bottomleft' }).addTo(map);
 
