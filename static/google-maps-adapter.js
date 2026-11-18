@@ -83,11 +83,19 @@
     class MapWrapper {
         constructor(elementId, options) {
             const mapId = window.MARIBUS_CONFIG?.google_maps_map_id || undefined;
+            const savedTheme = localStorage.getItem('maribus-theme');
+            const colorScheme = savedTheme === 'dark' ? 'DARK'
+                : savedTheme === 'light' ? 'LIGHT'
+                : 'FOLLOW_SYSTEM';
             this.native = new google.maps.Map(document.getElementById(elementId), {
                 center: { lat: 3.139, lng: 101.6869 }, zoom: 12,
                 mapTypeControl: false, streetViewControl: false, fullscreenControl: false,
                 zoomControl: options?.zoomControl !== false,
                 gestureHandling: 'greedy',
+                // Google only reads this at construction time. A Cloud Map ID
+                // can then provide a native light and dark style without CSS
+                // filters changing transit overlays.
+                colorScheme,
                 ...(mapId ? { mapId, renderingType:google.maps.RenderingType?.VECTOR } : {}),
                 tilt: 0,
                 heading: 0,

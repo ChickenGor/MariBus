@@ -76,19 +76,10 @@
             background-color: #000000; 
         }
 
-        /* Cloud Map IDs are styled in Google Cloud rather than with the
-           JavaScript styles array. Keep this as a neutral fallback treatment
-           for their base-map plane; route overlays live above it. */
-        #map.cloud-map-dark .gm-style > div:first-child {
-            filter:brightness(28%) contrast(155%) saturate(38%) grayscale(20%);
-            transition:filter .3s ease;
-        }
-        
-        /* Leaflet fallbacks follow the same base-tile-only treatment. */
-        body.dark-mode .leaflet-tile-pane {
-            filter:brightness(28%) contrast(155%) saturate(38%) grayscale(20%);
-            transition: filter 0.3s ease;
-        }
+        /* Never darken Google Maps with a CSS filter. Google draws map tiles,
+           labels, route polylines and markers in one rendering stack, so a
+           filter also dims rider-facing route colours. Cloud map styling is
+           used for the real dark base map instead. */
 
         /* --- TOP APP BAR --- */
         #top-bar {
@@ -1462,9 +1453,9 @@
             --border-color:#2a2d33;
             --input-bg:#1b1e23;
             --shadow-color:rgba(0,0,0,.68);
-            --maribus-teal:#75c5cf;
-            --maribus-teal-deep:#d9f4f6;
-            --maribus-teal-soft:#20262b;
+            --maribus-teal:#5d626b;
+            --maribus-teal-deep:#f5f7fa;
+            --maribus-teal-soft:#25282d;
         }
         :focus-visible { outline-color:var(--maribus-teal); }
         .journey-card[role="button"]:focus-visible,.route-live-bus:focus-visible,.nearby-stop-card:focus-visible {
@@ -1643,6 +1634,13 @@
 </head>
 
 <body>
+    <script>
+        // Apply the saved preference before the Google map is constructed.
+        // Its native color scheme is selected only during construction.
+        if (localStorage.getItem('maribus-theme') === 'dark') {
+            document.body.classList.add('dark-mode');
+        }
+    </script>
     <header id="top-bar">
         <button id="menu-button" type="button" onclick="toggleSidebar(true)" aria-label="Open menu" aria-expanded="false">
             <svg class="ui-icon" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"></path></svg>
@@ -1923,6 +1921,7 @@
         window.toggleTheme = function() {
             const enabled = !document.body.classList.contains('dark-mode');
             document.body.classList.toggle('dark-mode', enabled);
+            localStorage.setItem('maribus-theme', enabled ? 'dark' : 'light');
             window.__mariBusSetMapTheme?.(enabled);
             window.__mariBusSyncThemeControl(enabled);
         };
@@ -1995,8 +1994,6 @@
         ];
         const GOOGLE_MAP_ID_ENABLED = Boolean(window.MARIBUS_CONFIG?.google_maps_map_id);
         window.__mariBusSetMapTheme = enabled => {
-            const mapElement = document.getElementById('map');
-            mapElement.classList.toggle('cloud-map-dark', Boolean(enabled && GOOGLE_MAP_ID_ENABLED));
             if (!GOOGLE_MAP_ID_ENABLED) {
                 map.native.setOptions({ styles:enabled ? GOOGLE_DARK_MAP_STYLES : GOOGLE_LIGHT_MAP_STYLES });
             }
@@ -2079,6 +2076,7 @@
 
             // Apply the app theme and request the appropriate native map theme.
             document.body.classList.toggle('dark-mode', isDarkMode);
+            localStorage.setItem('maribus-theme', isDarkMode ? 'dark' : 'light');
             window.__mariBusSetMapTheme(isDarkMode);
             window.__mariBusSyncThemeControl(isDarkMode);
 
