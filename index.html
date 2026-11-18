@@ -4317,11 +4317,17 @@
 
         function safeRouteColor(value, agencyOverride = null) {
             const agency = agencyOverride || document.getElementById('agency-select')?.value || '';
+            const officialColor = String(value || '').trim().replace(/^#/, '');
+            // Prefer the GTFS/API colour for this exact route. Agencies often
+            // operate services with more than one official line colour.
+            if (/^[0-9a-f]{6}$/i.test(officialColor)) return `#${officialColor}`;
+
+            // These are fallback brand colours only for incomplete feeds.
             if (agency.includes('mybas')) return '#f93999';
             if (agency === 'rapid-bus-mrtfeeder') return '#f60404';
             if (agency === 'rapid-bus-kl') return '#f60404';
             if (agency === 'rapid-bus-penang') return '#e11d48';
-            return /^[0-9a-f]{6}$/i.test(value || '') ? `#${value}` : '#2563eb';
+            return '#2563eb';
         }
 
         function compactRouteLabel(routeId, routeName) {
