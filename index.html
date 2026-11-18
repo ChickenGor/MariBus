@@ -1335,16 +1335,21 @@
                 position:sticky;
                 top:0;
                 height:auto;
-                min-height:46px;
-                padding:2px 38px 7px 0;
+                min-height:30px;
+                padding:2px 38px 2px 0;
                 border-bottom:1px solid rgba(148,163,184,.22);
+            }
+            /* Journey options intentionally has no subtitle: don't reserve its old subtitle space. */
+            #bottom-sheet.detail-mode:not(.sheet-half):not(.sheet-expanded) .panel-heading:has(#panel-subtitle:empty) {
+                min-height:28px;
+                padding-bottom:0;
             }
             #bottom-sheet.detail-mode:not(.sheet-half):not(.sheet-expanded) .panel-heading:has(#panel-title:not(:empty)) .panel-subtitle {
                 margin:2px 0 0;
                 line-height:1.25;
             }
             #bottom-sheet.detail-mode:not(.sheet-half):not(.sheet-expanded) .panel-heading:has(#panel-title:not(:empty)) + #panel-content {
-                padding-top:2px;
+                padding-top:0;
             }
             #bottom-sheet.detail-mode:not(.sheet-half):not(.sheet-expanded) .journey-card.modern.selected {
                 border-color:rgba(37,99,235,.45);
