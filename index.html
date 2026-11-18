@@ -185,6 +185,41 @@
         #header-journey-search.expanded #journey-swap-button { display:block; }
         #destination-search-close { display:none; position:absolute; top:18px; left:18px; width:42px; height:42px; place-items:center; border:0; border-radius:50%; background:var(--input-bg); color:var(--text-main); font-size:30px; line-height:1; cursor:pointer; }
 
+        /* Destination search is its own screen, not a variation of the map header.
+           Keep these rules outside the phone breakpoint so browser zoom, tablets and
+           landscape phones cannot leave the controls in their normal map positions. */
+        body.destination-search-open { overflow:hidden; }
+        body.destination-search-open #app-sidebar,
+        body.destination-search-open #sidebar-backdrop { display:none !important; }
+        body.destination-search-open #top-bar {
+            position:fixed !important; z-index:4000; inset:0; display:block;
+            width:100vw; height:100dvh !important; padding:72px clamp(18px, 5vw, 48px) 24px;
+            box-sizing:border-box; background:var(--sheet-bg);
+        }
+        body.destination-search-open #menu-button,
+        body.destination-search-open #journey-menu-button,
+        body.destination-search-open .desktop-brand,
+        body.destination-search-open #theme-toggle-header { display:none !important; }
+        body.destination-search-open #destination-search-close { display:grid !important; z-index:1; }
+        body.destination-search-open #header-journey-search,
+        body.destination-search-open #header-journey-search.expanded {
+            position:static !important; display:flex; width:100%; max-width:720px;
+            min-height:58px; height:auto; margin:0 auto; padding:0 14px; box-sizing:border-box;
+            flex-direction:row; align-items:center; border-radius:30px; box-shadow:none;
+            transform:none;
+        }
+        body.destination-search-open #journey-origin-row,
+        body.destination-search-open .journey-divider,
+        body.destination-search-open #journey-swap-button,
+        body.destination-search-open #journey-location-button { display:none !important; }
+        body.destination-search-open #header-journey-search .journey-input-row { min-height:58px; }
+        body.destination-search-open #journey-to { font-size:20px; font-weight:700; }
+        body.destination-search-open .place-suggestions {
+            position:fixed; z-index:4001; top:148px; right:clamp(18px, 5vw, 48px);
+            left:clamp(18px, 5vw, 48px); max-width:720px; max-height:calc(100dvh - 170px);
+            margin:0 auto; overflow:auto; border:0; border-radius:0; box-shadow:none;
+        }
+
         /* Floating Top Search Bar */
         #top-search-container {
             position: absolute;
@@ -2172,6 +2207,7 @@
             // This is place search only. Browsing a bus line belongs in a
             // separate feature, never in the rider's A-to-B destination flow.
             document.body.classList.remove('route-code-entry');
+            toggleSidebar(false);
             document.body.classList.add('destination-search-open');
             document.getElementById('destination-search-close').hidden = false;
             search.classList.add('expanded');
@@ -2181,6 +2217,8 @@
         function closeDestinationSearch() {
             document.body.classList.remove('destination-search-open');
             document.getElementById('destination-search-close').hidden = true;
+            document.getElementById('header-journey-search')?.classList.remove('expanded');
+            toggleSidebar(false);
             document.getElementById('journey-to')?.blur();
         }
 
