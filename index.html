@@ -210,9 +210,9 @@
         body.destination-search-open #header-journey-search,
         body.destination-search-open #header-journey-search.expanded {
             position:static !important; display:flex; width:100%; max-width:720px;
-            min-height:52px; height:auto; margin:0; padding:0 14px; box-sizing:border-box;
-            flex-direction:row; align-items:center; border-radius:30px; box-shadow:none;
-            transform:none;
+            min-height:52px !important; height:52px !important; margin:0; padding:0 14px !important; box-sizing:border-box;
+            flex-direction:row !important; align-items:center !important; border-radius:26px !important; box-shadow:none !important;
+            transform:none !important; background:var(--input-bg) !important;
         }
         body.destination-search-open #journey-origin-row,
         body.destination-search-open .journey-divider,
@@ -1644,7 +1644,7 @@
             <svg class="ui-icon" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"></path></svg>
         </button>
         <span class="desktop-brand">MARIBUS</span>
-        <button id="destination-search-close" type="button" onclick="closeDestinationSearch()" aria-label="Back to map" hidden>&larr;&nbsp; Back</button>
+        <button id="destination-search-close" type="button" onclick="return closeDestinationSearch(event)" aria-label="Back to map" hidden>&larr;&nbsp; Back</button>
         <div id="header-journey-search">
             <div id="journey-origin-row" class="journey-input-row">
                 <span class="point-label origin-point-icon" aria-hidden="true"><svg class="ui-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"></circle><circle cx="12" cy="12" r="2.5"></circle></svg></span>
@@ -2269,12 +2269,19 @@
             requestAnimationFrame(() => input.focus({ preventScroll:true }));
         }
 
-        function closeDestinationSearch() {
+        function closeDestinationSearch(event) {
+            event?.preventDefault();
+            event?.stopPropagation();
             document.body.classList.remove('destination-search-open');
             document.getElementById('destination-search-close').hidden = true;
             document.getElementById('header-journey-search')?.classList.remove('expanded');
+            document.getElementById('destination-search-recents').hidden = true;
+            document.querySelectorAll('.place-suggestions').forEach(list => { list.hidden = true; });
+            document.getElementById('top-bar')?.classList.remove('search-focused');
             toggleSidebar(false);
             document.getElementById('journey-to')?.blur();
+            requestAnimationFrame(() => map?.invalidateSize?.());
+            return false;
         }
 
         map.native?.addListener?.('idle', () => {
