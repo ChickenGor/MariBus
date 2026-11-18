@@ -71,22 +71,24 @@
             z-index: 1;
         }
 
-        /* --- TRUE PITCH-BLACK OLED MAP --- */
+        /* --- MAP APPEARANCE --- */
         body.dark-mode #map {
             background-color: #000000; 
         }
 
-        /* Cloud Map IDs ignore the JavaScript styles array. Apply the dark
-           treatment to Google's rendered map plane while leaving MariBus
-           controls and HTML vehicle labels at their original colours. */
+        /* Cloud Map IDs do not accept the JavaScript styles array. Do not
+           invert their tiles: it turns road, route and place colours into a
+           washed-out photographic negative. A Cloud dark map style, when
+           configured, is rendered natively by Google instead. */
         #map.cloud-map-dark .gm-style > div:first-child {
-            filter:invert(92%) hue-rotate(180deg) brightness(72%) contrast(112%) saturate(82%);
+            filter:none;
             transition:filter .3s ease;
         }
         
-        /* This perfectly inverts the Light map into a glowing OLED dark map! */
+        /* Leaflet fallbacks also retain their native palette rather than using
+           inversion, which preserves transit line and road colours. */
         body.dark-mode .leaflet-tile-pane {
-            filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(120%);
+            filter:none;
             transition: filter 0.3s ease;
         }
 
@@ -2072,7 +2074,7 @@
         function toggleTheme() {
             isDarkMode = !document.body.classList.contains('dark-mode');
 
-            // This single line instantly triggers the CSS filter to invert the map!
+            // Apply the app theme and request the appropriate native map theme.
             document.body.classList.toggle('dark-mode', isDarkMode);
             window.__mariBusSetMapTheme(isDarkMode);
             window.__mariBusSyncThemeControl(isDarkMode);
