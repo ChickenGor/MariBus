@@ -192,9 +192,8 @@
         body.destination-search-open #app-sidebar,
         body.destination-search-open #sidebar-backdrop { display:none !important; }
         body.destination-search-open #top-bar {
-            position:fixed !important; z-index:4000; inset:0; display:grid;
-            grid-template-columns:42px minmax(0, 720px) 42px; grid-auto-rows:min-content;
-            column-gap:12px; align-content:start; justify-content:center;
+            position:fixed !important; z-index:4000; inset:0; display:flex;
+            flex-direction:column; align-items:center; align-content:initial; justify-content:flex-start;
             width:100vw; height:100dvh !important; padding:max(18px, env(safe-area-inset-top)) clamp(18px, 5vw, 48px) 24px;
             box-sizing:border-box; background:var(--sheet-bg);
         }
@@ -202,10 +201,15 @@
         body.destination-search-open #journey-menu-button,
         body.destination-search-open .desktop-brand,
         body.destination-search-open #theme-toggle-header { display:none !important; }
-        body.destination-search-open #destination-search-close { position:static; display:grid !important; grid-column:1; z-index:1; }
+        body.destination-search-open #destination-search-close {
+            position:static; display:flex !important; align-items:center; justify-content:center;
+            z-index:1; width:auto; min-width:74px; height:34px; margin:0 0 12px;
+            padding:0 15px; border:1px solid var(--border-color); border-radius:999px;
+            background:var(--input-bg); font-size:14px; font-weight:800;
+        }
         body.destination-search-open #header-journey-search,
         body.destination-search-open #header-journey-search.expanded {
-            position:static !important; grid-column:2; display:flex; width:100%; max-width:720px;
+            position:static !important; display:flex; width:100%; max-width:720px;
             min-height:52px; height:auto; margin:0; padding:0 14px; box-sizing:border-box;
             flex-direction:row; align-items:center; border-radius:30px; box-shadow:none;
             transform:none;
@@ -223,7 +227,7 @@
         }
         #destination-search-recents { display:none; }
         body.destination-search-open #destination-search-recents {
-            grid-column:2; display:block; width:100%; max-width:720px; margin:24px 0 0;
+            display:block; width:100%; max-width:720px; margin:24px 0 0;
         }
         .recent-search-heading { margin:0 0 10px; color:var(--text-muted); font-size:14px; font-weight:850; }
         .recent-search-list { display:grid; gap:2px; }
@@ -1640,7 +1644,7 @@
             <svg class="ui-icon" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"></path></svg>
         </button>
         <span class="desktop-brand">MARIBUS</span>
-        <button id="destination-search-close" type="button" onclick="closeDestinationSearch()" aria-label="Close destination search" hidden>&times;</button>
+        <button id="destination-search-close" type="button" onclick="closeDestinationSearch()" aria-label="Back to map" hidden>&larr;&nbsp; Back</button>
         <div id="header-journey-search">
             <div id="journey-origin-row" class="journey-input-row">
                 <span class="point-label origin-point-icon" aria-hidden="true"><svg class="ui-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"></circle><circle cx="12" cy="12" r="2.5"></circle></svg></span>
