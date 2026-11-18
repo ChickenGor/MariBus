@@ -1941,6 +1941,7 @@
             localStorage.setItem('maribus-theme', enabled ? 'dark' : 'light');
             window.__mariBusSetMapTheme?.(enabled);
             window.__mariBusSyncThemeControl(enabled);
+            if (window.__mariBusRefreshMapForTheme?.()) return;
         };
         window.__mariBusSyncThemeControl(document.body.classList.contains('dark-mode'));
         window.__mariBusSyncSystemBars = async function(dark) {
@@ -2014,6 +2015,14 @@
             if (!GOOGLE_MAP_ID_ENABLED) {
                 map.native.setOptions({ styles:enabled ? GOOGLE_DARK_MAP_STYLES : GOOGLE_LIGHT_MAP_STYLES });
             }
+        };
+        // Google Maps reads a Cloud Map ID's light/dark colour scheme only while
+        // constructing the map. A short, controlled reload is therefore required
+        // to swap the native basemap; route state is restored from the URL/data.
+        window.__mariBusRefreshMapForTheme = () => {
+            if (!GOOGLE_MAP_ID_ENABLED) return false;
+            window.location.reload();
+            return true;
         };
         window.__mariBusSetMapTheme(document.body.classList.contains('dark-mode'));
 
@@ -2096,6 +2105,7 @@
             localStorage.setItem('maribus-theme', isDarkMode ? 'dark' : 'light');
             window.__mariBusSetMapTheme(isDarkMode);
             window.__mariBusSyncThemeControl(isDarkMode);
+            if (window.__mariBusRefreshMapForTheme?.()) return;
 
             document.getElementById('sidebar-theme-icon').innerHTML = isDarkMode
                 ? '<circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path>'
