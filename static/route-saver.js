@@ -1,6 +1,6 @@
 import { initializeApp, getApps } from 'https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js';
 import { getAuth } from 'https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js';
-import { getFirestore, collection, addDoc, doc, getDoc, getDocs, setDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js';
+import { getFirestore, collection, addDoc, doc, setDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js';
 
 let auth = null;
 let db = null;
@@ -63,26 +63,7 @@ window.saveMariBusJourney = async function(index, button) {
   notify('Saving route…');
 
   try {
-    const profile = (await getDoc(doc(db, 'users', user.uid))).data() || {};
-    const subscriptionEnd = profile.subscriptionEnd?.toDate?.();
-    const isPlus = profile.subscriptionPlan
-      && !['free', 'basic'].includes(profile.subscriptionPlan)
-      && subscriptionEnd
-      && subscriptionEnd.getTime() > Date.now();
     const savedCollection = collection(db, 'users', user.uid, 'savedRoutes');
-    const existing = await getDocs(savedCollection);
-
-    if (!isPlus && existing.size >= 3) {
-      setButtonLabel('3 route limit');
-      notify('Basic accounts can save up to 3 routes');
-      setTimeout(() => {
-        if (iconOnly) setButtonLabel(previousTitle);
-        else button.textContent = previousText;
-        button.disabled = false;
-        location.href = '/ad-free';
-      }, 1400);
-      return;
-    }
 
     const routes = (journey.legs?.length ? journey.legs : [journey]).map(leg => ({
       routeId: leg.route_id || '',
@@ -100,14 +81,7 @@ window.saveMariBusJourney = async function(index, button) {
       createdAt: serverTimestamp(),
     };
 
-    if (isPlus) {
-      await addDoc(savedCollection, savedRoute);
-    } else {
-      const usedIds = new Set(existing.docs.map(item => item.id));
-      const slot = ['basic-1', 'basic-2', 'basic-3'].find(id => !usedIds.has(id));
-      if (!slot) throw new Error('No basic route slot is available');
-      await setDoc(doc(savedCollection, slot), savedRoute);
-    }
+    await addDoc(savedCollection, savedRoute);
 
     setButtonLabel('Route saved');
     button.classList.add('saved');

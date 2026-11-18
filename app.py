@@ -14,7 +14,7 @@ from functools import wraps
 from threading import Lock
 
 import requests
-from flask import Flask, has_request_context, jsonify, request, send_file
+from flask import Flask, has_request_context, jsonify, redirect, request, send_file
 from flask_cors import CORS
 from google.protobuf.json_format import MessageToDict
 from google.transit import gtfs_realtime_pb2
@@ -733,7 +733,7 @@ def favicon():
 
 
 PAGE_NAMES = {
-    "ad-free", "saved-routes", "notifications", "feedback",
+    "saved-routes", "notifications", "feedback",
     "share", "rate-us", "about-us", "sign-in", "account",
     "privacy-policy", "terms", "curate-route",
 }
@@ -741,6 +741,10 @@ PAGE_NAMES = {
 
 @app.get("/<page_name>")
 def app_page(page_name):
+    # Retain old shared/bookmarked upgrade links, but subscriptions are no
+    # longer part of MariBus and every feature is available to every rider.
+    if page_name == "ad-free":
+        return redirect("/", code=302)
     if page_name not in PAGE_NAMES:
         return jsonify({"success": False, "error": "Page not found"}), 404
     return send_file(os.path.join(os.path.dirname(__file__), "pages", f"{page_name}.html"))

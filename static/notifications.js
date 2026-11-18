@@ -60,8 +60,6 @@ try{
     user=current;setup.hidden=false;controls.hidden=true;
     if(!user){setup.innerHTML='<h2>Sign in to enable notifications</h2><p>Your notification choices are connected to your MariBus account.</p><a class="button" href="/sign-in?next=/notifications">Sign in</a>';return;}
     const snapshot=await getDoc(doc(db,'users',user.uid));profile=snapshot.exists()?snapshot.data():{};
-    const end=profile.subscriptionEnd?.toDate?.();const plus=profile.subscriptionPlan&&!['free','basic'].includes(profile.subscriptionPlan)&&end&&end>Date.now();
-    if(!plus){setup.classList.add('plus-required');setup.innerHTML='<h2>Notifications are a Plus feature</h2><p>Upgrade to receive approaching-bus and disruption alerts.</p><a class="button" href="/ad-free">View Plus</a>';return;}
     setup.hidden=true;controls.hidden=false;
     setToggle(arrival,profile.notificationPreferences?.arrivalReminders!==false);
     setToggle(disruptions,profile.notificationPreferences?.serviceAlerts!==false);
