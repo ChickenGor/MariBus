@@ -195,7 +195,7 @@
             position:fixed !important; z-index:4000; inset:0; display:flex;
             flex-direction:column; align-items:center; align-content:initial; justify-content:flex-start;
             width:100vw; height:100dvh !important; padding:max(18px, env(safe-area-inset-top)) clamp(18px, 5vw, 48px) 24px;
-            box-sizing:border-box; background:var(--sheet-bg);
+            box-sizing:border-box; background:var(--sheet-bg); pointer-events:auto !important;
         }
         body.destination-search-open #menu-button,
         body.destination-search-open #journey-menu-button,
@@ -210,7 +210,7 @@
         body.destination-search-open #header-journey-search,
         body.destination-search-open #header-journey-search.expanded {
             position:static !important; display:flex; width:100%; max-width:720px;
-            min-height:52px !important; height:52px !important; margin:0; padding:0 14px !important; box-sizing:border-box;
+            min-height:52px !important; height:52px !important; flex:0 0 52px !important; margin:0; padding:0 14px !important; box-sizing:border-box;
             flex-direction:row !important; align-items:center !important; border-radius:26px !important; box-shadow:none !important;
             transform:none !important; background:var(--input-bg) !important;
         }
@@ -218,8 +218,8 @@
         body.destination-search-open .journey-divider,
         body.destination-search-open #journey-swap-button,
         body.destination-search-open #journey-location-button { display:none !important; }
-        body.destination-search-open #header-journey-search .journey-input-row { min-height:58px; }
-        body.destination-search-open #journey-to { font-size:20px; font-weight:700; }
+        body.destination-search-open #header-journey-search .journey-input-row { min-height:52px !important; }
+        body.destination-search-open #journey-to { font-size:16px !important; font-weight:700; }
         body.destination-search-open .place-suggestions {
             position:fixed; z-index:4001; top:148px; right:clamp(18px, 5vw, 48px);
             left:clamp(18px, 5vw, 48px); max-width:720px; max-height:calc(100dvh - 170px);
