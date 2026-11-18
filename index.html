@@ -2832,7 +2832,10 @@
         }
 
         function backTransitPanel() {
-            closeTransitPanel(false);
+            // Leaving a journey should restore the idle map. Keeping a hidden
+            // resumable journey left A/B pins and its route visible behind the
+            // home controls, which reads like a route that failed to close.
+            closeTransitPanel(true);
         }
 
         function openRouteTransitPanel(title, subtitle, html) {
@@ -2992,10 +2995,15 @@
                 document.getElementById('panel-content').innerHTML = '';
                 journeyPlaceLayer.clearLayers();
                 activeRouteLayer.clearLayers();
+                if (walkingDirectionsRenderer) {
+                    walkingDirectionsRenderer.setMap(null);
+                    walkingDirectionsRenderer = null;
+                }
                 routeDirectionsRenderers.forEach(renderer => renderer.setMap(null));
                 routeDirectionsRenderers = [];
                 if (liveJourneyTrackingTimer) clearInterval(liveJourneyTrackingTimer);
                 liveJourneyTrackingTimer = null;
+                window.__mariBusRefreshHomeTransitLayer?.();
             }
             const canResumeJourney = !forceClose && Boolean(journeySelection.from?.place && journeySelection.to?.place && document.getElementById('panel-content').children.length);
             resumeButton.classList.toggle('visible', canResumeJourney);
