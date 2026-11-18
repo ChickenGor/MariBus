@@ -76,19 +76,18 @@
             background-color: #000000; 
         }
 
-        /* Cloud Map IDs do not accept the JavaScript styles array. Do not
-           invert their tiles: it turns road, route and place colours into a
-           washed-out photographic negative. A Cloud dark map style, when
-           configured, is rendered natively by Google instead. */
+        /* Cloud Map IDs do not accept the JavaScript styles array. Darken only
+           the rendered base-map plane: this produces a black map without hue
+           inversion, while MariBus route polylines and markers remain in their
+           original provider colours above it. */
         #map.cloud-map-dark .gm-style > div:first-child {
-            filter:none;
+            filter:brightness(34%) contrast(122%) saturate(72%);
             transition:filter .3s ease;
         }
         
-        /* Leaflet fallbacks also retain their native palette rather than using
-           inversion, which preserves transit line and road colours. */
+        /* Leaflet fallbacks follow the same base-tile-only treatment. */
         body.dark-mode .leaflet-tile-pane {
-            filter:none;
+            filter:brightness(34%) contrast(122%) saturate(72%);
             transition: filter 0.3s ease;
         }
 
