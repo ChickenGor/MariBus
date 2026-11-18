@@ -1277,8 +1277,8 @@
                 box-sizing:border-box;
             }
             #bottom-sheet.detail-mode {
-                height:auto;
-                max-height:min(350px, calc(100dvh - 96px));
+                height:min(34dvh, 300px);
+                max-height:min(34dvh, 300px);
                 padding:8px 16px 8px;
                 gap:4px;
                 overflow:hidden;
@@ -1286,7 +1286,7 @@
             }
             #bottom-sheet.detail-mode #transit-panel.open { flex:0 1 auto; min-height:0; overflow-y:auto; overscroll-behavior:contain; }
             #bottom-sheet.detail-mode.sheet-half { height:52dvh; }
-            #bottom-sheet.detail-mode.sheet-expanded { height:80dvh; }
+            #bottom-sheet.detail-mode.sheet-expanded { height:90dvh; max-height:90dvh; }
             #bottom-sheet.detail-mode.sheet-half #transit-panel.open,
             #bottom-sheet.detail-mode.sheet-expanded #transit-panel.open { flex:1 1 auto; }
             #bottom-sheet.detail-mode.sheet-dragging { transition:none; user-select:none; }
@@ -4729,11 +4729,7 @@
                 };
                 const transitOptionsHtml = `<h4 class="journey-section-title">${walkingPreferred ? 'Public transport' : 'MariBus schedule'}</h4>${html}${googleCards ? `<h4 class="journey-section-title">Google Transit alternatives</h4>${googleCards}` : ''}`;
                 const walkingOptionHtml = `<h4 class="journey-section-title">${walkingPreferred ? 'Best option' : 'Walking'}</h4>${walkingCard || '<p class="panel-message">Walking directions are unavailable for this journey.</p>'}`;
-                openTransitPanel('Journey options', result.notice || 'Choose a route, then view every step', walkingPreferred ? `${walkingOptionHtml}${transitOptionsHtml}` : `${transitOptionsHtml}${walkingOptionHtml}`);
-                if (window.innerWidth < 768) {
-                    document.getElementById('bottom-sheet').classList.add('sheet-half');
-                    updateDetailSheetToggle();
-                }
+                openTransitPanel('Journey options', result.notice || '', walkingPreferred ? `${walkingOptionHtml}${transitOptionsHtml}` : `${transitOptionsHtml}${walkingOptionHtml}`);
                 document.querySelectorAll('[data-nearby-index]').forEach(card => {
                     const select = () => {
                     document.querySelectorAll('.journey-card.modern').forEach(item => { item.classList.remove('selected'); item.setAttribute('aria-pressed','false'); });
@@ -5945,11 +5941,7 @@
                 }
                 const transitOptionsHtml = `<h4 class="journey-section-title">${walkingPreferred ? 'Public transport' : 'Best option'}</h4>${cards}`;
                 const walkingOptionHtml = `<h4 class="journey-section-title">${walkingPreferred ? 'Best option' : 'Walking'}</h4>${walkingCard || '<p class="panel-message">Walking directions are unavailable for this journey.</p>'}`;
-                openTransitPanel('Journey options', 'Choose a route, then view every step', walkingPreferred ? `${walkingOptionHtml}${transitOptionsHtml}` : `${transitOptionsHtml}${walkingOptionHtml}`, preserveSheetState);
-                if (window.innerWidth < 768 && !preserveSheetState) {
-                    document.getElementById('bottom-sheet').classList.add('sheet-half');
-                    updateDetailSheetToggle();
-                }
+                openTransitPanel('Journey options', '', walkingPreferred ? `${walkingOptionHtml}${transitOptionsHtml}` : `${transitOptionsHtml}${walkingOptionHtml}`, preserveSheetState);
                 document.getElementById('adjust-transit-modes')?.addEventListener('click', event => {
                     const panel = document.getElementById('transit-mode-panel');
                     const open = panel.classList.toggle('open');
