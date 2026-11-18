@@ -1345,7 +1345,6 @@
             #bottom-sheet.detail-mode:not(.sheet-half):not(.sheet-expanded) .panel-heading:has(#panel-title:not(:empty)) + #panel-content {
                 padding-top:2px;
             }
-            #bottom-sheet.detail-mode:not(.sheet-half):not(.sheet-expanded) .journey-card.modern:not(.selected) { display:none; }
             #bottom-sheet.detail-mode:not(.sheet-half):not(.sheet-expanded) .journey-card.modern.selected {
                 border-color:rgba(37,99,235,.45);
             }
@@ -1388,6 +1387,9 @@
             body:has(#bottom-sheet.detail-mode) #header-journey-search {
                 top:max(8px, env(safe-area-inset-top)); right:16px; bottom:auto; left:16px;
             }
+            /* Results need the map and scrollable choices, not the large A-to-B
+               editor. It returns automatically when the rider closes the sheet. */
+            body:has(#bottom-sheet.detail-mode):not(.destination-search-open) #top-bar { display:none; }
             #bottom-sheet.guided-mode:not(.sheet-half):not(.sheet-expanded) {
                 height:auto;
                 max-height:min(44dvh,390px);
