@@ -174,6 +174,7 @@
         #journey-location-button { width:34px; height:34px; flex:0 0 34px; border:0; border-radius:50%; background:#2563eb; color:#fff; font-size:17px; cursor:pointer; }
         #journey-swap-button { display:none; width:34px; height:34px; flex:0 0 34px; border:0; border-radius:50%; background:transparent; color:var(--text-main); font-size:20px; cursor:pointer; }
         #header-journey-search.expanded #journey-swap-button { display:block; }
+        .journey-search-submit { display:none; width:100%; min-height:42px; margin:6px 0 4px; border:0; border-radius:12px; background:#16181b; color:#fff; font:inherit; font-size:14px; font-weight:850; cursor:pointer; }
         #destination-search-close { display:none; position:absolute; top:18px; left:18px; width:42px; height:42px; place-items:center; border:0; border-radius:50%; background:var(--input-bg); color:var(--text-main); font-size:30px; line-height:1; cursor:pointer; }
 
         /* Destination search is its own screen, not a variation of the map header.
@@ -209,11 +210,12 @@
         body.destination-search-open .journey-divider { display:block !important; margin-left:34px; }
         body.destination-search-open #journey-swap-button { display:none !important; }
         body.destination-search-open #journey-location-button { display:grid !important; }
-        body.destination-search-open #header-journey-search.expanded { height:auto !important; min-height:105px !important; flex-basis:auto !important; padding:4px 14px !important; }
+            body.destination-search-open #header-journey-search.expanded { height:auto !important; min-height:154px !important; flex-basis:auto !important; padding:4px 14px !important; }
         body.destination-search-open #header-journey-search .journey-input-row { min-height:48px !important; }
         body.destination-search-open #journey-to { font-size:16px !important; font-weight:700; }
+            body.destination-search-open .journey-search-submit { display:flex; align-items:center; justify-content:center; }
         body.destination-search-open .place-suggestions {
-            position:fixed; z-index:4001; top:124px !important; right:auto !important; left:50% !important;
+            position:fixed; z-index:4001; top:174px !important; right:auto !important; left:50% !important;
             width:calc(100vw - 48px) !important; max-width:620px !important; max-height:calc(100dvh - 198px);
             margin:0; overflow:auto; border:0; border-radius:0; box-shadow:none; transform:translateX(-50%);
         }
@@ -1581,15 +1583,16 @@
             body.destination-search-open { overflow:hidden; }
             body.destination-search-open #top-bar { position:fixed !important; z-index:4000; inset:0; width:100%; height:100dvh !important; padding:max(18px, env(safe-area-inset-top)) 18px 24px; box-sizing:border-box; background:var(--sheet-bg); }
             body.destination-search-open #menu-button,body.destination-search-open .desktop-brand,body.destination-search-open #theme-toggle-header { display:none; }
-            body.destination-search-open #header-journey-search,body.destination-search-open #header-journey-search.expanded { position:static; display:flex; width:100%; max-width:none; min-height:108px; margin:0; padding:4px 14px; box-sizing:border-box; border-radius:22px; box-shadow:none; }
+            body.destination-search-open #header-journey-search,body.destination-search-open #header-journey-search.expanded { position:static; display:flex; width:100%; max-width:none; min-height:154px; margin:0; padding:4px 14px; box-sizing:border-box; border-radius:22px; box-shadow:none; }
             body.destination-search-open #journey-origin-row { display:flex !important; }
             body.destination-search-open .journey-divider { display:block !important; margin-left:34px; }
             body.destination-search-open #journey-swap-button { display:none !important; }
             body.destination-search-open #journey-location-button { display:grid !important; }
             body.destination-search-open #header-journey-search .journey-input-row { min-height:48px; }
             body.destination-search-open #journey-to { font-size:16px; font-weight:700; }
+            body.destination-search-open .journey-search-submit { display:flex; align-items:center; justify-content:center; }
             body.destination-search-open #destination-search-close { display:grid; }
-            body.destination-search-open .place-suggestions { position:fixed; top:174px; right:18px; left:18px; max-height:calc(100dvh - 196px); overflow:auto; border:0; border-radius:0; box-shadow:none; }
+            body.destination-search-open .place-suggestions { position:fixed; top:202px; right:18px; left:18px; max-height:calc(100dvh - 224px); overflow:auto; border:0; border-radius:0; box-shadow:none; }
             body.destination-search-open .place-suggestions button { min-height:72px; padding:14px 8px; font-size:16px; font-weight:700; }
             body:has(#header-journey-search.expanded) #map-view-toggle { bottom:18px; }
             body:not(:has(#bottom-sheet.detail-mode)) #map-view-toggle { bottom:164px; }
@@ -1660,7 +1663,7 @@
             <div id="journey-origin-row" class="journey-input-row">
                 <span class="point-label origin-point-icon" aria-hidden="true"><svg class="ui-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"></circle><circle cx="12" cy="12" r="2.5"></circle></svg></span>
                 <input id="journey-from" autocomplete="off" placeholder="Starting point" aria-label="Starting point">
-                <button id="journey-location-button" onclick="useCurrentLocationForJourney(true)" title="Use current location" aria-label="Use current location"><svg class="ui-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><circle cx="12" cy="12" r="8"></circle></svg></button>
+                <button id="journey-location-button" onclick="useCurrentLocationForJourney()" title="Use current location" aria-label="Use current location"><svg class="ui-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><circle cx="12" cy="12" r="8"></circle></svg></button>
             </div>
             <div class="journey-divider"></div>
             <div class="journey-input-row">
@@ -1668,6 +1671,7 @@
                 <input id="journey-to" autocomplete="off" placeholder="Where do you want to go?" aria-label="Destination">
                 <button id="journey-swap-button" type="button" onclick="swapJourneyPoints()" title="Swap locations" aria-label="Swap locations">&#8645;</button>
             </div>
+            <button id="journey-search-submit" class="journey-search-submit" type="button" onclick="planJourneyFromSearch()">Search routes</button>
         </div>
         <section id="destination-search-recents" aria-label="Recent destination searches"></section>
     </header>
@@ -2158,7 +2162,6 @@
         let liveFetchInFlight = false;
         const journeySelection = { from: null, to: null };
         const journeySearchTimers = {};
-        let autoPlanAfterLocation = false;
         let transitModePreferences = new Set((() => {
             try {
                 const saved = JSON.parse(localStorage.getItem('maribus-transit-modes') || '[]');
@@ -2925,7 +2928,6 @@
                 stopGuidedJourney(true);
                 journeySelection.from = null;
                 journeySelection.to = null;
-                autoPlanAfterLocation = false;
                 currentJourneyOptions = [];
                 activeTrackedJourneyIndex = 0;
                 activeJourneyRouteNames.clear();
@@ -4174,19 +4176,28 @@
                 if (!journeySelection.from?.place) {
                     document.getElementById('journey-from-match').textContent = 'Choose a starting point, or use your current location.';
                     setTimeout(() => document.getElementById('journey-from').focus(), 0);
-                } else {
-                    closeDestinationSearch();
-                    setTimeout(planJourney, 0);
                 }
             } else if (kind === 'from') {
-                if (journeySelection.to?.place) {
-                    closeDestinationSearch();
-                    setTimeout(planJourney, 0);
-                } else {
+                if (!journeySelection.to?.place) {
                     document.getElementById('journey-to-match').textContent = 'Now choose where you want to go.';
                     setTimeout(() => document.getElementById('journey-to').focus(), 0);
                 }
             }
+        }
+
+        function planJourneyFromSearch() {
+            if (!journeySelection.from?.place) {
+                document.getElementById('journey-from-match').textContent = 'Choose your starting point first.';
+                document.getElementById('journey-from')?.focus();
+                return;
+            }
+            if (!journeySelection.to?.place) {
+                document.getElementById('journey-to-match').textContent = 'Choose a destination first.';
+                document.getElementById('journey-to')?.focus();
+                return;
+            }
+            closeDestinationSearch();
+            setTimeout(planJourney, 0);
         }
 
         function swapJourneyPoints() {
@@ -4267,8 +4278,7 @@
             }
         }
 
-        function useCurrentLocationForJourney(planWhenReady = false) {
-            autoPlanAfterLocation = planWhenReady;
+        function useCurrentLocationForJourney() {
             if (!navigator.geolocation) {
                 document.getElementById('journey-from-match').textContent = 'Location is unavailable on this device';
                 document.getElementById('journey-from').value = '';
