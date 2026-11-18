@@ -76,18 +76,17 @@
             background-color: #000000; 
         }
 
-        /* Cloud Map IDs do not accept the JavaScript styles array. Darken only
-           the rendered base-map plane: this produces a black map without hue
-           inversion, while MariBus route polylines and markers remain in their
-           original provider colours above it. */
+        /* Cloud Map IDs are styled in Google Cloud rather than with the
+           JavaScript styles array. Keep this as a neutral fallback treatment
+           for their base-map plane; route overlays live above it. */
         #map.cloud-map-dark .gm-style > div:first-child {
-            filter:brightness(34%) contrast(122%) saturate(72%);
+            filter:brightness(28%) contrast(155%) saturate(38%) grayscale(20%);
             transition:filter .3s ease;
         }
         
         /* Leaflet fallbacks follow the same base-tile-only treatment. */
         body.dark-mode .leaflet-tile-pane {
-            filter:brightness(34%) contrast(122%) saturate(72%);
+            filter:brightness(28%) contrast(155%) saturate(38%) grayscale(20%);
             transition: filter 0.3s ease;
         }
 
@@ -1456,16 +1455,16 @@
             --maribus-live:#d81b76;
         }
         body.dark-mode {
-            --bg-color:#0d1b1e;
-            --sheet-bg:#15282c;
-            --text-main:#f2f8f7;
-            --text-muted:#a9bcbd;
-            --border-color:#2d4549;
-            --input-bg:#20373b;
-            --shadow-color:rgba(0,0,0,.48);
-            --maribus-teal:#67aeb5;
-            --maribus-teal-deep:#c2e6e8;
-            --maribus-teal-soft:#23464b;
+            --bg-color:#090a0c;
+            --sheet-bg:#121316;
+            --text-main:#f5f7fa;
+            --text-muted:#aab1bc;
+            --border-color:#2a2d33;
+            --input-bg:#1b1e23;
+            --shadow-color:rgba(0,0,0,.68);
+            --maribus-teal:#75c5cf;
+            --maribus-teal-deep:#d9f4f6;
+            --maribus-teal-soft:#20262b;
         }
         :focus-visible { outline-color:var(--maribus-teal); }
         .journey-card[role="button"]:focus-visible,.route-live-bus:focus-visible,.nearby-stop-card:focus-visible {
@@ -5778,11 +5777,26 @@
         function googleTransitLineColor(step) {
             const line = step.transit?.line || {};
             const supplied = String(line.color || '').trim();
-            if (/^#[0-9a-f]{6}$/i.test(supplied)) return supplied;
-            if (/^[0-9a-f]{6}$/i.test(supplied)) return `#${supplied}`;
+            let color = '';
+            if (/^#[0-9a-f]{6}$/i.test(supplied)) color = supplied;
+            else if (/^[0-9a-f]{6}$/i.test(supplied)) color = `#${supplied}`;
             const routeName = String(line.short_name || line.name || '').trim().toUpperCase();
-            if (routeName === 'MRL') return '#78b900';
-            return safeRouteColor('');
+            if (!color && routeName === 'MRL') color = '#78b900';
+            if (!color) color = safeRouteColor('');
+            return document.body.classList.contains('dark-mode') ? brightenRouteColor(color) : color;
+        }
+
+        // Dark maps need a little extra luminance on provider-supplied colours.
+        // Preserve their hue (so the line still means the same service), while
+        // avoiding navy and maroon lines becoming indistinguishable from black.
+        function brightenRouteColor(color, amount = .34) {
+            const match = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(color || '');
+            if (!match) return '#60a5fa';
+            const channel = value => {
+                const source = parseInt(value, 16);
+                return Math.round(source + ((255 - source) * amount)).toString(16).padStart(2, '0');
+            };
+            return `#${channel(match[1])}${channel(match[2])}${channel(match[3])}`;
         }
 
         function darkenRouteColor(color, factor = .52) {
