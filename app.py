@@ -49,6 +49,10 @@ API_URLS = {
     "mybas-johor-bahru": "https://api.data.gov.my/gtfs-realtime/vehicle-position/mybas-johor",
     "mybas-kuching": "https://api.data.gov.my/gtfs-realtime/vehicle-position/mybas-kuching",
 }
+# These agencies have static schedules packaged with MariBus.  Rapid Rail is
+# intentionally separate from API_URLS: its official GTFS timetable is public,
+# while its GTFS-Realtime feed is not yet stable enough for live tracking.
+STATIC_AGENCIES = set(API_URLS) | {"rapid-rail-kl"}
 
 RAPID_PENANG_FARES = (
     (7, 1.40, 0.70),
@@ -351,7 +355,7 @@ def load_route_override(agency, route_id, direction_id):
 def db_connection(agency=None):
     if agency is None and has_request_context():
         agency = request.args.get("agency", "rapid-bus-kl").strip() or "rapid-bus-kl"
-    if agency is not None and agency not in API_URLS:
+    if agency is not None and agency not in STATIC_AGENCIES:
         raise UnsupportedAgency("Invalid agency selected")
     connection = sqlite3.connect(ensure_database_path(agency))
     connection.row_factory = sqlite3.Row
@@ -367,7 +371,7 @@ def ensure_database_path(agency=None):
         return DATABASE_PATH
     if agency is None and has_request_context():
         agency = request.args.get("agency", "rapid-bus-kl").strip() or "rapid-bus-kl"
-    if agency in API_URLS:
+    if agency in STATIC_AGENCIES:
         packaged_agency_path = os.path.join(PACKAGED_DATABASE_DIRECTORY, f"{agency}.db.gz")
         if os.path.exists(packaged_agency_path):
             with _database_lock:
@@ -555,7 +559,7 @@ def deployment_configuration():
 @app.get("/api/health")
 def health():
     packaged_agencies = [
-        agency for agency in API_URLS
+        agency for agency in STATIC_AGENCIES
         if os.path.exists(os.path.join(PACKAGED_DATABASE_DIRECTORY, f"{agency}.db.gz"))
     ]
     database_available = os.path.exists(DATABASE_PATH) or os.path.exists(PACKAGED_DATABASE_PATH) or bool(packaged_agencies)

@@ -20,6 +20,7 @@ STATIC_URLS = {
 # Providers whose static endpoint does not use the realtime provider path.
 STATIC_URLS.update({
     "ktmb": "https://api.data.gov.my/gtfs-static/ktmb",
+    "rapid-rail-kl": "https://api.data.gov.my/gtfs-static/prasarana?category=rapid-rail-kl",
 })
 # Kota Bharu's published endpoint currently returns calendar metadata without
 # route records. Every other configured feed must contain routes before a new
@@ -113,12 +114,13 @@ def copy_agency_table(source, destination, table, agency):
         destination.executemany(insert, rows)
 
 
-def package_agency_databases(database_path):
+def package_agency_databases(database_path, agencies=None):
     package_directory = os.path.join(os.path.dirname(database_path), "gtfs_agencies")
     os.makedirs(package_directory, exist_ok=True)
+    agencies = list(agencies or STATIC_URLS)
     source = sqlite3.connect(database_path)
     try:
-        for agency in STATIC_URLS:
+        for agency in agencies:
             fd, agency_database_path = tempfile.mkstemp(prefix=f"{agency}-", suffix=".db", dir=os.path.dirname(database_path))
             os.close(fd)
             try:
