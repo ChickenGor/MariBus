@@ -1292,8 +1292,31 @@
             #bottom-sheet.detail-mode.sheet-half #transit-panel.open,
             #bottom-sheet.detail-mode.sheet-expanded #transit-panel.open { flex:1 1 auto; }
             #bottom-sheet.detail-mode.sheet-dragging { transition:none; user-select:none; }
+            /* Keep the visible grip small, but give it a full finger-sized
+               target.  A four-pixel line cannot reliably receive a mobile
+               drag gesture. */
             #bottom-sheet.detail-mode > .drag-handle {
-                display:block; flex:0 0 4px; margin:2px auto 1px; cursor:grab; touch-action:none;
+                position:relative;
+                display:block;
+                width:76px;
+                height:28px;
+                flex:0 0 28px;
+                margin:0 auto;
+                background:transparent;
+                border-radius:0;
+                cursor:grab;
+                touch-action:none;
+            }
+            #bottom-sheet.detail-mode > .drag-handle::after {
+                content:"";
+                position:absolute;
+                top:12px;
+                left:50%;
+                width:38px;
+                height:4px;
+                transform:translateX(-50%);
+                border-radius:999px;
+                background:color-mix(in srgb,var(--maribus-teal) 48%,var(--border-color));
             }
             #bottom-sheet.detail-mode .sheet-swipe-hint { display:none; }
             #bottom-sheet.detail-mode .sheet-detail-controls {
@@ -1303,7 +1326,9 @@
                 gap:8px;
                 min-height:28px;
                 flex:0 0 auto;
+                touch-action:none;
             }
+            #bottom-sheet.detail-mode .sheet-detail-controls button { touch-action:manipulation; }
             #bottom-sheet.detail-mode .sheet-detail-controls .sheet-control-button:last-child { grid-column:3; }
             .sheet-control-button {
                 height:28px; min-height:28px; border:0; border-radius:9px; background:transparent;
@@ -2855,7 +2880,11 @@
         function initializeBottomSheetDrag() {
             const sheet = document.getElementById('bottom-sheet');
             const handle = sheet.querySelector('.drag-handle');
-            const dragTargets = [handle].filter(Boolean);
+            const controls = sheet.querySelector('.sheet-detail-controls');
+            // The handle has a generous invisible touch target.  The empty
+            // middle of the control row is also draggable; actual buttons
+            // remain normal tap targets.
+            const dragTargets = [handle, controls].filter(Boolean);
             let startY = 0;
             let startHeight = 0;
             let pointerId = null;
@@ -2863,6 +2892,7 @@
 
             const startDrag = event => {
                 if (window.innerWidth >= 768 || !sheet.classList.contains('detail-mode')) return;
+                if (event.target.closest('button')) return;
                 pointerId = event.pointerId;
                 activeTarget = event.currentTarget;
                 startY = event.clientY;
