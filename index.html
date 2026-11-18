@@ -2003,18 +2003,16 @@
         const API_BASE = location.protocol === 'file:' || IS_LOCAL_FRONTEND ? 'http://localhost:5000' : location.origin;
         const map = L.map('map', { zoomControl: false }).setView([3.1390, 101.6869], 12);
         window.__mariBusMap = map;
-        // The packaged GTFS feed currently contains bus services, not the full
-        // Rapid Rail network geometry. Google renders its maintained rail lines
-        // through TransitLayer, keeping the idle map useful without showing a
-        // stale hand-drawn network. Keep it strictly on the home map so it does
-        // not compete with a rider's selected journey.
+        // Google TransitLayer renders route lines and every stop together. It
+        // cannot be configured as "lines only", so do not put it on the idle
+        // home map: a city-wide field of stop icons is harder to read than a
+        // clean map. Stops remain available from Nearby stops and in a chosen
+        // journey, where they have useful context.
         const homeTransitLayer = window.google?.maps?.TransitLayer
             ? new google.maps.TransitLayer()
             : null;
         const updateHomeTransitLayer = () => {
-            const hasJourney = document.getElementById('bottom-sheet')?.classList.contains('detail-mode');
-            const isSearching = document.body.classList.contains('destination-search-open');
-            homeTransitLayer?.setMap(!hasJourney && !isSearching ? map.native : null);
+            homeTransitLayer?.setMap(null);
         };
         window.__mariBusRefreshHomeTransitLayer = updateHomeTransitLayer;
         updateHomeTransitLayer();
