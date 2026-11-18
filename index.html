@@ -4483,6 +4483,16 @@
                 // agency has no scheduled door-to-door option.
                 const googleTransitHandled = await tryGoogleTransitJourney();
                 if (googleTransitHandled) return;
+                // Walking is the final fallback, never a conclusion reached
+                // merely because MariBus's local timetable had no match. This
+                // matters when a route requires another operator or a transfer
+                // that is present in Google Transit but absent from our GTFS.
+                await showWalkingFallback(
+                    journeySelection.from.place,
+                    journeySelection.to.place,
+                    'No public-transport journey was available from MariBus or Google Transit for this departure time.'
+                );
+                return;
             }
             if (!journeySelection.from.stop_id || !journeySelection.to.stop_id) {
                 openTransitPanel('No scheduled journey found', '', '<p class="panel-message">No direct or one-transfer service was found for the selected date and time. Try a later time, another operator, or a nearby starting point.</p>');
@@ -4546,8 +4556,12 @@
                 const result = await response.json();
                 if (!result.success) throw new Error(result.error);
                 if (!result.data.length) {
-                    showWalkingFallback(fromPlace, toPlace, result.notice || 'No scheduled bus journey found');
-                    return true;
+                    // Let Google Transit search the full regional network before
+                    // we fall back to a walking-only result. The local GTFS feed
+                    // is intentionally limited and often does not contain every
+                    // useful inter-operator transfer.
+                    console.info('No local GTFS journey; checking Google Transit.', { notice:result.notice });
+                    return false;
                 }
                 // Static GTFS is the local planner's baseline, but its
                 // published timetable can lag a service change. Do not make a
