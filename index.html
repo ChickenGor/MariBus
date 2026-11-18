@@ -212,7 +212,13 @@
         body.destination-search-open .journey-divider { display:block !important; margin-left:34px; }
         body.destination-search-open #journey-swap-button { display:none !important; }
         body.destination-search-open #journey-location-button { display:grid !important; }
-            body.destination-search-open #header-journey-search.expanded { height:auto !important; min-height:154px !important; flex-basis:auto !important; padding:4px 14px !important; }
+        /* The search screen has a vertical From → To → Search flow.  The base
+           search bar is horizontal, so explicitly reset its flex direction here
+           instead of allowing the compact map-header rule to leak into this view. */
+        body.destination-search-open #header-journey-search.expanded {
+            height:auto !important; min-height:154px !important; flex-basis:auto !important;
+            padding:4px 14px !important; flex-direction:column !important; align-items:stretch !important;
+        }
         body.destination-search-open #header-journey-search .journey-input-row { min-height:48px !important; }
         body.destination-search-open #journey-to { font-size:16px !important; font-weight:700; }
             body.destination-search-open .journey-search-submit { display:flex; align-items:center; justify-content:center; }
@@ -1664,13 +1670,13 @@
         <div id="header-journey-search">
             <div id="journey-origin-row" class="journey-input-row">
                 <span class="point-label origin-point-icon" aria-hidden="true"><svg class="ui-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"></circle><circle cx="12" cy="12" r="2.5"></circle></svg></span>
-                <input id="journey-from" autocomplete="off" placeholder="Starting point" aria-label="Starting point">
+                <input id="journey-from" autocomplete="off" placeholder="From" aria-label="Starting point">
                 <button id="journey-location-button" onclick="useCurrentLocationForJourney()" title="Use current location" aria-label="Use current location"><svg class="ui-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><circle cx="12" cy="12" r="8"></circle></svg></button>
             </div>
             <div class="journey-divider"></div>
             <div class="journey-input-row">
                 <span id="destination-prefix" class="point-label"><svg class="ui-icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>
-                <input id="journey-to" autocomplete="off" placeholder="Where do you want to go?" aria-label="Destination">
+                <input id="journey-to" autocomplete="off" placeholder="To" aria-label="Destination">
                 <button id="journey-swap-button" type="button" onclick="swapJourneyPoints()" title="Swap locations" aria-label="Swap locations">&#8645;</button>
             </div>
             <button id="journey-search-submit" class="journey-search-submit" type="button" onclick="planJourneyFromSearch()">Search routes</button>
