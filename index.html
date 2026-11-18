@@ -15,7 +15,9 @@
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script>
         if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => navigator.serviceWorker.register('/firebase-messaging-sw.js'));
+            // Change this version whenever the app shell changes so an installed
+            // Android/PWA copy cannot keep serving the old interface.
+            window.addEventListener('load', () => navigator.serviceWorker.register('/firebase-messaging-sw.js?v=20261118-2'));
         }
     </script>
 

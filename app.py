@@ -623,7 +623,7 @@ def firebase_messaging_service_worker():
 importScripts('https://www.gstatic.com/firebasejs/12.1.0/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/12.1.0/firebase-messaging-compat.js');
 const firebaseConfig = {json.dumps(firebase_config)};
-const CACHE_NAME = 'maribus-shell-v1';
+const CACHE_NAME = 'maribus-shell-v2';
 const APP_SHELL = ['/', '/static/manifest.webmanifest', '/static/favicon.svg'];
 const isSameOrigin = request => new URL(request.url).origin === self.location.origin;
 
