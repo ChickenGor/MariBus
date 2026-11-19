@@ -177,10 +177,10 @@
         #journey-swap-button { display:none; width:34px; height:34px; flex:0 0 34px; border:0; border-radius:50%; background:transparent; color:var(--text-main); font-size:20px; cursor:pointer; }
         #header-journey-search.expanded #journey-swap-button { display:block; }
         .journey-search-submit { display:none; width:100%; min-height:42px; margin:7px 0 4px; border:0; border-radius:12px; background:#16181b; color:#fff; font:inherit; font-size:14px; font-weight:850; cursor:pointer; }
-        .journey-time-controls { display:none; width:100%; grid-template-columns:minmax(116px,1fr) minmax(118px,1.1fr) minmax(102px,.95fr); gap:8px; padding:8px 0 1px; }
+        .journey-time-controls { display:none; width:100%; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:8px; padding:8px 0 1px; }
         #header-journey-search.expanded .journey-time-controls { display:grid; }
         .journey-time-controls select,.journey-time-controls input { min-width:0; width:100%; height:38px; box-sizing:border-box; border:1px solid var(--border-color); border-radius:10px; padding:0 9px; background:var(--input-bg); color:var(--text-main); font:inherit; font-size:13px; font-weight:700; line-height:38px; }
-        .journey-time-controls select { padding-right:25px; }
+        .journey-time-controls select { grid-column:1 / -1; padding-right:25px; }
         #destination-search-close { display:none; position:absolute; top:18px; left:18px; width:42px; height:42px; place-items:center; border:0; border-radius:50%; background:var(--input-bg); color:var(--text-main); font-size:30px; line-height:1; cursor:pointer; }
 
         /* Destination search is its own screen, not a variation of the map header.
@@ -220,7 +220,7 @@
            search bar is horizontal, so explicitly reset its flex direction here
            instead of allowing the compact map-header rule to leak into this view. */
         body.destination-search-open #header-journey-search.expanded {
-            height:auto !important; min-height:216px !important; flex-basis:auto !important;
+            height:auto !important; min-height:260px !important; flex-basis:auto !important;
             padding:4px 14px !important; flex-direction:column !important; align-items:stretch !important;
         }
         body.destination-search-open #header-journey-search .journey-input-row { min-height:48px !important; }
@@ -1639,7 +1639,7 @@
             body.destination-search-open { overflow:hidden; }
             body.destination-search-open #top-bar { position:fixed !important; z-index:4000; inset:0; width:100%; height:100dvh !important; padding:max(18px, env(safe-area-inset-top)) 14px 24px; box-sizing:border-box; background:var(--sheet-bg); }
             body.destination-search-open #menu-button,body.destination-search-open .desktop-brand,body.destination-search-open #theme-toggle-header { display:none; }
-            body.destination-search-open #header-journey-search,body.destination-search-open #header-journey-search.expanded { position:static; display:flex; width:100%; max-width:none; min-height:216px; margin:0; padding:4px 14px; box-sizing:border-box; border-radius:22px; box-shadow:none; }
+            body.destination-search-open #header-journey-search,body.destination-search-open #header-journey-search.expanded { position:static; display:flex; width:100%; max-width:none; min-height:260px; margin:0; padding:4px 14px; box-sizing:border-box; border-radius:22px; box-shadow:none; }
             body.destination-search-open #journey-origin-row { display:flex !important; }
             body.destination-search-open .journey-divider { display:block !important; margin-left:34px; }
             body.destination-search-open #journey-swap-button { display:none !important; }
