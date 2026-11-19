@@ -1396,12 +1396,14 @@
             #bottom-sheet.detail-mode:not(.sheet-half):not(.sheet-expanded) .journey-card.modern .journey-main-time { font-size:14px; }
             #bottom-sheet.detail-mode:not(.sheet-half):not(.sheet-expanded) .journey-card.modern .journey-steps { margin-top:6px; }
             #bottom-sheet.detail-mode.sheet-custom-size .panel-heading { position:sticky !important; top:0; height:auto !important; min-height:30px !important; padding:2px 38px 2px 0 !important; border-bottom:1px solid rgba(148,163,184,.22) !important; }
-            #bottom-sheet.detail-mode.sheet-custom-size .journey-board,
-            #bottom-sheet.detail-mode.sheet-custom-size .journey-fare,
-            #bottom-sheet.detail-mode.sheet-custom-size .journey-live-progress,
-            #bottom-sheet.detail-mode.sheet-custom-size .live-journey-status { display:block !important; }
-            #bottom-sheet.detail-mode.sheet-custom-size .journey-alternatives { display:flex !important; }
-            #bottom-sheet.detail-mode.sheet-custom-size .route-action { display:inline-flex !important; }
+            /* Dragging is progressive: a short sheet stays scan-friendly while
+               crossing the middle of the screen opens the full card detail. */
+            #bottom-sheet.detail-mode.sheet-custom-size.sheet-expanded-content .journey-board,
+            #bottom-sheet.detail-mode.sheet-custom-size.sheet-expanded-content .journey-fare,
+            #bottom-sheet.detail-mode.sheet-custom-size.sheet-expanded-content .journey-live-progress,
+            #bottom-sheet.detail-mode.sheet-custom-size.sheet-expanded-content .live-journey-status { display:block !important; }
+            #bottom-sheet.detail-mode.sheet-custom-size.sheet-expanded-content .journey-alternatives { display:flex !important; }
+            #bottom-sheet.detail-mode.sheet-custom-size.sheet-expanded-content .route-action { display:inline-flex !important; }
             #bottom-sheet:not(.detail-mode) { display:none; }
             #top-bar {
                 height:64px; width:64px; padding:8px 10px; gap:0;
@@ -2844,7 +2846,7 @@
             document.getElementById('resume-journey-button').classList.remove('visible');
             sheet.classList.add('detail-mode');
             if (!preserveSheetState && window.innerWidth < 768 && !sheet.classList.contains('sheet-dragging')) {
-                sheet.classList.remove('sheet-half', 'sheet-expanded', 'sheet-custom-size');
+                sheet.classList.remove('sheet-half', 'sheet-expanded', 'sheet-custom-size', 'sheet-expanded-content');
                 sheet.style.height = '';
             }
             if (!preserveSheetState) sheet.scrollTop = 0;
@@ -2919,6 +2921,9 @@
             let startHeight = 0;
             let pointerId = null;
             let activeTarget = null;
+            const updateDragDetailDensity = height => {
+                sheet.classList.toggle('sheet-expanded-content', height >= window.innerHeight * .56);
+            };
 
             const startDrag = event => {
                 if (window.innerWidth >= 768 || !sheet.classList.contains('detail-mode')) return;
@@ -2930,6 +2935,7 @@
                 sheet.classList.remove('sheet-half', 'sheet-expanded');
                 sheet.classList.add('sheet-dragging', 'sheet-custom-size');
                 sheet.style.height = `${startHeight}px`;
+                updateDragDetailDensity(startHeight);
                 activeTarget.setPointerCapture(pointerId);
                 event.preventDefault();
             };
@@ -2938,6 +2944,7 @@
                 if (pointerId !== event.pointerId) return;
                 const nextHeight = Math.min(window.innerHeight * .94, Math.max(180, startHeight + startY - event.clientY));
                 sheet.style.height = `${nextHeight}px`;
+                updateDragDetailDensity(nextHeight);
                 event.preventDefault();
             };
 
@@ -3005,7 +3012,7 @@
             const panel = document.getElementById('transit-panel');
             panel.classList.remove('open');
             const sheet = document.getElementById('bottom-sheet');
-            sheet.classList.remove('detail-mode', 'sheet-half', 'sheet-expanded', 'sheet-custom-size', 'sheet-dragging', 'route-browse-mode');
+            sheet.classList.remove('detail-mode', 'sheet-half', 'sheet-expanded', 'sheet-custom-size', 'sheet-expanded-content', 'sheet-dragging', 'route-browse-mode');
             sheet.style.height = '';
             const resumeButton = document.getElementById('resume-journey-button');
             if (forceClose) {
@@ -6039,14 +6046,14 @@
                         <div class="walking-option-copy"><strong>${iconSvg('walk')} Walk ${(Number(walkingLeg.distance?.value || 0) / 1000).toFixed(1)} km</strong><span>${walkingRoute?.legs?.[0]?.steps?.some(step => step.contributedPath) ? 'Uses MariBus walking network where available' : 'Google walking route'}</span></div>
                     </article>
                 </section>` : '';
-                // Keep choices meaningful. A rider sees one best journey plus
-                // genuinely different less-walking/fewer-transfer alternatives,
-                // rather than a long list of near-identical schedules.
-                const optionSpecs = [
-                    { key:'recommended', label:'Recommended', route:recommended },
-                    { key:'less-walking', label:'Less walking', route:[...rankedRoutes].sort((a,b) => a.walkSeconds - b.walkSeconds || a.arrivalTimestamp - b.arrivalTimestamp)[0] },
-                    { key:'fewer-transfers', label:'Fewer transfers', route:[...rankedRoutes].sort((a,b) => a.transferCount - b.transferCount || a.arrivalTimestamp - b.arrivalTimestamp || a.walkSeconds - b.walkSeconds)[0] },
-                ].filter((option, index, options) => option.route && options.findIndex(other => other.route?.routeIndex === option.route.routeIndex) === index);
+                // Show the rider the actual alternatives Google returned. The
+                // old three-label shortcut hid valid later departures, which is
+                // especially unhelpful when comparing a timetable.
+                const optionSpecs = rankedRoutes.slice(0, 6).map((route, index) => ({
+                    key:index === 0 ? 'recommended' : 'alternative',
+                    label:index === 0 ? 'Recommended' : 'Alternative',
+                    route,
+                }));
                 const cards = optionSpecs.map(({ key, label, route:{ route, routeIndex, walkSeconds, transferCount, durationSeconds } }, displayIndex) => {
                     const leg = route.legs?.[0];
                     if (!leg) return '';
