@@ -1725,7 +1725,7 @@
             <div class="sidebar-region">
                 <svg class="drawer-icon" viewBox="0 0 24 24"><path d="M5 21V4M6 5h11l-2 4 2 4H6"></path></svg>
                 <span class="sidebar-region-copy"><label for="sidebar-region-select">Service region</label><select id="sidebar-region-select" onchange="selectSidebarRegion(this.value)">
-                    <option value="rapid-bus-kl">Klang Valley</option><option value="rapid-bus-penang">Penang</option><option value="mybas-ipoh">Perak</option><option value="mybas-johor-bahru">Johor</option><option value="mybas-melaka">Melaka</option><option value="mybas-seremban-A">Negeri Sembilan</option><option value="mybas-kuala-terengganu">Terengganu</option><option value="mybas-kota-bharu">Kelantan</option><option value="mybas-alor-setar">Kedah</option><option value="mybas-kangar">Perlis</option><option value="mybas-kuching">Sarawak</option>
+                    <option value="rapid-bus-kl">Klang Valley</option><option value="rapid-rail-kl">Rapid Rail (timetable)</option><option value="rapid-bus-penang">Penang</option><option value="mybas-ipoh">Perak</option><option value="mybas-johor-bahru">Johor</option><option value="mybas-melaka">Melaka</option><option value="mybas-seremban-A">Negeri Sembilan</option><option value="mybas-kuala-terengganu">Terengganu</option><option value="mybas-kota-bharu">Kelantan</option><option value="mybas-alor-setar">Kedah</option><option value="mybas-kangar">Perlis</option><option value="mybas-kuching">Sarawak</option>
                 </select></span>
             </div>
             <a class="sidebar-item" href="/feedback"><svg class="drawer-icon" viewBox="0 0 24 24"><path d="M4 5h16v12H8l-4 4zM8 9h8M8 13h5"></path></svg><span class="sidebar-item-copy">User feedback</span></a>
@@ -1870,6 +1870,9 @@
                 <!-- State and regional networks -->
                 <div class="select-option active" data-value="rapid-bus-kl" onclick="selectAgencyOption('rapid-bus-kl', 'Klang Valley', 'dot-rapid')">
                     <div class="agency-dot dot-rapid"></div><span class="text">Klang Valley</span>
+                </div>
+                <div class="select-option" data-value="rapid-rail-kl" onclick="selectAgencyOption('rapid-rail-kl', 'Rapid Rail · timetable', 'dot-rapid')">
+                    <div class="agency-dot dot-rapid"></div><span class="text">Rapid Rail · timetable</span>
                 </div>
                 <div class="select-option" data-value="rapid-bus-penang" onclick="selectAgencyOption('rapid-bus-penang', 'Penang', 'dot-rapid')">
                     <div class="agency-dot dot-rapid"></div><span class="text">Penang</span>
@@ -2376,6 +2379,7 @@
 
         const agencyLocations = {
             "rapid-bus-kl": { lat: 3.1390, lng: 101.6869, zoom: 12 },
+            "rapid-rail-kl": { lat: 3.1390, lng: 101.6869, zoom: 11 },
             "rapid-bus-mrtfeeder": { lat: 3.1390, lng: 101.6869, zoom: 12 },
             "rapid-bus-penang": { lat: 5.4141, lng: 100.3288, zoom: 11 },
             "ktmb": { lat: 3.1390, lng: 101.6869, zoom: 7 },
@@ -2395,6 +2399,7 @@
         // operator IDs. This lets one state display every feed MariBus has.
         const agencyGroups = {
             "rapid-bus-kl": ["rapid-bus-kl", "rapid-bus-mrtfeeder", "ktmb"],
+            "rapid-rail-kl": ["rapid-rail-kl"],
             "rapid-bus-penang": ["rapid-bus-penang", "ktmb"],
             "mybas-ipoh": ["mybas-ipoh", "ktmb"],
             "mybas-seremban-A": ["mybas-seremban-A", "mybas-seremban-B", "ktmb"],
@@ -2408,9 +2413,15 @@
             return agencyGroups[selection] || [selection];
         }
 
+        // Rapid Rail is packaged official GTFS timetable data. It deliberately
+        // has no vehicle polling until an operator-backed real-time feed exists.
+        const SCHEDULE_ONLY_AGENCIES = new Set(['rapid-rail-kl']);
+        const isScheduleOnlyAgency = agency => SCHEDULE_ONLY_AGENCIES.has(agency);
+
         function operatorLabel(agency) {
             const labels = {
                 "rapid-bus-kl":"Rapid KL",
+                "rapid-rail-kl":"Rapid Rail",
                 "rapid-bus-mrtfeeder":"MRT Feeder",
                 "rapid-bus-penang":"Rapid Penang",
                 "ktmb":"KTMB",
@@ -2426,6 +2437,10 @@
         }
 
         function updateCountdownDisplay() {
+            if (isScheduleOnlyAgency(document.getElementById('agency-select').value)) {
+                document.getElementById('refresh-timer').innerText = 'Timetable';
+                return;
+            }
             document.getElementById('refresh-timer').innerText = liveRefreshFailed
                 ? 'Live unavailable · retry'
                 : `${liveRefreshPartial ? 'Live partial' : 'Live'} (${countdownValue}s)`;
@@ -2445,15 +2460,29 @@
 
         async function fetchBuses() {
             if (liveFetchInFlight) return;
+            const selectedAgency = document.getElementById('agency-select').value;
+            const syncDot = document.getElementById('sync-dot');
+            const timerText = document.getElementById('refresh-timer');
+            if (isScheduleOnlyAgency(selectedAgency)) {
+                allLiveBusMarkers.forEach(marker => markersGroup.removeLayer(marker));
+                allLiveBusMarkers = [];
+                busMarkersDict = {};
+                busLiveDataDict = {};
+                routeMarkersDict = {};
+                liveRefreshFailed = false;
+                liveRefreshPartial = false;
+                if (countdownInterval) clearInterval(countdownInterval);
+                countdownInterval = null;
+                syncDot?.classList.remove('is-syncing');
+                timerText.innerText = 'Timetable';
+                return;
+            }
             if (journeyMapFocused) {
                 startCountdown();
                 return;
             }
             liveFetchInFlight = true;
-            const selectedAgency = document.getElementById('agency-select').value;
             // 1. TRIGGER SYNCING STATE
-            const syncDot = document.getElementById('sync-dot');
-            const timerText = document.getElementById('refresh-timer');
             syncDot.classList.add('is-syncing');
             liveRefreshFailed = false;
             liveRefreshPartial = false;
@@ -3224,6 +3253,8 @@
 
         async function loadNearbyDepartures(lat, lng, options = {}) {
             const agency = document.getElementById('agency-select').value;
+            const scheduleOnly = isScheduleOnlyAgency(agency);
+            const placeType = scheduleOnly ? 'rail stations' : 'bus stops';
             const cacheKey = `${agency}:${Number(lat).toFixed(3)}:${Number(lng).toFixed(3)}`;
             const cached = nearbyDepartureCache.get(cacheKey);
             if (cached && Date.now() - cached.savedAt < 60000) {
@@ -3236,7 +3267,7 @@
                 const stopResult = await cachedApiJson(`${API_BASE}/api/stops?agency=${encodeURIComponent(agency)}&lat=${lat}&lng=${lng}&radius_km=2&limit=6`, { ttlMs:24 * 60 * 60 * 1000 });
                 const stops = stopResult.data.slice(0, 3).map(stop => ({ ...stop, source_agency:agency }));
                 if (!stops.length) {
-                    openTransitPanel('Nearby departures', '', '<p class="panel-message">No bus stops were found within 2 km of your location.</p>');
+                    openTransitPanel('Nearby departures', '', `<p class="panel-message">No ${placeType} were found within 2 km of your location.</p>`);
                     return;
                 }
                 const groups = await Promise.all(stops.map(async stop => {
@@ -3244,7 +3275,9 @@
                         const result = rebaseCachedArrivals(await cachedApiJson(`${API_BASE}/api/stops/${encodeURIComponent(stop.stop_id)}/arrivals?agency=${encodeURIComponent(agency)}&limit=6`, { ttlMs:2 * 60 * 60 * 1000 }));
                         const scheduled = result.data || [];
                         let live = [];
-                        try { live = await smartStopLiveEstimates(stop, agency, scheduled); } catch (_) {}
+                        if (!scheduleOnly) {
+                            try { live = await smartStopLiveEstimates(stop, agency, scheduled); } catch (_) {}
+                        }
                         return { stop, scheduled, live, cacheInfo:result.cache_info };
                     } catch (_) { return { stop, scheduled:[], live:[], error:true }; }
                 }));
@@ -3255,7 +3288,7 @@
                         : scheduled.slice(0,2).map(item => ({ route:item.route_short_name || 'Route', destination:item.trip_headsign || item.route_long_name, minutes:item.minutes, live:false }));
                     return `<article class="nearby-stop-card" role="button" tabindex="0" data-nearby-stop="${escapeHtml(stop.stop_id)}"><div class="nearby-stop-head"><strong>${escapeHtml(readableStopName(stop.stop_name))}</strong><span>${Math.round(Number(stop.distance_m))} m away</span></div>${departures.length ? departures.map(item => `<div class="nearby-departure"><span class="nearby-departure-route">${escapeHtml(item.route)}</span><span class="nearby-departure-destination">${escapeHtml(readableStopName(item.destination))}</span><span class="nearby-departure-time${item.live ? ' live' : ''}"><strong>${item.minutes === 0 ? 'Due' : `${item.live ? '~' : ''}${item.minutes} min`}</strong><small>${item.live ? '● LIVE ESTIMATE' : 'SCHEDULED'}</small></span></div>`).join('') : '<p class="smart-stop-note">No upcoming departures found.</p>'}</article>`;
                 }).join('');
-                const subtitle = `${stops.length} nearest stop${stops.length === 1 ? '' : 's'} · updated just now`;
+                const subtitle = `${stops.length} nearest ${scheduleOnly ? 'station' : 'stop'}${stops.length === 1 ? '' : 's'} · ${scheduleOnly ? 'timetable' : 'updated just now'}`;
                 nearbyDepartureCache.set(cacheKey, { savedAt:Date.now(), subtitle, html, groups });
                 openTransitPanel('Nearby departures', subtitle, html);
                 bindNearbyStopCards(groups);
@@ -3315,13 +3348,16 @@
 
         async function showStopArrivals(stop) {
             const agency = stop.source_agency || document.getElementById('agency-select').value;
+            const scheduleOnly = isScheduleOnlyAgency(agency);
             window.__mariBusSmartStop = { stop, agency };
-            openTransitPanel(readableStopName(stop.stop_name), stop.stop_code ? `Stop ${stop.stop_code}` : 'Smart Stop', '<p class="panel-message">Checking live and scheduled arrivals…</p>');
+            openTransitPanel(readableStopName(stop.stop_name), stop.stop_code ? `Stop ${stop.stop_code}` : 'Smart Stop', `<p class="panel-message">Checking ${scheduleOnly ? 'scheduled departures' : 'live and scheduled arrivals'}…</p>`);
             try {
                 const result = rebaseCachedArrivals(await cachedApiJson(`${API_BASE}/api/stops/${encodeURIComponent(stop.stop_id)}/arrivals?agency=${encodeURIComponent(agency)}`, { ttlMs:2 * 60 * 60 * 1000 }));
                 let liveItems = [];
-                try { liveItems = await smartStopLiveEstimates(stop, agency, result.data); }
-                catch (error) { console.warn('Smart Stop live estimates unavailable', error); }
+                if (!scheduleOnly) {
+                    try { liveItems = await smartStopLiveEstimates(stop, agency, result.data); }
+                    catch (error) { console.warn('Smart Stop live estimates unavailable', error); }
+                }
                 openTransitPanel(readableStopName(stop.stop_name), stop.stop_code ? `Stop ${stop.stop_code}` : 'Smart Stop', smartStopHtml(stop, agency, result.data, liveItems, result.cache_info));
             } catch (error) {
                 openTransitPanel(readableStopName(stop.stop_name), '', panelStateHtml('Arrivals temporarily unavailable', 'The stop remains available, but its timetable could not be refreshed.', 'Retry', 'retrySmartStop()'));
@@ -3371,6 +3407,10 @@
             const subtitle = document.getElementById('panel-subtitle');
             if (!subtitle) return;
             subtitle.dataset.stopCount = `${stopCount} stops`;
+            if (routeBrowseContext && isScheduleOnlyAgency(routeBrowseContext.agency)) {
+                subtitle.innerHTML = `${stopCount} stations · Timetable`;
+                return;
+            }
             subtitle.innerHTML = liveCount
                 ? `${stopCount} stops · <span class="route-header-live">${liveCount} bus${liveCount === 1 ? '' : 'es'} live</span><span id="route-updated-status" class="route-updated">Updated just now</span>`
                 : `${stopCount} stops · Live tracking unavailable`;
@@ -3463,6 +3503,15 @@
         }
 
         async function updateBrowsedRouteVehicles(routeId, publicCode, agency, directionId, stops) {
+            if (isScheduleOnlyAgency(agency)) {
+                routeBrowseVehicles = [];
+                routeBrowseVehicleMarkers.clear();
+                journeyLiveVehicleLayer.clearLayers();
+                const timetable = document.getElementById('route-live-list');
+                if (timetable) timetable.innerHTML = '<div class="route-live-empty">Timetable route. Live train locations are not available from this feed.</div>';
+                renderRouteHeaderStatus(stops.length, 0);
+                return;
+            }
             try {
                 const response = await fetch(`${API_BASE}/api/live-buses?agency=${encodeURIComponent(agency)}`);
                 const result = await response.json();
@@ -3550,6 +3599,7 @@
         function retryBrowsedRouteVehicles() {
             if (!routeBrowseContext) return;
             const context = routeBrowseContext;
+            if (isScheduleOnlyAgency(context.agency)) return;
             document.getElementById('route-live-list').innerHTML = '<p class="panel-message">Checking live bus locations…</p>';
             updateBrowsedRouteVehicles(context.routeId, context.publicCode, context.agency, context.directionId, context.stops);
         }
@@ -3603,7 +3653,8 @@
                 const title = `${routeLabel} ${data.trip.trip_headsign || ''}`.trim();
                 const geometryLabel = data.geometry_source === 'verified-override'
                     ? (roadMatched ? 'verified • road matched' : 'verified route') : 'official stops';
-                openRouteTransitPanel(title, `${data.stops.length} stops • ${geometryLabel}`, `${cachedDataNotice(result.cache_info)}<div id="route-service-alerts">${serviceAlertsHtml({ agency, routes:[routeId, routeLabel, publicCode] })}</div><div id="route-live-list" class="route-live-list"><p class="panel-message">Checking live bus locations…</p></div><div class="route-stop-list">` + data.stops.map((stop, index) => `
+                const scheduleOnly = isScheduleOnlyAgency(agency);
+                openRouteTransitPanel(title, `${data.stops.length} stops • ${geometryLabel}`, `${cachedDataNotice(result.cache_info)}<div id="route-service-alerts">${serviceAlertsHtml({ agency, routes:[routeId, routeLabel, publicCode] })}</div><div id="route-live-list" class="route-live-list"><p class="panel-message">${scheduleOnly ? 'Scheduled timetable route' : 'Checking live bus locations…'}</p></div><div class="route-stop-list">` + data.stops.map((stop, index) => `
                     <button class="stop-row" type="button" data-route-stop-index="${index}" style="width:100%;border-left:0;border-right:0;border-bottom:0;background:transparent;color:inherit;text-align:left;cursor:pointer"><strong>${index + 1}</strong><span class="stop-name">${escapeHtml(readableStopName(stop.stop_name))}</span></button>
                 `).join('') + '</div>');
                 document.getElementById('bottom-sheet').classList.add('route-browse-mode');
@@ -3617,8 +3668,10 @@
                 updateRouteStopVisibility();
                 await updateBrowsedRouteVehicles(routeId, publicCode || routeLabel, agency, data.trip.direction_id, data.stops);
                 if (routeBrowseTimer) clearInterval(routeBrowseTimer);
-                routeBrowseTimer = setInterval(() => updateBrowsedRouteVehicles(routeId, publicCode || routeLabel, agency, data.trip.direction_id, data.stops), 30000);
-                routeBrowseFreshnessTimer = setInterval(updateRouteFreshnessLabels, 5000);
+                if (!scheduleOnly) {
+                    routeBrowseTimer = setInterval(() => updateBrowsedRouteVehicles(routeId, publicCode || routeLabel, agency, data.trip.direction_id, data.stops), 30000);
+                    routeBrowseFreshnessTimer = setInterval(updateRouteFreshnessLabels, 5000);
+                }
             } catch (error) {
                 openRouteTransitPanel('Route unavailable', routeId, '<p class="panel-message">Route geometry is not available yet. Rebuild the GTFS database and try again.</p>');
             }
