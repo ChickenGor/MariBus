@@ -1057,6 +1057,9 @@
             min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
         }
         .journey-board { margin-top:5px; color:var(--text-muted); font-size:11px; line-height:1.35; }
+        .journey-peak-advisory { display:flex; align-items:flex-start; gap:7px; margin-top:8px; padding:8px 9px; border-radius:10px; background:#fff7df; color:#805b12; font-size:10px; font-weight:750; line-height:1.35; }
+        .journey-peak-advisory .ui-icon { width:14px; height:14px; flex:0 0 14px; margin-top:1px; stroke-width:2.3; }
+        body.dark-mode .journey-peak-advisory { background:#342915; color:#f8d477; }
         .journey-fare { margin-top:7px; display:flex; align-items:baseline; gap:6px; color:var(--text-main); font-size:11px; }
         .journey-fare strong { font-size:13px; }
         .journey-fare-note { color:var(--text-muted); }
@@ -3116,6 +3119,7 @@
                 monorail:'<path d="M4 17h16M8 17v3M16 17v3"></path><rect x="5" y="3" width="14" height="11" rx="4"></rect><path d="M8 7h8M9 11h.01M15 11h.01"></path>',
                 metro:'<path d="M6 21h12M8 18l-2 3M16 18l2 3"></path><rect x="4" y="3" width="16" height="15" rx="5"></rect><path d="M8 7h8M8 12h.01M16 12h.01"></path>',
                 tram:'<path d="M8 2h8M12 2v3M6 21h12M8 18l-2 3M16 18l2 3"></path><rect x="4" y="5" width="16" height="13" rx="3"></rect><path d="M8 9h8M8 14h.01M16 14h.01"></path>',
+                alert:'<path d="M12 3 2.8 20h18.4L12 3Z"></path><path d="M12 9v5M12 17h.01"></path>',
                 adjust:'<path d="M4 7h10M18 7h2M4 17h2M10 17h10"></path><circle cx="16" cy="7" r="2"></circle><circle cx="8" cy="17" r="2"></circle>',
                 navigation:'<path d="m12 3 7 17-7-4-7 4z"></path>',
                 bookmark:'<path d="M6 4h12v17l-6-4-6 4z"></path>',
@@ -4995,6 +4999,27 @@
             }));
         }
 
+        function peakTravelAdvisoryHtml(hasBus) {
+            if (!hasBus) return '';
+            const timing = journeyTiming();
+            if (!timing.date || !timing.time) return '';
+            const journeyTime = new Date(`${timing.date}T${timing.time}:00`);
+            if (Number.isNaN(journeyTime.getTime())) return '';
+            const weekday = journeyTime.getDay() >= 1 && journeyTime.getDay() <= 5;
+            const minuteOfDay = journeyTime.getHours() * 60 + journeyTime.getMinutes();
+            const morningPeak = minuteOfDay >= 7 * 60 && minuteOfDay < 9 * 60 + 30;
+            const eveningPeak = minuteOfDay >= 16 * 60 + 30 && minuteOfDay < 19 * 60 + 30;
+            if (!weekday || (!morningPeak && !eveningPeak)) return '';
+            return `<p class="journey-peak-advisory">${iconSvg('alert')}<span><strong>Peak travel time</strong><br>Road traffic may make this bus journey take longer. Allow extra time.</span></p>`;
+        }
+
+        function googleTransitHasBus(transitSteps) {
+            return (transitSteps || []).some(step => {
+                const vehicle = String(step?.transit?.line?.vehicle?.type || '').toUpperCase();
+                return vehicle === 'BUS' || vehicle === 'INTERCITY_BUS' || vehicle === 'TROLLEYBUS';
+            });
+        }
+
         async function planJourney() {
             if (!journeySelection.from || !journeySelection.to) {
                 openTransitPanel('Choose your stops', '', '<p class="panel-message">Select both stops from the search suggestions.</p>');
@@ -5165,6 +5190,7 @@
                             <div class="journey-option-head"><div class="journey-total">${escapeHtml(formatJourneyDuration(journey.total_minutes))}<small>from now</small></div><div class="journey-main-time">${escapeHtml(journey.departure_time)} &ndash; ${escapeHtml(journey.arrival_time)}</div></div>
                             <div class="journey-steps"><span>${iconSvg('walk', 'inline-icon')} ${journey.walk_minutes} min</span><span>&rsaquo;</span>${routeBadges(journey)}<span>&rsaquo;</span><span>${journey.transfers ? `${journey.transfers} change` : 'Direct'}</span></div>
                             <div class="journey-board">${journey.wait_minutes ? `Leave now · wait about ${journey.wait_minutes} min<br>` : ''}Board at <strong>${escapeHtml(journey.from_stop.stop_name)}</strong><br>Exit at ${escapeHtml(journey.to_stop.stop_name)}</div>
+                            ${peakTravelAdvisoryHtml(agency !== 'rapid-rail-kl' && agency !== 'ktmb')}
                             ${journey.fare ? `<div class="journey-fare"><strong>Estimated adult fare RM${Number(journey.fare.adult_rm).toFixed(2)}</strong><span class="journey-fare-note">${Number(journey.fare.distance_km).toFixed(1)} km</span></div><div class="journey-fare-detail">Estimated concession RM${Number(journey.fare.concession_rm).toFixed(2)} · distance-band calculation, confirm with the operator</div>` : ''}
                             <div class="journey-live-progress" id="journey-progress-${index}">
                                 <div class="journey-progress-labels"><span>A</span><span>B</span></div>
@@ -5198,6 +5224,7 @@
                             <div class="journey-option-head"><div class="journey-total">${escapeHtml(formatJourneyDuration(candidate.durationMinutes))}<small>from now</small></div><div class="journey-main-time">${escapeHtml(timeRange.text || 'Scheduled times unavailable')}</div></div>
                             <div class="journey-steps">${escapeHtml(candidate.lines)}</div>
                             <div class="journey-meta">${candidate.walkingMinutes} min walking · ${candidate.transfers} transfer${candidate.transfers === 1 ? '' : 's'} · Google Transit</div>
+                            ${peakTravelAdvisoryHtml(googleTransitHasBus(candidate.route.legs?.[0]?.steps?.filter(step => step.travel_mode === google.maps.TravelMode.TRANSIT)))}
                         </div><div class="journey-actions"><button class="route-action" data-hybrid-google-details="${candidate.routeIndex}">View details</button></div>
                     </article>`;
                 }).join('');
@@ -6512,6 +6539,7 @@
                             <div class="journey-steps">${routeSteps}</div>
                             <div class="journey-board">${board ? `Board at <strong>${escapeHtml(board)}</strong>` : ''}${board && exit ? '<br>' : ''}${exit ? `Exit at ${escapeHtml(exit)}` : ''}</div>
                             <div class="journey-meta">${Math.ceil(walkSeconds / 60)} min walking · ${Math.max(0, transitSteps.length - 1)} change${transitSteps.length === 2 ? '' : 's'} · Google Transit</div>
+                            ${peakTravelAdvisoryHtml(googleTransitHasBus(transitSteps))}
                             ${googleTransitFareHtml(route)}
                             ${comparisons.length ? `<div class="journey-comparison">${escapeHtml(comparisons.join(' · '))}</div>` : ''}
                             ${googleTransitLiveStatus(transitSteps)}
