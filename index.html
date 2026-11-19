@@ -1060,6 +1060,9 @@
         .occupancy-badge.moderate { background:#fef3c7; color:#92400e; }
         .occupancy-badge.crowded,.occupancy-badge.full { background:#ffe4e6; color:#9f1239; }
         .journey-alternatives { margin-top:5px; color:var(--text-muted); font-size:10px; }
+        .departure-choice-list { display:flex; flex-wrap:wrap; gap:5px; margin-top:5px; }
+        .departure-choice { padding:4px 6px; border:1px solid var(--border-color); border-radius:999px; background:var(--input-bg); color:var(--text-main); font:inherit; font-size:9px; font-weight:800; cursor:pointer; }
+        .departure-choice:hover,.departure-choice:focus-visible { border-color:#2563eb; color:#2563eb; outline:none; }
         .journey-rank-label { display:inline-flex; margin-bottom:6px; padding:3px 7px; border-radius:999px; background:var(--input-bg); color:var(--text-muted); font-size:8px; font-weight:900; letter-spacing:.45px; text-transform:uppercase; }
         .journey-card.selected .journey-rank-label { background:#dcfce7; color:#166534; }
         .journey-comparison { margin-top:5px; color:#0f766e; font-size:9px; font-weight:750; }
@@ -4882,8 +4885,7 @@
                 const html = displayedJourneys.map(({ journey, index, departures }, displayIndex) => {
                     const alternatives = departures
                         .filter(item => item.index !== index)
-                        .slice(0, 4)
-                        .map(item => `${item.departure} → ${item.arrival}`);
+                        .slice(0, 4);
                     return `<article class="journey-card modern ${displayIndex === 0 && !walkingPreferred && !googlePreferred ? 'selected' : ''}" style="--entry-delay:${Math.min(displayIndex, 6) * 38}ms" data-nearby-index="${index}" role="button" tabindex="0" aria-pressed="${displayIndex === 0 && !walkingPreferred && !googlePreferred ? 'true' : 'false'}" aria-label="Journey option ${displayIndex + 1}, ${escapeHtml(formatJourneyDuration(journey.total_minutes))}">
                         <div class="journey-option-top">
                             <span class="journey-rank-label">${displayIndex === 0 && !googlePreferred ? 'Recommended' : 'MariBus schedule'}</span>
@@ -4896,7 +4898,7 @@
                                 <div class="journey-progress-track"><div class="journey-progress-fill"></div><span class="journey-progress-node a"></span><span class="journey-progress-node b"></span><span class="journey-progress-bus" title="Live bus">${iconSvg('bus')}</span></div>
                                 <div class="journey-progress-message">Checking live bus…</div>
                             </div>
-                            ${alternatives.length ? `<div class="journey-alternatives">Next departures: ${alternatives.map(escapeHtml).join(' · ')}</div>` : ''}
+                            ${alternatives.length ? `<div class="journey-alternatives">Later departures<div class="departure-choice-list">${alternatives.map(item => `<button class="departure-choice" type="button" data-nearby-departure="${item.index}" aria-label="Choose departure at ${escapeHtml(item.departure)}, arriving ${escapeHtml(item.arrival)}">${escapeHtml(item.departure)} → ${escapeHtml(item.arrival)}</button>`).join('')}</div></div>` : ''}
                         </div>
                         <div class="journey-actions">
                             <button class="route-action" data-show-route="${index}" style="background:${safeRouteColor(journey.route_color)}">View details</button>
@@ -4938,20 +4940,42 @@
                 const walkingOptionHtml = `<h4 class="journey-section-title">${walkingPreferred ? 'Best option' : 'Walking'}</h4>${walkingCard || '<p class="panel-message">Walking directions are unavailable for this journey.</p>'}`;
                 openTransitPanel('Journey options', result.notice || '', walkingPreferred ? `${walkingOptionHtml}${transitOptionsHtml}` : `${transitOptionsHtml}${walkingOptionHtml}`);
                 bindJourneyPriorityControls();
-                document.querySelectorAll('[data-nearby-index]').forEach(card => {
-                    const select = () => {
+                const selectNearbyJourney = (journeyIndex, sourceCard = null) => {
+                    const journey = journeys[journeyIndex];
+                    if (!journey) return;
+                    const card = sourceCard || document.querySelector(`[data-nearby-index="${journeyIndex}"]`);
                     document.querySelectorAll('.journey-card.modern').forEach(item => { item.classList.remove('selected'); item.setAttribute('aria-pressed','false'); });
-                    card.classList.add('selected'); card.setAttribute('aria-pressed','true');
-                    activeTrackedJourneyIndex = Number(card.dataset.nearbyIndex);
-                    const journey = journeys[Number(card.dataset.nearbyIndex)];
+                    card?.classList.add('selected');
+                    card?.setAttribute('aria-pressed','true');
+                    if (card) {
+                        card.dataset.nearbyIndex = String(journeyIndex);
+                        card.setAttribute('aria-label', `Journey option, ${formatJourneyDuration(journey.total_minutes)}`);
+                        const time = card.querySelector('.journey-main-time');
+                        if (time) time.textContent = `${journey.departure_time} – ${journey.arrival_time}`;
+                        const total = card.querySelector('.journey-total');
+                        if (total) total.innerHTML = `${escapeHtml(formatJourneyDuration(journey.total_minutes))}<small>from now</small>`;
+                        const detailButton = card.querySelector('[data-show-route]');
+                        if (detailButton) detailButton.dataset.showRoute = String(journeyIndex);
+                        const saveButton = card.querySelector('[data-save-route]');
+                        if (saveButton) saveButton.dataset.saveRoute = String(journeyIndex);
+                        const progress = card.querySelector('[id^="journey-progress-"]');
+                        if (progress) progress.id = `journey-progress-${journeyIndex}`;
+                    }
+                    activeTrackedJourneyIndex = journeyIndex;
                     setActiveJourneyRoutes(journeyRouteNames(journey));
                     if (journey.legs) showJourneyRoutes(journey);
                     else showJourneySegment(journey, true);
                     updateLiveJourneyTracking(journeys);
-                    };
+                };
+                document.querySelectorAll('[data-nearby-index]').forEach(card => {
+                    const select = () => selectNearbyJourney(Number(card.dataset.nearbyIndex), card);
                     card.addEventListener('click', select);
                     card.addEventListener('keydown', event => { if (event.target === card && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); select(); } });
                 });
+                document.querySelectorAll('[data-nearby-departure]').forEach(button => button.addEventListener('click', event => {
+                    event.stopPropagation();
+                    selectNearbyJourney(Number(button.dataset.nearbyDeparture), button.closest('.journey-card'));
+                }));
                 document.querySelectorAll('[data-hybrid-google-index]').forEach(card => {
                     const select = () => {
                         const routeIndex = Number(card.dataset.hybridGoogleIndex);
