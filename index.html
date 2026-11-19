@@ -4806,6 +4806,7 @@
                 to_lat:toPlace.lat, to_lng:toPlace.lng,
                 date:document.getElementById('journey-date').value,
                 departure_time:document.getElementById('journey-time').value,
+                limit:'12',
             });
             openTransitPanel('Finding the best route', `${fromPlace.name} → ${toPlace.name}`, '<p class="panel-message">Comparing nearby stops and services…</p>');
             setRouteLoading(true);
@@ -4917,7 +4918,8 @@
                     to:{ name:toPlace.name, lat:toPlace.lat, lng:toPlace.lng },
                     agency,
                 };
-                const transitOptionsHtml = `${journeyPriorityControlsHtml()}<h4 class="journey-section-title">${walkingPreferred ? 'Public transport' : 'MariBus schedule'}</h4>${html}${googleCards ? `<h4 class="journey-section-title">Google Transit alternatives</h4>${googleCards}` : ''}`;
+                const scheduleCount = `<p class="journey-alternatives">Showing ${journeys.length} scheduled option${journeys.length === 1 ? '' : 's'}, including later departures where available.</p>`;
+                const transitOptionsHtml = `${journeyPriorityControlsHtml()}${scheduleCount}<h4 class="journey-section-title">${walkingPreferred ? 'Public transport' : 'MariBus schedule'}</h4>${html}${googleCards ? `<h4 class="journey-section-title">Google Transit alternatives</h4>${googleCards}` : ''}`;
                 const walkingOptionHtml = `<h4 class="journey-section-title">${walkingPreferred ? 'Best option' : 'Walking'}</h4>${walkingCard || '<p class="panel-message">Walking directions are unavailable for this journey.</p>'}`;
                 openTransitPanel('Journey options', result.notice || '', walkingPreferred ? `${walkingOptionHtml}${transitOptionsHtml}` : `${transitOptionsHtml}${walkingOptionHtml}`);
                 bindJourneyPriorityControls();
@@ -4965,15 +4967,13 @@
                 });
                 document.querySelectorAll('[data-show-route]').forEach(button => button.addEventListener('click', event => {
                     event.stopPropagation();
-                    const journey = result.data[Number(button.dataset.showRoute)];
-                    if (journey.legs) showJourneyRouteList(journey);
-                    else showJourneySegment(journey, false);
+                    showJourneyRouteList(journeys[Number(button.dataset.showRoute)]);
                 }));
                 document.querySelectorAll('[data-save-route]').forEach(button => button.addEventListener('click', event => {
                     event.stopPropagation();
                     requestJourneySave(button.dataset.saveRoute, button);
                 }));
-                const firstJourney = result.data[0];
+                const firstJourney = journeys[0];
                 if (walkingPreferred) {
                     activeTrackedJourneyIndex = -1;
                     activeJourneyRouteNames.clear();
@@ -4989,7 +4989,7 @@
                     if (firstJourney.legs) showJourneyRoutes(firstJourney);
                     else showJourneySegment(firstJourney, true);
                 }
-                startLiveJourneyTracking(result.data);
+                startLiveJourneyTracking(journeys);
                 return true;
             } catch (error) {
                 console.error('Nearby-stop journey search failed', error);
@@ -5161,24 +5161,58 @@
         async function showJourneyRouteList(journey) {
             const agency = document.getElementById('agency-select').value;
             openTransitPanel('Route details', `${journey.from_stop.stop_name} → ${journey.to_stop.stop_name}`, '<p class="panel-message">Loading your stops…</p>');
-            await showJourneyRoutes(journey);
+            const legs = journey.legs?.length ? journey.legs : [{
+                trip_id:journey.trip_id, direction_id:journey.direction_id,
+                route_id:journey.route_id, route_short_name:journey.route_short_name,
+                route_color:journey.route_color, headsign:journey.headsign,
+                departure_time:journey.departure_time, arrival_time:journey.arrival_time,
+            }];
+            if (journey.legs?.length) await showJourneyRoutes(journey);
+            else await showJourneySegment(journey, false);
             try {
                 const sections = [];
-                for (let index = 0; index < journey.legs.length; index++) {
-                    const leg = journey.legs[index];
+                for (let index = 0; index < legs.length; index++) {
+                    const leg = legs[index];
                     const fromStop = index === 0 ? journey.from_stop.stop_id : journey.transfer_stop.board_stop_id;
-                    const toStop = index === 0 ? journey.transfer_stop.stop_id : journey.to_stop.stop_id;
+                    const toStop = index === legs.length - 1 ? journey.to_stop.stop_id : journey.transfer_stop.stop_id;
                     const params = new URLSearchParams({ agency, trip_id:leg.trip_id, direction_id:leg.direction_id ?? '' });
                     const response = await fetch(`${API_BASE}/api/routes/${encodeURIComponent(leg.route_id)}?${params}`);
                     const result = await response.json();
                     if (!result.success) continue;
-                    sections.push(`<h4>${escapeHtml(compactRouteLabel(leg.route_id, leg.route_short_name))}</h4>${renderJourneyStopList(result.data.stops, fromStop, toStop)}`);
+                    sections.push({ leg, stops:result.data.stops, fromStop, toStop });
                 }
-                openTransitPanel('Route details', `${journey.from_stop.stop_name} → ${journey.to_stop.stop_name}`, sections.join(''));
+                openRouteTransitPanel('Route details', `${journey.from_stop.stop_name} → ${journey.to_stop.stop_name}`, localJourneyFlowHtml(journey, sections));
+                journeyDetailBackAction = () => tryNearbyStopJourneys();
+                const closeButton = document.querySelector('#transit-panel .panel-close');
+                closeButton.innerHTML = '&#8592;';
+                closeButton.setAttribute('aria-label', 'Back to journey options');
                 if (currentJourneyOptions.length) updateLiveJourneyTracking(currentJourneyOptions);
             } catch (error) {
                 openTransitPanel('Route unavailable', '', '<p class="panel-message">The stop list could not be loaded.</p>');
             }
+        }
+
+        function localJourneyFlowHtml(journey, sections) {
+            const totalMinutes = Math.max(1, Number(journey.total_minutes || journey.duration_minutes || 0));
+            const walkMinutes = Math.max(0, Number(journey.walk_minutes || 0));
+            const transfers = Math.max(0, Number(journey.transfers || 0));
+            const summary = `<section class="journey-detail-summary" aria-label="Journey summary">
+                <div class="journey-detail-summary-main"><strong>${escapeHtml(formatJourneyDuration(totalMinutes))}</strong><span>${escapeHtml(journey.arrival_time ? `Arrive ${journey.arrival_time}` : 'Scheduled arrival')}</span></div>
+                <div class="journey-detail-summary-stat"><div><strong>${walkMinutes} min</strong><span>walking</span></div><div><strong>${transfers}</strong><span>${transfers === 1 ? 'transfer' : 'transfers'}</span></div></div>
+            </section>`;
+            const openingWalk = walkMinutes ? `<div class="google-flow-step"><span class="google-flow-icon">${iconSvg('walk')}</span><div class="google-flow-copy"><strong>Walk about ${walkMinutes} min</strong><span>To ${escapeHtml(journey.from_stop?.stop_name || 'your boarding stop')}</span></div></div>` : '';
+            const rides = sections.map((section, index) => {
+                const { leg, stops, fromStop, toStop } = section;
+                const color = safeRouteColor(leg.route_color);
+                const label = compactRouteLabel(leg.route_id, leg.route_short_name);
+                const board = stops.find(stop => String(stop.stop_id) === String(fromStop))?.stop_name || journey.from_stop?.stop_name || 'boarding stop';
+                const exit = stops.find(stop => String(stop.stop_id) === String(toStop))?.stop_name || journey.to_stop?.stop_name || 'exit stop';
+                const rideStopCount = Math.max(0, stopBoundaryIndex(stops, toStop, stopBoundaryIndex(stops, fromStop)) - stopBoundaryIndex(stops, fromStop));
+                const transfer = index < sections.length - 1 ? `<div class="google-flow-step"><span class="google-flow-icon">${iconSvg('walk')}</span><div class="google-flow-copy"><strong>Transfer</strong><span>Change at ${escapeHtml(exit)}${journey.transfer_stop?.walk_distance_m ? ` · walk about ${Math.ceil(journey.transfer_stop.walk_distance_m / 78)} min` : ''}</span></div></div>` : '';
+                return `<div class="google-flow-step"><span class="google-flow-icon" style="color:${color}">${iconSvg('bus')}</span><div class="google-flow-copy"><strong>Take <span class="journey-route" style="background:${color}">${escapeHtml(label)}</span></strong><span>Board at ${escapeHtml(board)}${rideStopCount ? ` · ${rideStopCount} stops` : ''}<br>Get off at ${escapeHtml(exit)}${leg.headsign ? ` · towards ${escapeHtml(leg.headsign)}` : ''}</span></div></div><details class="extra-stops"><summary>Show stops on this service</summary>${renderJourneyStopList(stops, fromStop, toStop)}</details>${transfer}`;
+            }).join('');
+            const endingWalk = walkMinutes ? `<div class="google-flow-step"><span class="google-flow-icon">${iconSvg('walk')}</span><div class="google-flow-copy"><strong>Finish on foot</strong><span>Walk to your destination</span></div></div>` : '';
+            return `${summary}<div class="google-journey-flow">${openingWalk}${rides || '<p class="panel-message">Stop-by-stop details are unavailable for this scheduled trip.</p>'}${endingWalk}</div>`;
         }
 
         function malaysiaTime(timestamp) {

@@ -1472,6 +1472,7 @@ def plan_journey():
 @rate_limited(90, 60, "journeys-nearby")
 def plan_nearby_journey():
     agency = request.args.get("agency", "rapid-bus-kl")
+    limit = min(max(request.args.get("limit", 12, type=int), 1), 20)
     coordinates = {
         name: (request.args.get(f"{name}_lat", type=float), request.args.get(f"{name}_lng", type=float))
         for name in ("from", "to")
@@ -1572,7 +1573,9 @@ def plan_nearby_journey():
         item["total_minutes"] + item["walk_minutes"] * 1.5 + item["transfers"] * 8,
         item["walk_minutes"], item["transfers"], item["arrival_time"],
     ))
-    journeys = journeys[:8]
+    # Keep a practical set of later departures and transfer alternatives. The
+    # client ranks these according to the rider's preference.
+    journeys = journeys[:limit]
     if agency == "rapid-bus-penang" or (agency.startswith("mybas-") and agency != "mybas-kuching"):
         with db_connection() as connection:
             attach_estimated_fares(connection, agency, journeys)
