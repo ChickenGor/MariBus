@@ -1093,6 +1093,9 @@
         .live-journey-status.live .live-dot { background:#16a34a; box-shadow:0 0 0 4px rgba(22,163,74,.14); }
         .google-journey-flow { display:grid; gap:0; padding:2px 0 8px; }
         .google-flow-step { position:relative; display:grid; grid-template-columns:34px 1fr; gap:10px; min-height:54px; padding:7px 0; }
+        .journey-step-button { width:100%; border:0; border-radius:12px; background:transparent; color:inherit; font:inherit; text-align:left; cursor:pointer; transition:background .18s ease, transform .18s ease; }
+        .journey-step-button:hover,.journey-step-button:focus-visible,.journey-step-button.is-focused { background:rgba(37,99,235,.08); outline:none; }
+        .journey-step-button:active { transform:scale(.99); }
         .google-flow-step:not(:last-child)::after { content:""; position:absolute; top:37px; bottom:-8px; left:16px; width:2px; background:var(--border-color); }
         .journey-detail-summary { display:grid; grid-template-columns:1.35fr 1fr; gap:8px; margin:0 0 14px; }
         .journey-detail-summary-main,.journey-detail-summary-stat { padding:12px; border:1px solid var(--border-color); border-radius:14px; background:var(--input-bg); }
@@ -2225,6 +2228,7 @@
         let trackedBusRouteLayer = L.layerGroup().addTo(map);
         let walkingDirectionsRenderer = null;
         let routeDirectionsRenderers = [];
+        let journeyStepSegments = [];
         let liveJourneyTrackingTimer = null;
         let routeBrowseTimer = null;
         let routeBrowseFreshnessTimer = null;
@@ -3070,6 +3074,7 @@
                 }
                 routeDirectionsRenderers.forEach(renderer => renderer.setMap(null));
                 routeDirectionsRenderers = [];
+                journeyStepSegments = [];
                 if (liveJourneyTrackingTimer) clearInterval(liveJourneyTrackingTimer);
                 liveJourneyTrackingTimer = null;
                 window.__mariBusRefreshHomeTransitLayer?.();
@@ -3134,6 +3139,23 @@
             if (countdownInterval) clearInterval(countdownInterval);
             countdownInterval = null;
             document.getElementById('refresh-timer').innerText = 'Journey mode';
+        }
+
+        function focusJourneyRouteStep(stepIndex) {
+            const segment = journeyStepSegments.find(item => item.stepIndex === Number(stepIndex));
+            if (!segment || !map?.native) return;
+            journeyStepSegments.forEach(item => {
+                item.outline.setOptions({ strokeWeight:item.isTransit ? 10 : 7, strokeOpacity:.9 });
+                item.routeLine.setOptions({ strokeWeight:item.isTransit ? 6 : 4, strokeOpacity:item.isTransit ? 1 : 0 });
+            });
+            segment.outline.setOptions({ strokeWeight:segment.isTransit ? 14 : 10, strokeOpacity:1 });
+            segment.routeLine.setOptions({ strokeWeight:segment.isTransit ? 9 : 5, strokeOpacity:1 });
+            const bounds = new google.maps.LatLngBounds();
+            segment.path.forEach(point => bounds.extend(point));
+            if (!bounds.isEmpty()) map.native.fitBounds(bounds, 80);
+            document.querySelectorAll('[data-route-step]').forEach(element => {
+                element.classList.toggle('is-focused', Number(element.dataset.routeStep) === Number(stepIndex));
+            });
         }
 
         function setActiveJourneyRoutes(routeNames) {
@@ -3669,6 +3691,7 @@
                 activeRouteLayer.clearLayers();
                 routeDirectionsRenderers.forEach(renderer => renderer.setMap(null));
                 routeDirectionsRenderers = [];
+                journeyStepSegments = [];
                 const coordinates = data.shape?.length
                     ? data.shape.map(point => [Number(point.lat), Number(point.lon)])
                     : data.stops.map(stop => [Number(stop.stop_lat), Number(stop.stop_lon)]);
@@ -4069,7 +4092,9 @@
                     const line = drawOutlinedRoute(coordinates, brandColor);
                     map.fitBounds(line.getBounds(), { padding:[45,45] });
                 }
-                stops.forEach(stop => createStopMarker(stop, brandColor).addTo(activeRouteLayer));
+                [stops[0], stops[stops.length - 1]].filter(Boolean).forEach(stop => {
+                    createStopMarker(stop, brandColor).addTo(activeRouteLayer);
+                });
                 updateJourneyPlaceMarkers();
                 if (!preservePanel) {
                     openTransitPanel('', '', transitStyleRouteHero(journey, stops));
@@ -5322,7 +5347,12 @@
                     const shapeCoordinates = sliceShapeThroughStops(data.shape, segmentStops);
                     const coordinates = shapeCoordinates.length ? shapeCoordinates : stopCoordinates;
                     if (coordinates.length) drawOutlinedRoute(coordinates, safeRouteColor(leg.route_color));
-                    segmentStops.forEach(stop => createStopMarker(stop, safeRouteColor(leg.route_color)).addTo(activeRouteLayer));
+                    // Only show boarding and alighting stops on the map. A marker
+                    // for every stop makes a trip look like a crowded "zombie"
+                    // route; all intermediate stops remain available in details.
+                    [segmentStops[0], segmentStops[segmentStops.length - 1]].filter(Boolean).forEach(stop => {
+                        createStopMarker(stop, safeRouteColor(leg.route_color)).addTo(activeRouteLayer);
+                    });
                     allCoordinates.push(...coordinates);
                 }
                 if (allCoordinates.length) map.fitBounds(L.latLngBounds(allCoordinates), { padding:[50,50], maxZoom:15 });
@@ -6168,7 +6198,7 @@
                 const depart = transit.departure_time?.text || '';
                 const arrive = transit.arrival_time?.text || '';
                 const schedule = depart && arrive ? `Depart ${depart} · arrive ${arrive}` : depart ? `Departs ${depart}` : arrive ? `Arrives ${arrive}` : '';
-                return `<div class="google-flow-step"><span class="google-flow-icon">${iconSvg(mode.icon)}</span><div class="google-flow-copy"><strong>Ride ${escapeHtml(mode.label)} ${escapeHtml(routeName)}</strong><span>Board at ${escapeHtml(from)}${stopCount ? ` · ${stopCount} stop${stopCount === 1 ? '' : 's'}` : ''}<br>Get off at ${escapeHtml(to)}${transit.headsign ? ` · towards ${escapeHtml(transit.headsign)}` : ''}</span>${schedule ? `<span class="google-flow-time">${escapeHtml(schedule)}</span>` : ''}</div></div>`;
+                return `<button class="google-flow-step journey-step-button" type="button" data-route-step="${stepIndex}" onclick="focusJourneyRouteStep(${stepIndex})"><span class="google-flow-icon">${iconSvg(mode.icon)}</span><span class="google-flow-copy"><strong>Ride ${escapeHtml(mode.label)} ${escapeHtml(routeName)}</strong><span>Board at ${escapeHtml(from)}${stopCount ? ` · ${stopCount} stop${stopCount === 1 ? '' : 's'}` : ''}<br>Get off at ${escapeHtml(to)}${transit.headsign ? ` · towards ${escapeHtml(transit.headsign)}` : ''}</span>${schedule ? `<span class="google-flow-time">${escapeHtml(schedule)}</span>` : ''}</span></button>`;
             }).join('')}</div>`;
         }
 
@@ -6218,6 +6248,7 @@
             if (walkingDirectionsRenderer) walkingDirectionsRenderer.setMap(null);
             routeDirectionsRenderers.forEach(renderer => renderer.setMap(null));
             routeDirectionsRenderers = [];
+            journeyStepSegments = [];
             guidedRouteSegments = [];
             activeRouteLayer.clearLayers();
             const route = response.routes?.[routeIndex];
@@ -6259,6 +6290,7 @@
                 }
                 const routeLine = new google.maps.Polyline(lineOptions);
                 routeDirectionsRenderers.push(outline, routeLine);
+                journeyStepSegments.push({ stepIndex, path, outline, routeLine, isTransit });
                 if (showAlternatives) guidedRouteSegments.push({ stepIndex, path, outline, routeLine });
             });
             if (!bounds.isEmpty()) map.native.fitBounds(bounds, 64);
