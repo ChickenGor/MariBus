@@ -1289,6 +1289,9 @@
             #bottom-sheet.detail-mode #transit-panel.open { flex:0 1 auto; min-height:0; overflow-y:auto; overscroll-behavior:contain; }
             #bottom-sheet.detail-mode.sheet-half { height:52dvh; }
             #bottom-sheet.detail-mode.sheet-expanded { height:90dvh; max-height:90dvh; }
+            /* A manually dragged sheet must not inherit the compact 34dvh
+               ceiling from detail-mode. Leave a small strip of map visible. */
+            #bottom-sheet.detail-mode.sheet-custom-size { max-height:94dvh; }
             #bottom-sheet.detail-mode.sheet-half #transit-panel.open,
             #bottom-sheet.detail-mode.sheet-expanded #transit-panel.open { flex:1 1 auto; }
             #bottom-sheet.detail-mode.sheet-dragging { transition:none; user-select:none; }
@@ -2933,7 +2936,7 @@
 
             const moveDrag = event => {
                 if (pointerId !== event.pointerId) return;
-                const nextHeight = Math.min(window.innerHeight * .88, Math.max(180, startHeight + startY - event.clientY));
+                const nextHeight = Math.min(window.innerHeight * .94, Math.max(180, startHeight + startY - event.clientY));
                 sheet.style.height = `${nextHeight}px`;
                 event.preventDefault();
             };
