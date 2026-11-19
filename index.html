@@ -1021,7 +1021,7 @@
         .journey-card.modern.selected { border:2px solid #2563eb; background:rgba(37,99,235,.04); box-shadow:0 7px 20px rgba(37,99,235,.13); animation:journey-card-selected .28s cubic-bezier(.2,.8,.2,1) both; }
         .journey-option-top { display:block; }
         .journey-option-head { display:flex; align-items:center; justify-content:space-between; gap:12px; }
-        .transit-priority { display:grid; grid-template-columns:.9fr 1.18fr 1.32fr 34px; gap:4px; margin:1px 0 6px; padding:3px; border-radius:11px; background:var(--input-bg); }
+        .transit-priority { display:grid; grid-template-columns:.9fr 1.18fr 1.32fr; gap:4px; margin:1px 0 6px; padding:3px; border-radius:11px; background:var(--input-bg); }
         .transit-priority button { min-width:0; min-height:32px; padding:0 6px; border:0; border-radius:8px; background:transparent; color:var(--text-muted); font:inherit; font-size:10px; font-weight:800; white-space:nowrap; cursor:pointer; transition:background .18s,color .18s,transform .14s ease; }
         .transit-priority button:active,.panel-state button:active,.apply-transit-modes:active { transform:scale(.98); }
         .transit-priority button.active { background:var(--sheet-bg); color:#2563eb; box-shadow:0 2px 8px var(--shadow-color); }
@@ -2232,6 +2232,7 @@
         let activeTrackedJourneyIndex = 0;
         let activeJourneyRouteNames = new Set();
         let currentJourneyOptions = [];
+        let journeyRankingPreference = localStorage.getItem('maribus-journey-ranking') || 'fastest';
         let journeyMapFocused = false;
         let journeyDetailBackAction = null;
         let countdownValue = 30;
@@ -4681,6 +4682,40 @@
             }
         }
 
+        function journeyPriorityControlsHtml() {
+            const choices = [
+                ['fastest', 'Fastest'],
+                ['less-walking', 'Less walking'],
+                ['fewer-transfers', 'Fewer transfers'],
+            ];
+            return `<div class="transit-priority" role="group" aria-label="Rank journey options">${choices.map(([value, label]) => `<button type="button" data-journey-priority="${value}" class="${journeyRankingPreference === value ? 'active' : ''}" aria-pressed="${journeyRankingPreference === value}">${label}</button>`).join('')}</div>`;
+        }
+
+        function rankJourneyOptions(options) {
+            const preference = journeyRankingPreference;
+            return [...options].sort((a, b) => {
+                const aDuration = Number(a.total_minutes ?? a.durationMinutes ?? Infinity);
+                const bDuration = Number(b.total_minutes ?? b.durationMinutes ?? Infinity);
+                const aWalk = Number(a.walk_minutes ?? a.walkingMinutes ?? Infinity);
+                const bWalk = Number(b.walk_minutes ?? b.walkingMinutes ?? Infinity);
+                const aTransfers = Number(a.transfers ?? a.transferCount ?? Infinity);
+                const bTransfers = Number(b.transfers ?? b.transferCount ?? Infinity);
+                if (preference === 'less-walking') return aWalk - bWalk || aTransfers - bTransfers || aDuration - bDuration;
+                if (preference === 'fewer-transfers') return aTransfers - bTransfers || aWalk - bWalk || aDuration - bDuration;
+                return aDuration - bDuration || aWalk - bWalk || aTransfers - bTransfers;
+            });
+        }
+
+        function bindJourneyPriorityControls() {
+            document.querySelectorAll('[data-journey-priority]').forEach(button => button.addEventListener('click', () => {
+                const next = button.dataset.journeyPriority;
+                if (!next || next === journeyRankingPreference) return;
+                journeyRankingPreference = next;
+                localStorage.setItem('maribus-journey-ranking', next);
+                planJourney();
+            }));
+        }
+
         async function planJourney() {
             setJourneyTimeToNow();
             if (!journeySelection.from || !journeySelection.to) {
@@ -4786,12 +4821,14 @@
                     console.info('No local GTFS journey; checking Google Transit.', { notice:result.notice });
                     return false;
                 }
+                const journeys = rankJourneyOptions(result.data);
+                const fastestScheduledJourney = [...result.data].sort((a, b) => Number(a.total_minutes || Infinity) - Number(b.total_minutes || Infinity))[0];
                 // Static GTFS is the local planner's baseline, but its
                 // published timetable can lag a service change. Do not make a
                 // rider wait a long time when Google Transit has a chance to
                 // supply a newer viable departure. Returning false lets the
                 // normal Google fallback compare that alternative.
-                const earliestStaticWait = Math.max(0, Number(result.data[0]?.wait_minutes || 0));
+                const earliestStaticWait = Math.max(0, Math.min(...result.data.map(journey => Number(journey.wait_minutes || 0))));
                 if (earliestStaticWait >= 25) {
                     console.info('Local timetable wait is too long; checking Google Transit fallback.', { earliestStaticWait });
                     return false;
@@ -4802,7 +4839,7 @@
                 const walkingRoute = await requestGoogleWalkingJourney(fromPlace, toPlace);
                 const walkingLeg = walkingRoute?.legs?.[0];
                 const walkingMinutes = walkingLeg ? Math.max(1, Math.ceil(Number(walkingLeg.duration?.value || 0) / 60)) : Infinity;
-                const fastestTransitMinutes = Math.max(1, Number(result.data[0]?.total_minutes || Infinity));
+                const fastestTransitMinutes = Math.max(1, Number(fastestScheduledJourney?.total_minutes || Infinity));
                 const walkingPreferred = walkingRoute && walkingMinutes < fastestTransitMinutes;
                 const walkingCard = walkingLeg ? `<section aria-label="Walking route">
                     <article class="journey-card modern walking-option-card ${walkingPreferred ? 'selected' : ''}" data-local-walking-option role="button" tabindex="0" aria-pressed="${walkingPreferred}" aria-label="Walking route, ${escapeHtml(formatJourneyDuration(walkingMinutes))}">
@@ -4814,20 +4851,20 @@
                 // The two sources can disagree when the published static feed
                 // lags a timetable change; riders should see that choice.
                 const googleResponse = await requestGoogleTransitAlternatives(fromPlace, toPlace);
-                const googleCandidates = (googleResponse?.routes || []).map((route, routeIndex) => ({
+                const googleCandidates = rankJourneyOptions((googleResponse?.routes || []).map((route, routeIndex) => ({
                     route, routeIndex,
                     durationMinutes:Math.max(1, Math.ceil(Number(route.legs?.[0]?.duration?.value || 0) / 60)),
                     walkingMinutes:Math.ceil(googleRouteWalkingSeconds(route) / 60),
                     transfers:Math.max(0, (route.legs?.[0]?.steps || []).filter(step => step.travel_mode === google.maps.TravelMode.TRANSIT).length - 1),
-                })).filter(item => item.durationMinutes > 0);
+                })).filter(item => item.durationMinutes > 0));
                 const fastestGoogle = googleCandidates.reduce((best, item) => !best || item.durationMinutes < best.durationMinutes ? item : best, null);
                 const googlePreferred = Boolean(fastestGoogle && fastestGoogle.durationMinutes < fastestTransitMinutes);
                 const routeBadges = journey => journey.legs
                     ? journey.legs.map(leg => `<span class="journey-route" style="background:${safeRouteColor(leg.route_color)}">${escapeHtml(compactRouteLabel(leg.route_id, leg.route_short_name))}</span>`).join(' &rsaquo; ')
                     : `<span class="journey-route" style="background:${safeRouteColor(journey.route_color)}">${escapeHtml(compactRouteLabel(journey.route_id, journey.route_short_name))}</span>`;
-                const html = result.data.map((journey, index) => {
+                const html = journeys.map((journey, index) => {
                     const signature = journey.legs ? journey.legs.map(leg => leg.route_id).join('|') : journey.route_id;
-                    const alternatives = [...new Set(result.data
+                    const alternatives = [...new Set(journeys
                         .filter((other, otherIndex) => otherIndex !== index
                             && (other.legs ? other.legs.map(leg => leg.route_id).join('|') : other.route_id) === signature
                             && other.departure_time !== journey.departure_time)
@@ -4873,26 +4910,27 @@
                         </div><div class="journey-actions"><button class="route-action" data-hybrid-google-details="${candidate.routeIndex}">View details</button></div>
                     </article>`;
                 }).join('');
-                currentJourneyOptions = result.data;
-                window.__mariBusJourneyOptions = result.data;
+                currentJourneyOptions = journeys;
+                window.__mariBusJourneyOptions = journeys;
                 window.__mariBusJourneyEndpoints = {
                     from:{ name:fromPlace.name, lat:fromPlace.lat, lng:fromPlace.lng },
                     to:{ name:toPlace.name, lat:toPlace.lat, lng:toPlace.lng },
                     agency,
                 };
-                const transitOptionsHtml = `<h4 class="journey-section-title">${walkingPreferred ? 'Public transport' : 'MariBus schedule'}</h4>${html}${googleCards ? `<h4 class="journey-section-title">Google Transit alternatives</h4>${googleCards}` : ''}`;
+                const transitOptionsHtml = `${journeyPriorityControlsHtml()}<h4 class="journey-section-title">${walkingPreferred ? 'Public transport' : 'MariBus schedule'}</h4>${html}${googleCards ? `<h4 class="journey-section-title">Google Transit alternatives</h4>${googleCards}` : ''}`;
                 const walkingOptionHtml = `<h4 class="journey-section-title">${walkingPreferred ? 'Best option' : 'Walking'}</h4>${walkingCard || '<p class="panel-message">Walking directions are unavailable for this journey.</p>'}`;
                 openTransitPanel('Journey options', result.notice || '', walkingPreferred ? `${walkingOptionHtml}${transitOptionsHtml}` : `${transitOptionsHtml}${walkingOptionHtml}`);
+                bindJourneyPriorityControls();
                 document.querySelectorAll('[data-nearby-index]').forEach(card => {
                     const select = () => {
                     document.querySelectorAll('.journey-card.modern').forEach(item => { item.classList.remove('selected'); item.setAttribute('aria-pressed','false'); });
                     card.classList.add('selected'); card.setAttribute('aria-pressed','true');
                     activeTrackedJourneyIndex = Number(card.dataset.nearbyIndex);
-                    const journey = result.data[Number(card.dataset.nearbyIndex)];
+                    const journey = journeys[Number(card.dataset.nearbyIndex)];
                     setActiveJourneyRoutes(journeyRouteNames(journey));
                     if (journey.legs) showJourneyRoutes(journey);
                     else showJourneySegment(journey, true);
-                    updateLiveJourneyTracking(result.data);
+                    updateLiveJourneyTracking(journeys);
                     };
                     card.addEventListener('click', select);
                     card.addEventListener('keydown', event => { if (event.target === card && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); select(); } });
@@ -6032,18 +6070,22 @@
                     resolve(false);
                     return;
                 }
-                const rankedRoutes = response.routes.map((route, routeIndex) => ({
+                const rankedRoutes = rankJourneyOptions(response.routes.map((route, routeIndex) => ({
                     route,
                     routeIndex,
                     walkSeconds:googleRouteWalkingSeconds(route),
                     transferCount:Math.max(0, (route.legs?.[0]?.steps || []).filter(step => step.travel_mode === google.maps.TravelMode.TRANSIT).length - 1),
                     durationSeconds:Number(route.legs?.[0]?.duration?.value || Number.MAX_SAFE_INTEGER),
                     arrivalTimestamp:Number(route.legs?.[0]?.arrival_time?.value?.getTime?.() || Number.MAX_SAFE_INTEGER),
-                })).sort((a, b) => a.arrivalTimestamp - b.arrivalTimestamp || a.durationSeconds - b.durationSeconds || a.walkSeconds - b.walkSeconds);
+                    total_minutes:Math.ceil(Number(route.legs?.[0]?.duration?.value || Number.MAX_SAFE_INTEGER) / 60),
+                    walk_minutes:Math.ceil(googleRouteWalkingSeconds(route) / 60),
+                    transfers:Math.max(0, (route.legs?.[0]?.steps || []).filter(step => step.travel_mode === google.maps.TravelMode.TRANSIT).length - 1),
+                })));
                 const recommended = rankedRoutes[0];
+                const fastestRoute = [...rankedRoutes].sort((a, b) => a.durationSeconds - b.durationSeconds || a.walkSeconds - b.walkSeconds)[0];
                 const walkingRoute = await requestGoogleWalkingJourney(fromPlace, toPlace);
                 const walkingLeg = walkingRoute?.legs?.[0];
-                const walkingPreferred = Boolean(walkingLeg && Number(walkingLeg.duration?.value || Infinity) < recommended.durationSeconds);
+                const walkingPreferred = Boolean(walkingLeg && Number(walkingLeg.duration?.value || Infinity) < fastestRoute.durationSeconds);
                 const walkingCard = walkingLeg ? `<section aria-label="Walking route">
                     <article class="journey-card modern walking-option-card ${walkingPreferred ? 'selected' : ''}" data-google-walking-option role="button" tabindex="0" aria-pressed="${walkingPreferred}" aria-label="Walking route, ${escapeHtml(walkingLeg.duration?.text || '')}">
                         <div class="walking-option-time">${escapeHtml(walkingLeg.duration?.text || '')}<small>${walkingPreferred ? 'recommended' : 'walk'}</small></div>
@@ -6107,9 +6149,10 @@
                     activeTrackedJourneyIndex = rankedRoutes[0].routeIndex;
                     setActiveJourneyRoutes(googleTransitRouteNames(response.routes[activeTrackedJourneyIndex]));
                 }
-                const transitOptionsHtml = `<h4 class="journey-section-title">${walkingPreferred ? 'Public transport' : 'Best option'}</h4>${cards}`;
+                const transitOptionsHtml = `${journeyPriorityControlsHtml()}<h4 class="journey-section-title">${walkingPreferred ? 'Public transport' : 'Best option'}</h4>${cards}`;
                 const walkingOptionHtml = `<h4 class="journey-section-title">${walkingPreferred ? 'Best option' : 'Walking'}</h4>${walkingCard || '<p class="panel-message">Walking directions are unavailable for this journey.</p>'}`;
                 openTransitPanel('Journey options', '', walkingPreferred ? `${walkingOptionHtml}${transitOptionsHtml}` : `${transitOptionsHtml}${walkingOptionHtml}`, preserveSheetState);
+                bindJourneyPriorityControls();
                 document.getElementById('adjust-transit-modes')?.addEventListener('click', event => {
                     const panel = document.getElementById('transit-mode-panel');
                     const open = panel.classList.toggle('open');
