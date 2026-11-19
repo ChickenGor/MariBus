@@ -177,6 +177,9 @@
         #journey-swap-button { display:none; width:34px; height:34px; flex:0 0 34px; border:0; border-radius:50%; background:transparent; color:var(--text-main); font-size:20px; cursor:pointer; }
         #header-journey-search.expanded #journey-swap-button { display:block; }
         .journey-search-submit { display:none; width:100%; min-height:42px; margin:6px 0 4px; border:0; border-radius:12px; background:#16181b; color:#fff; font:inherit; font-size:14px; font-weight:850; cursor:pointer; }
+        .journey-time-controls { display:none; width:100%; grid-template-columns:minmax(0,1fr) 120px 92px; gap:7px; padding:5px 0 1px; }
+        #header-journey-search.expanded .journey-time-controls { display:grid; }
+        .journey-time-controls select,.journey-time-controls input { min-width:0; height:32px; box-sizing:border-box; border:1px solid var(--border-color); border-radius:9px; padding:0 8px; background:var(--input-bg); color:var(--text-main); font:inherit; font-size:12px; }
         #destination-search-close { display:none; position:absolute; top:18px; left:18px; width:42px; height:42px; place-items:center; border:0; border-radius:50%; background:var(--input-bg); color:var(--text-main); font-size:30px; line-height:1; cursor:pointer; }
 
         /* Destination search is its own screen, not a variation of the map header.
@@ -216,7 +219,7 @@
            search bar is horizontal, so explicitly reset its flex direction here
            instead of allowing the compact map-header rule to leak into this view. */
         body.destination-search-open #header-journey-search.expanded {
-            height:auto !important; min-height:154px !important; flex-basis:auto !important;
+            height:auto !important; min-height:196px !important; flex-basis:auto !important;
             padding:4px 14px !important; flex-direction:column !important; align-items:stretch !important;
         }
         body.destination-search-open #header-journey-search .journey-input-row { min-height:48px !important; }
@@ -1635,7 +1638,7 @@
             body.destination-search-open { overflow:hidden; }
             body.destination-search-open #top-bar { position:fixed !important; z-index:4000; inset:0; width:100%; height:100dvh !important; padding:max(18px, env(safe-area-inset-top)) 18px 24px; box-sizing:border-box; background:var(--sheet-bg); }
             body.destination-search-open #menu-button,body.destination-search-open .desktop-brand,body.destination-search-open #theme-toggle-header { display:none; }
-            body.destination-search-open #header-journey-search,body.destination-search-open #header-journey-search.expanded { position:static; display:flex; width:100%; max-width:none; min-height:154px; margin:0; padding:4px 14px; box-sizing:border-box; border-radius:22px; box-shadow:none; }
+            body.destination-search-open #header-journey-search,body.destination-search-open #header-journey-search.expanded { position:static; display:flex; width:100%; max-width:none; min-height:196px; margin:0; padding:4px 14px; box-sizing:border-box; border-radius:22px; box-shadow:none; }
             body.destination-search-open #journey-origin-row { display:flex !important; }
             body.destination-search-open .journey-divider { display:block !important; margin-left:34px; }
             body.destination-search-open #journey-swap-button { display:none !important; }
@@ -1722,6 +1725,14 @@
                 <span id="destination-prefix" class="point-label"><svg class="ui-icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>
                 <input id="journey-to" autocomplete="off" placeholder="To" aria-label="Destination">
                 <button id="journey-swap-button" type="button" onclick="swapJourneyPoints()" title="Swap locations" aria-label="Swap locations">&#8645;</button>
+            </div>
+            <div class="journey-time-controls" aria-label="Travel time preference">
+                <select id="journey-time-mode" aria-label="Travel time preference">
+                    <option value="depart_at">Leave at</option>
+                    <option value="arrive_by">Arrive by</option>
+                </select>
+                <input id="journey-date-input" type="date" aria-label="Travel date">
+                <input id="journey-time-input" type="time" aria-label="Travel time">
             </div>
             <button id="journey-search-submit" class="journey-search-submit" type="button" onclick="planJourneyFromSearch()">Search routes</button>
         </div>
@@ -3797,14 +3808,33 @@
 
         function setJourneyTimeToNow() {
             const now = new Date();
-            document.getElementById('journey-date').value = [now.getFullYear(), String(now.getMonth() + 1).padStart(2, '0'), String(now.getDate()).padStart(2, '0')].join('-');
-            document.getElementById('journey-time').value = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+            const date = [now.getFullYear(), String(now.getMonth() + 1).padStart(2, '0'), String(now.getDate()).padStart(2, '0')].join('-');
+            const time = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+            document.getElementById('journey-date').value = date;
+            document.getElementById('journey-time').value = time;
+            document.getElementById('journey-date-input').value = date;
+            document.getElementById('journey-time-input').value = time;
+            document.getElementById('journey-time-mode').value = 'depart_at';
+        }
+
+        function journeyTiming() {
+            const dateInput = document.getElementById('journey-date-input');
+            const timeInput = document.getElementById('journey-time-input');
+            const modeInput = document.getElementById('journey-time-mode');
+            const date = dateInput.value || document.getElementById('journey-date').value;
+            const time = timeInput.value || document.getElementById('journey-time').value;
+            document.getElementById('journey-date').value = date;
+            document.getElementById('journey-time').value = time;
+            return { date, time, mode:modeInput.value === 'arrive_by' ? 'arrive_by' : 'depart_at' };
         }
 
         function initializeJourneyPlanner() {
             setJourneyTimeToNow();
             const topBar = document.getElementById('top-bar');
             const headerSearch = document.getElementById('header-journey-search');
+            ['journey-date-input', 'journey-time-input', 'journey-time-mode'].forEach(id => {
+                document.getElementById(id).addEventListener('change', journeyTiming);
+            });
             let searchFocusTimer = null;
             headerSearch.addEventListener('focusin', () => {
                 if (searchFocusTimer) clearTimeout(searchFocusTimer);
@@ -4632,8 +4662,15 @@
                     return { value:date, text:new Intl.DateTimeFormat('en-MY', { hour:'numeric', minute:'2-digit' }).format(date) };
                 };
                 try {
+                    const departureTime = request.transitOptions?.departureTime;
+                    const arrivalTime = request.transitOptions?.arrivalTime;
+                    const transitTime = departureTime || arrivalTime;
                     const response = await fetch(`${API_BASE}/api/directions`, { method:'POST', headers:{'Content-Type':'application/json'},
-                        body:JSON.stringify({ origin:point(request.origin), destination:point(request.destination), travel_mode:mode }) });
+                        body:JSON.stringify({
+                            origin:point(request.origin), destination:point(request.destination), travel_mode:mode,
+                            transit_time: transitTime instanceof Date && !Number.isNaN(transitTime.getTime()) ? transitTime.toISOString() : '',
+                            transit_time_mode: arrivalTime ? 'arrive_by' : 'depart_at',
+                        }) });
                     const result = await response.json();
                     const routes = (result.data || []).map(route => {
                         const path = google.maps.geometry.encoding.decodePath(route.polyline?.encodedPolyline || '');
@@ -4723,7 +4760,6 @@
         }
 
         async function planJourney() {
-            setJourneyTimeToNow();
             if (!journeySelection.from || !journeySelection.to) {
                 openTransitPanel('Choose your stops', '', '<p class="panel-message">Select both stops from the search suggestions.</p>');
                 return;
@@ -4807,11 +4843,11 @@
             const fromPlace = journeySelection.from.place;
             const toPlace = journeySelection.to.place;
             const agency = document.getElementById('agency-select').value;
+            const timing = journeyTiming();
             const params = new URLSearchParams({
                 agency, from_lat:fromPlace.lat, from_lng:fromPlace.lng,
                 to_lat:toPlace.lat, to_lng:toPlace.lng,
-                date:document.getElementById('journey-date').value,
-                departure_time:document.getElementById('journey-time').value,
+                date:timing.date, departure_time:timing.time, time_mode:timing.mode,
                 limit:'20',
             });
             openTransitPanel('Finding the best route', `${fromPlace.name} → ${toPlace.name}`, '<p class="panel-message">Comparing nearby stops and services…</p>');
@@ -6154,7 +6190,11 @@
         function requestGoogleTransitAlternatives(fromPlace, toPlace) {
             return new Promise(resolve => {
                 const service = new RoutesApiService();
-                const transitOptions = { departureTime:new Date() };
+                const timing = journeyTiming();
+                const requestedTime = new Date(`${timing.date}T${timing.time}:00`);
+                const transitOptions = timing.mode === 'arrive_by'
+                    ? { arrivalTime:requestedTime }
+                    : { departureTime:requestedTime };
                 const preferredModes = preferredGoogleTransitModes();
                 if (preferredModes.length) transitOptions.modes = preferredModes;
                 service.route({
@@ -6344,11 +6384,15 @@
         async function tryMultimodalJourney() {
             const fromPlace = journeySelection.from.place;
             const toPlace = journeySelection.to.place;
+            const timing = journeyTiming();
+            // The optional OpenTripPlanner deployment may not expose arrive-by
+            // support. Use the schedule and Google engines for that request
+            // instead of silently treating an arrival deadline as departure.
+            if (timing.mode === 'arrive_by') return false;
             const params = new URLSearchParams({
                 from_lat:fromPlace.lat, from_lng:fromPlace.lng, from_name:fromPlace.name,
                 to_lat:toPlace.lat, to_lng:toPlace.lng, to_name:toPlace.name,
-                date:document.getElementById('journey-date').value,
-                departure_time:document.getElementById('journey-time').value,
+                date:timing.date, departure_time:timing.time,
             });
             toggleJourneyPlanner(false);
             openTransitPanel('Planning door-to-door journey', `${fromPlace.name} → ${toPlace.name}`, '<p class="panel-message">Searching walking and transfer options…</p>');

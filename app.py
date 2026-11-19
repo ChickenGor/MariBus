@@ -9,7 +9,7 @@ import tempfile
 import time
 from collections import deque
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import datetime, timezone
 from functools import wraps
 from threading import Lock
 
@@ -1214,6 +1214,19 @@ def directions():
             "travelMode": travel_mode}
     if travel_mode == "TRANSIT":
         body["computeAlternativeRoutes"] = True
+        transit_time = str(payload.get("transit_time") or "").strip()
+        timing_mode = str(payload.get("transit_time_mode") or "depart_at").lower()
+        if timing_mode not in {"depart_at", "arrive_by"}:
+            return jsonify({"success": False, "error": "Unsupported transit time preference"}), 400
+        if transit_time:
+            try:
+                parsed_time = datetime.fromisoformat(transit_time.replace("Z", "+00:00"))
+                if parsed_time.tzinfo is None:
+                    raise ValueError("A timezone is required")
+                normalized_time = parsed_time.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+            except ValueError:
+                return jsonify({"success": False, "error": "Transit time must be an ISO-8601 timestamp"}), 400
+            body["arrivalTime" if timing_mode == "arrive_by" else "departureTime"] = normalized_time
     response = None
     try:
         response = requests.post("https://routes.googleapis.com/directions/v2:computeRoutes", json=body, timeout=12,
@@ -1473,6 +1486,9 @@ def plan_journey():
 def plan_nearby_journey():
     agency = request.args.get("agency", "rapid-bus-kl")
     limit = min(max(request.args.get("limit", 12, type=int), 1), 20)
+    time_mode = (request.args.get("time_mode") or "depart_at").strip().lower()
+    if time_mode not in {"depart_at", "arrive_by"}:
+        return jsonify({"success": False, "error": "Use depart_at or arrive_by for time_mode"}), 400
     coordinates = {
         name: (request.args.get(f"{name}_lat", type=float), request.args.get(f"{name}_lng", type=float))
         for name in ("from", "to")
@@ -1487,8 +1503,9 @@ def plan_nearby_journey():
         requested_seconds = clock.hour * 3600 + clock.minute * 60
     except ValueError:
         return jsonify({"success": False, "error": "Use YYYY-MM-DD and HH:MM formats"}), 400
-    window_start = f"{requested_seconds // 3600:02d}:{(requested_seconds % 3600) // 60:02d}:00"
-    window_end_seconds = requested_seconds + 5 * 3600
+    window_start_seconds = requested_seconds if time_mode == "depart_at" else max(0, requested_seconds - 5 * 3600)
+    window_start = f"{window_start_seconds // 3600:02d}:{(window_start_seconds % 3600) // 60:02d}:00"
+    window_end_seconds = requested_seconds + 5 * 3600 if time_mode == "depart_at" else requested_seconds
     window_end = f"{window_end_seconds // 3600:02d}:{(window_end_seconds % 3600) // 60:02d}:59"
 
     with db_connection() as connection:
@@ -1532,9 +1549,12 @@ def plan_nearby_journey():
         has_viable_direct = any(
             (gtfs_seconds(row["departure_time"]) or -1) >= requested_seconds
             and (gtfs_seconds(row["arrival_time"]) or -1) >= (gtfs_seconds(row["departure_time"]) or 0)
+            if time_mode == "depart_at" else
+            (gtfs_seconds(row["arrival_time"]) or 10**9) <= requested_seconds
+            and (gtfs_seconds(row["arrival_time"]) or -1) >= (gtfs_seconds(row["departure_time"]) or 0)
             for row in rows
         )
-        transfer_results = [] if has_viable_direct else one_transfer_journeys(
+        transfer_results = [] if time_mode == "arrive_by" or has_viable_direct else one_transfer_journeys(
             connection, agency, transfer_origin_map, transfer_destination_map, active_services, requested_seconds
         )
 
@@ -1544,7 +1564,12 @@ def plan_nearby_journey():
         arrival_seconds = gtfs_seconds(row["arrival_time"])
         origin, destination = origin_map[row["origin_stop_id"]], destination_map[row["destination_stop_id"]]
         origin_walk_minutes = math.ceil(origin["distance_m"] / 78)
-        if departure_seconds is None or arrival_seconds is None or departure_seconds < requested_seconds + origin_walk_minutes * 60 or arrival_seconds < departure_seconds:
+        if departure_seconds is None or arrival_seconds is None or arrival_seconds < departure_seconds:
+            continue
+        destination_walk_minutes = math.ceil(destination["distance_m"] / 78)
+        if time_mode == "depart_at" and departure_seconds < requested_seconds + origin_walk_minutes * 60:
+            continue
+        if time_mode == "arrive_by" and (arrival_seconds + destination_walk_minutes * 60 > requested_seconds or departure_seconds < window_start_seconds):
             continue
         signature = (row["route_id"], departure_seconds, arrival_seconds, origin["stop_id"], destination["stop_id"])
         if signature in seen:
@@ -1552,7 +1577,7 @@ def plan_nearby_journey():
         seen.add(signature)
         walk_distance = origin["distance_m"] + destination["distance_m"]
         walk_minutes = math.ceil(walk_distance / 78)  # approximately 1.3 metres/second
-        wait_minutes = max(0, math.ceil((departure_seconds - requested_seconds) / 60) - origin_walk_minutes)
+        wait_minutes = max(0, math.ceil((departure_seconds - requested_seconds) / 60) - origin_walk_minutes) if time_mode == "depart_at" else 0
         ride_minutes = math.ceil((arrival_seconds - departure_seconds) / 60)
         journeys.append({
             "trip_id": row["trip_id"], "route_id": row["route_id"],
@@ -1569,10 +1594,15 @@ def plan_nearby_journey():
     # Door-to-door ranking: walking is substantially less convenient than
     # waiting or riding, especially when a stop is available beside the user.
     # This avoids suggesting a long walk merely to arrive a few minutes sooner.
-    journeys.sort(key=lambda item: (
-        item["total_minutes"] + item["walk_minutes"] * 1.5 + item["transfers"] * 8,
-        item["walk_minutes"], item["transfers"], item["arrival_time"],
-    ))
+    if time_mode == "arrive_by":
+        # For an arrival deadline, leave as late as practical, then minimise
+        # walking and transfers. This is the inverse of a depart-now search.
+        journeys.sort(key=lambda item: (-gtfs_seconds(item["departure_time"]), item["total_minutes"], item["walk_minutes"], item["transfers"]))
+    else:
+        journeys.sort(key=lambda item: (
+            item["total_minutes"] + item["walk_minutes"] * 1.5 + item["transfers"] * 8,
+            item["walk_minutes"], item["transfers"], item["arrival_time"],
+        ))
     # Keep a practical set of later departures and transfer alternatives. The
     # client ranks these according to the rider's preference.
     journeys = journeys[:limit]
@@ -1581,7 +1611,7 @@ def plan_nearby_journey():
             attach_estimated_fares(connection, agency, journeys)
     return jsonify({
         "success": True, "data": journeys,
-        "notice": f"Compared {len(origins)} nearby origin stops with {len(destinations)} destination stops, including one transfer",
+        "notice": f"Compared {len(origins)} nearby origin stops with {len(destinations)} destination stops" + (" before your arrival deadline" if time_mode == "arrive_by" else ", including one transfer"),
     })
 
 
