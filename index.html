@@ -1038,7 +1038,7 @@
         .apply-transit-modes { width:100%; margin-top:9px; padding:8px; border:0; border-radius:9px; background:#2563eb; color:#fff; font:inherit; font-size:11px; font-weight:850; cursor:pointer; }
         .journey-total { font-size:19px; line-height:1.1; font-weight:900; letter-spacing:-.4px; white-space:nowrap; }
         .journey-total small { display:block; margin-top:5px; font-size:12px; letter-spacing:0; color:var(--text-muted); }
-        .journey-main-time { font-size:15px; font-weight:900; white-space:nowrap; }
+        .journey-main-time { max-width:55%; font-size:11px; font-weight:800; line-height:1.3; text-align:right; white-space:normal; color:var(--text-muted); }
         .journey-steps { display:flex; align-items:center; flex-wrap:wrap; gap:6px; margin-top:8px; color:var(--text-muted); font-size:12px; }
         .journey-route.mode-labelled {
             display:inline-flex; min-width:0; max-width:112px; align-items:center; gap:5px;
@@ -1063,7 +1063,7 @@
         .journey-rank-label { display:inline-flex; margin-bottom:6px; padding:3px 7px; border-radius:999px; background:var(--input-bg); color:var(--text-muted); font-size:8px; font-weight:900; letter-spacing:.45px; text-transform:uppercase; }
         .journey-card.selected .journey-rank-label { background:#dcfce7; color:#166534; }
         .journey-comparison { margin-top:5px; color:#0f766e; font-size:9px; font-weight:750; }
-        .journey-card.modern .route-action { margin-top:6px; padding:7px 12px; }
+        .journey-card.modern .route-action { margin-top:6px; padding:6px 10px; font-size:11px; }
         .journey-actions { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:8px; }
         .journey-actions:has(.icon-only) { grid-template-columns:1fr 42px; }
         .journey-actions:has(.start-guidance-action) { grid-template-columns:minmax(0,1fr) minmax(74px,.62fr) 42px; }
@@ -4902,10 +4902,11 @@
                     return true;
                 }).slice(0, 4).map(candidate => {
                     const leg = candidate.route.legs?.[0] || {};
+                    const timeRange = googleRouteTimeRange(candidate.route);
                     const isRecommended = googlePreferred && candidate.routeIndex === fastestGoogle.routeIndex;
                     return `<article class="journey-card modern ${isRecommended && !walkingPreferred ? 'selected' : ''}" data-hybrid-google-index="${candidate.routeIndex}" role="button" tabindex="0" aria-pressed="${isRecommended && !walkingPreferred ? 'true' : 'false'}" aria-label="Google Transit journey, ${escapeHtml(formatJourneyDuration(candidate.durationMinutes))}">
                         <div class="journey-option-top"><span class="journey-rank-label">${isRecommended ? 'Recommended' : 'Google Transit'}</span>
-                            <div class="journey-option-head"><div class="journey-total">${escapeHtml(formatJourneyDuration(candidate.durationMinutes))}<small>from now</small></div><div class="journey-main-time">${escapeHtml(leg.departure_time?.text || '')} &ndash; ${escapeHtml(leg.arrival_time?.text || '')}</div></div>
+                            <div class="journey-option-head"><div class="journey-total">${escapeHtml(formatJourneyDuration(candidate.durationMinutes))}<small>from now</small></div><div class="journey-main-time">${escapeHtml(timeRange.text || 'Scheduled times unavailable')}</div></div>
                             <div class="journey-steps">${escapeHtml(candidate.lines)}</div>
                             <div class="journey-meta">${candidate.walkingMinutes} min walking · ${candidate.transfers} transfer${candidate.transfers === 1 ? '' : 's'} · Google Transit</div>
                         </div><div class="journey-actions"><button class="route-action" data-hybrid-google-details="${candidate.routeIndex}">View details</button></div>
@@ -5287,6 +5288,22 @@
             return (route.legs?.[0]?.steps || [])
                 .filter(step => step.travel_mode === google.maps.TravelMode.WALKING)
                 .reduce((total, step) => total + Number(step.duration?.value || 0), 0);
+        }
+
+        function googleRouteTimeRange(route) {
+            const leg = route?.legs?.[0] || {};
+            const transitSteps = (leg.steps || []).filter(step => step.travel_mode === google.maps.TravelMode.TRANSIT);
+            // Compute Routes supplies timetable times on transit steps. Some
+            // responses omit them at leg level, so use the first boarding time
+            // and final alighting time as a reliable rider-facing range.
+            const departure = leg.departure_time?.text || transitSteps[0]?.transit?.departure_time?.text || '';
+            const finalTransitStep = transitSteps[transitSteps.length - 1];
+            const arrival = leg.arrival_time?.text || finalTransitStep?.transit?.arrival_time?.text || '';
+            const text = departure && arrival ? `Board ${departure} → arrive ${arrival}`
+                : departure ? `Board ${departure}`
+                : arrival ? `Arrive ${arrival}`
+                : '';
+            return { departure, arrival, text };
         }
 
         function preferredGoogleTransitModes() {
@@ -5958,11 +5975,12 @@
         function googleJourneyFlowHtml(route, routeIndex) {
             const steps = route.legs?.[0]?.steps || [];
             const leg = route.legs?.[0] || {};
+            const timeRange = googleRouteTimeRange(route);
             const walkingMinutes = Math.max(0, Math.ceil(googleRouteWalkingSeconds(route) / 60));
             const transitLegs = steps.filter(step => step.travel_mode === google.maps.TravelMode.TRANSIT);
             const transfers = Math.max(0, transitLegs.length - 1);
             const summary = `<section class="journey-detail-summary" aria-label="Journey summary">
-                <div class="journey-detail-summary-main"><strong>${escapeHtml(leg.duration?.text || 'Journey')}</strong><span>${escapeHtml(leg.arrival_time?.text ? `Arrive ${leg.arrival_time.text}` : 'Arrival time updating')}</span></div>
+                <div class="journey-detail-summary-main"><strong>${escapeHtml(leg.duration?.text || 'Journey')}</strong><span>${escapeHtml(timeRange.text || 'Scheduled times unavailable')}</span></div>
                 <div class="journey-detail-summary-stat"><div><strong>${walkingMinutes} min</strong><span>walking</span></div><div><strong>${transfers}</strong><span>${transfers === 1 ? 'transfer' : 'transfers'}</span></div></div>
             </section>`;
             return `${summary}<button class="start-guidance-button" type="button" onclick="startGuidedJourney(${Number(routeIndex)})">Start guidance</button><div class="google-journey-flow">${steps.map(step => {
@@ -5985,7 +6003,8 @@
             if (!route) return;
             renderGoogleTransitRoute(response, routeIndex);
             const leg = route.legs?.[0];
-            openRouteTransitPanel('Journey details', `${leg?.departure_time?.text || ''} – ${leg?.arrival_time?.text || ''}`, googleJourneyFlowHtml(route, routeIndex));
+            const timeRange = googleRouteTimeRange(route);
+            openRouteTransitPanel('Journey details', timeRange.text || `${leg?.duration?.text || ''}`, googleJourneyFlowHtml(route, routeIndex));
             journeyDetailBackAction = () => tryGoogleTransitJourney(true);
             const closeButton = document.querySelector('#transit-panel .panel-close');
             closeButton.innerHTML = '&#8592;';
@@ -6137,6 +6156,7 @@
                 const cards = optionSpecs.map(({ key, label, route:{ route, routeIndex, walkSeconds, transferCount, durationSeconds } }, displayIndex) => {
                     const leg = route.legs?.[0];
                     if (!leg) return '';
+                    const timeRange = googleRouteTimeRange(route);
                     const steps = leg.steps || [];
                     const transitSteps = steps.filter(step => step.travel_mode === google.maps.TravelMode.TRANSIT);
                     const routeSteps = googleTransitSummarySteps(steps).map(googleTransitStepLabel).join('<span>&rsaquo;</span>');
@@ -6154,7 +6174,7 @@
                     return `<article class="journey-card modern ${displayIndex === 0 && !walkingPreferred ? 'selected' : ''}" style="--entry-delay:${Math.min(displayIndex, 6) * 38}ms" data-google-transit-index="${routeIndex}" role="button" tabindex="0" aria-pressed="${displayIndex === 0 && !walkingPreferred ? 'true' : 'false'}" aria-label="${escapeHtml(label)} journey, ${escapeHtml(leg.duration?.text || '')}">
                         <div class="journey-option-top">
                             <span class="journey-rank-label">${escapeHtml(label)}</span>
-                            <div class="journey-option-head"><div class="journey-total">${escapeHtml(leg.duration?.text || '')}</div><div class="journey-main-time">${escapeHtml(leg.departure_time?.text || '')} &ndash; ${escapeHtml(leg.arrival_time?.text || '')}</div></div>
+                            <div class="journey-option-head"><div class="journey-total">${escapeHtml(leg.duration?.text || '')}</div><div class="journey-main-time">${escapeHtml(timeRange.text || 'Scheduled times unavailable')}</div></div>
                             <div class="journey-steps">${routeSteps}</div>
                             <div class="journey-board">${board ? `Board at <strong>${escapeHtml(board)}</strong>` : ''}${board && exit ? '<br>' : ''}${exit ? `Exit at ${escapeHtml(exit)}` : ''}</div>
                             <div class="journey-meta">${Math.ceil(walkSeconds / 60)} min walking · ${Math.max(0, transitSteps.length - 1)} change${transitSteps.length === 2 ? '' : 's'} · Google Transit</div>
