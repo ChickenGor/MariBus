@@ -2326,6 +2326,9 @@
         let liveRefreshPartial = false;
         let liveFetchInFlight = false;
         const journeySelection = { from: null, to: null };
+        // The full-screen planner has two independent fields. Remember which
+        // one the rider is editing so recents can be used as either A or B.
+        let activeJourneyField = 'from';
         const journeySearchTimers = {};
         let transitModePreferences = new Set((() => {
             try {
@@ -2418,23 +2421,47 @@
             if (!container) return;
             container.hidden = false;
             const items = recentDestinations();
+            const targetLabel = activeJourneyField === 'from' ? 'Starting point' : 'Destination';
             if (!items.length) {
                 container.innerHTML = '<p class="destination-search-empty">Search for a place, destination, or bus line.</p>';
                 return;
             }
-            container.innerHTML = `<h2 class="recent-search-heading">Recent searches</h2><div class="recent-search-list">${items.map((place, index) => `<button class="recent-search-item" type="button" data-recent-destination="${index}"><span class="search-result-icon">${iconSvg('search')}</span><span><strong>${escapeHtml(place.name)}</strong><small>Destination</small></span></button>`).join('')}</div>`;
+            container.innerHTML = `<h2 class="recent-search-heading">Recent searches</h2><div class="recent-search-list">${items.map((place, index) => `<button class="recent-search-item" type="button" data-recent-destination="${index}"><span class="search-result-icon">${iconSvg('search')}</span><span><strong>${escapeHtml(place.name)}</strong><small>Use as ${targetLabel.toLowerCase()}</small></span></button>`).join('')}</div>`;
             container.querySelectorAll('[data-recent-destination]').forEach(button => button.addEventListener('click', () => {
                 const place = items[Number(button.dataset.recentDestination)];
                 if (!place) return;
-                document.getElementById('journey-to').value = place.name;
-                void matchPlaceToStop('to', place);
+                const kind = activeJourneyField;
+                document.getElementById(`journey-${kind}`).value = place.name;
+                void matchPlaceToStop(kind, place);
             }));
+        }
+
+        function updateJourneySearchFlow() {
+            const submit = document.getElementById('journey-search-submit');
+            if (!submit) return;
+            const hasFrom = Boolean(journeySelection.from?.place);
+            const hasTo = Boolean(journeySelection.to?.place);
+            if (hasFrom && hasTo) {
+                submit.textContent = 'Search routes';
+                submit.setAttribute('aria-label', 'Search routes');
+            } else if (hasFrom) {
+                submit.textContent = 'Choose destination';
+                submit.setAttribute('aria-label', 'Choose a destination first');
+            } else if (hasTo) {
+                submit.textContent = 'Choose starting point';
+                submit.setAttribute('aria-label', 'Choose a starting point first');
+            } else {
+                submit.textContent = 'Choose From and To';
+                submit.setAttribute('aria-label', 'Choose a starting point and destination');
+            }
         }
 
         function openMobileJourneyPlanner(event) {
             event?.preventDefault();
             const search = document.getElementById('header-journey-search');
-            const input = document.getElementById('journey-from');
+            const input = document.getElementById(
+                !journeySelection.from?.place ? 'journey-from' : 'journey-to'
+            );
             // Start with A, then B. Current location remains an explicit
             // option, rather than silently becoming the rider's origin.
             document.body.classList.remove('route-code-entry');
@@ -2442,6 +2469,8 @@
             document.body.classList.add('destination-search-open');
             document.getElementById('destination-search-close').hidden = false;
             search.classList.add('expanded');
+            activeJourneyField = input.id === 'journey-from' ? 'from' : 'to';
+            updateJourneySearchFlow();
             renderDestinationSearchRecents();
             requestAnimationFrame(() => input.focus({ preventScroll:true }));
         }
@@ -3959,6 +3988,12 @@
             });
             ['from', 'to'].forEach(kind => {
                 const input = document.getElementById(`journey-${kind}`);
+                input.addEventListener('focus', () => {
+                    activeJourneyField = kind;
+                    if (document.body.classList.contains('destination-search-open')) {
+                        renderDestinationSearchRecents();
+                    }
+                });
                 if (kind === 'to') input.addEventListener('focus', () => {
                     if (window.innerWidth < 768 && !document.body.classList.contains('destination-search-open')) {
                         openMobileJourneyPlanner();
@@ -3977,6 +4012,7 @@
                         if (hadOrigin) document.getElementById('destination-prefix').textContent = 'B';
                         else document.getElementById('destination-prefix').innerHTML = iconSvg('search');
                     }
+                    updateJourneySearchFlow();
                 });
                 let suggestions = [], stopSuggestions = [], transitLineCode = '', requestId = 0, sessionToken = null, pendingSuggestionRequest = Promise.resolve();
                 const suggestionList = document.createElement('div');
@@ -4053,7 +4089,7 @@
                     }));
                     suggestionList.replaceChildren(...items);
                     suggestionList.hidden = !items.length;
-                    if (kind === 'to' && document.body.classList.contains('destination-search-open')) {
+                    if (document.body.classList.contains('destination-search-open')) {
                         const recents = document.getElementById('destination-search-recents');
                         if (recents) recents.hidden = items.length > 0;
                     }
@@ -4092,6 +4128,17 @@
                 input.addEventListener('keydown', async event => {
                     if (event.key !== 'Enter') return;
                     event.preventDefault();
+                    // Do not replace a resolved place with the first matching
+                    // autocomplete result. Enter moves through A → B → Search.
+                    if (journeySelection[kind]?.place && input.value.trim() === journeySelection[kind].place.name) {
+                        if (kind === 'from' && !journeySelection.to?.place) {
+                            activeJourneyField = 'to';
+                            document.getElementById('journey-to').focus();
+                        } else if (journeySelection.from?.place && journeySelection.to?.place) {
+                            planJourneyFromSearch();
+                        }
+                        return;
+                    }
                     await pendingSuggestionRequest;
                     if (transitLineCode) {
                         suggestionList.hidden = true;
@@ -4110,6 +4157,7 @@
                     document.getElementById(`journey-${kind}-match`).textContent = 'Choose a place from the suggestions, or enter more of its name.';
                 });
             });
+            updateJourneySearchFlow();
         }
 
         async function matchPlaceToStop(kind, place) {
@@ -4501,15 +4549,18 @@
         }
 
         function continueJourneyAfterPlaceMatch(kind) {
+            updateJourneySearchFlow();
             if (kind === 'to') {
                 document.getElementById('header-journey-search').classList.add('expanded');
                 document.getElementById('destination-prefix').textContent = 'B';
                 if (!journeySelection.from?.place) {
+                    activeJourneyField = 'from';
                     document.getElementById('journey-from-match').textContent = 'Choose a starting point, or use your current location.';
                     setTimeout(() => document.getElementById('journey-from').focus(), 0);
                 }
             } else if (kind === 'from') {
                 if (!journeySelection.to?.place) {
+                    activeJourneyField = 'to';
                     document.getElementById('journey-to-match').textContent = 'Now choose where you want to go.';
                     setTimeout(() => document.getElementById('journey-to').focus(), 0);
                 }
@@ -4610,6 +4661,7 @@
         }
 
         function useCurrentLocationForJourney() {
+            activeJourneyField = 'from';
             if (!navigator.geolocation) {
                 document.getElementById('journey-from-match').textContent = 'Location is unavailable on this device';
                 document.getElementById('journey-from').value = '';
