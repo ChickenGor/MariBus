@@ -1097,6 +1097,7 @@
         .google-flow-copy strong,.google-flow-copy span { display:block; }
         .google-flow-copy strong { font-size:12px; }
         .google-flow-copy span { margin-top:3px; color:var(--text-muted); font-size:11px; line-height:1.35; }
+        .google-flow-time { margin-top:5px !important; color:#2563eb !important; font-size:10px !important; font-weight:850; }
         .start-guidance-button { width:100%; margin:0 0 10px; padding:10px 12px; border:0; border-radius:11px; background:#2563eb; color:#fff; font:inherit; font-size:12px; font-weight:850; cursor:pointer; }
         .guided-journey-card { padding:12px; border:1px solid rgba(37,99,235,.28); border-radius:15px; background:rgba(37,99,235,.05); }
         .guided-stage-kicker { color:#2563eb; font-size:10px; font-weight:900; letter-spacing:.6px; text-transform:uppercase; }
@@ -5198,7 +5199,7 @@
             const walkMinutes = Math.max(0, Number(journey.walk_minutes || 0));
             const transfers = Math.max(0, Number(journey.transfers || 0));
             const summary = `<section class="journey-detail-summary" aria-label="Journey summary">
-                <div class="journey-detail-summary-main"><strong>${escapeHtml(formatJourneyDuration(totalMinutes))}</strong><span>${escapeHtml(journey.arrival_time ? `Arrive ${journey.arrival_time}` : 'Scheduled arrival')}</span></div>
+                <div class="journey-detail-summary-main"><strong>${escapeHtml(formatJourneyDuration(totalMinutes))}</strong><span>${escapeHtml(journey.departure_time && journey.arrival_time ? `Leave ${journey.departure_time} → arrive ${journey.arrival_time}` : journey.arrival_time ? `Arrive ${journey.arrival_time}` : 'Scheduled arrival')}</span></div>
                 <div class="journey-detail-summary-stat"><div><strong>${walkMinutes} min</strong><span>walking</span></div><div><strong>${transfers}</strong><span>${transfers === 1 ? 'transfer' : 'transfers'}</span></div></div>
             </section>`;
             const openingWalk = walkMinutes ? `<div class="google-flow-step"><span class="google-flow-icon">${iconSvg('walk')}</span><div class="google-flow-copy"><strong>Walk about ${walkMinutes} min</strong><span>To ${escapeHtml(journey.from_stop?.stop_name || 'your boarding stop')}</span></div></div>` : '';
@@ -5994,7 +5995,10 @@
                 const from = transit.departure_stop?.name || 'boarding stop';
                 const to = transit.arrival_stop?.name || 'exit stop';
                 const stopCount = Number(transit.num_stops || 0);
-                return `<div class="google-flow-step"><span class="google-flow-icon">${iconSvg(mode.icon)}</span><div class="google-flow-copy"><strong>Ride ${escapeHtml(mode.label)} ${escapeHtml(routeName)}</strong><span>Board at ${escapeHtml(from)}${stopCount ? ` · ${stopCount} stop${stopCount === 1 ? '' : 's'}` : ''}<br>Get off at ${escapeHtml(to)}${transit.headsign ? ` · towards ${escapeHtml(transit.headsign)}` : ''}</span></div></div>`;
+                const depart = transit.departure_time?.text || '';
+                const arrive = transit.arrival_time?.text || '';
+                const schedule = depart && arrive ? `Depart ${depart} · arrive ${arrive}` : depart ? `Departs ${depart}` : arrive ? `Arrives ${arrive}` : '';
+                return `<div class="google-flow-step"><span class="google-flow-icon">${iconSvg(mode.icon)}</span><div class="google-flow-copy"><strong>Ride ${escapeHtml(mode.label)} ${escapeHtml(routeName)}</strong><span>Board at ${escapeHtml(from)}${stopCount ? ` · ${stopCount} stop${stopCount === 1 ? '' : 's'}` : ''}<br>Get off at ${escapeHtml(to)}${transit.headsign ? ` · towards ${escapeHtml(transit.headsign)}` : ''}</span>${schedule ? `<span class="google-flow-time">${escapeHtml(schedule)}</span>` : ''}</div></div>`;
             }).join('')}</div>`;
         }
 
