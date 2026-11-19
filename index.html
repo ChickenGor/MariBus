@@ -192,7 +192,7 @@
         body.destination-search-open #top-bar {
             position:fixed !important; z-index:4000; inset:0; display:flex;
             flex-direction:column; align-items:center; align-content:initial; justify-content:flex-start;
-            width:100vw; height:100dvh !important; padding:max(18px, env(safe-area-inset-top)) 24px 24px !important;
+            width:100vw; height:100dvh !important; padding:max(18px, env(safe-area-inset-top)) 18px 24px !important;
             box-sizing:border-box; background:var(--sheet-bg); pointer-events:auto !important;
         }
         body.destination-search-open #menu-button,
@@ -207,7 +207,7 @@
         }
         body.destination-search-open #header-journey-search,
         body.destination-search-open #header-journey-search.expanded {
-            position:static !important; display:flex; width:calc(100vw - 48px) !important; max-width:620px !important;
+            position:static !important; display:flex; width:calc(100vw - 36px) !important; max-width:620px !important;
             min-height:52px !important; height:52px !important; flex:0 0 52px !important; margin:0; padding:0 14px !important; box-sizing:border-box;
             flex-direction:row !important; align-items:center !important; border-radius:26px !important; box-shadow:none !important;
             transform:none !important; background:var(--input-bg) !important;
@@ -228,12 +228,12 @@
             body.destination-search-open .journey-search-submit { display:flex; align-items:center; justify-content:center; }
         body.destination-search-open .place-suggestions {
             position:fixed; z-index:4001; top:174px !important; right:auto !important; left:50% !important;
-            width:calc(100vw - 48px) !important; max-width:620px !important; max-height:calc(100dvh - 198px);
+            width:calc(100vw - 36px) !important; max-width:620px !important; max-height:calc(100dvh - 198px);
             margin:0; overflow:auto; border:0; border-radius:0; box-shadow:none; transform:translateX(-50%);
         }
         #destination-search-recents { display:none; }
         body.destination-search-open #destination-search-recents {
-            display:block; width:calc(100vw - 48px); max-width:620px; margin:24px 0 0;
+            display:block; width:calc(100vw - 36px); max-width:620px; margin:24px 0 0;
         }
         .recent-search-heading { margin:0 0 10px; color:var(--text-muted); font-size:14px; font-weight:850; }
         .recent-search-list { display:grid; gap:2px; }
@@ -1637,7 +1637,7 @@
                 width:36px; height:36px; flex-basis:36px; color:var(--maribus-teal-deep); font-size:21px;
             }
             body.destination-search-open { overflow:hidden; }
-            body.destination-search-open #top-bar { position:fixed !important; z-index:4000; inset:0; width:100%; height:100dvh !important; padding:max(18px, env(safe-area-inset-top)) 18px 24px; box-sizing:border-box; background:var(--sheet-bg); }
+            body.destination-search-open #top-bar { position:fixed !important; z-index:4000; inset:0; width:100%; height:100dvh !important; padding:max(18px, env(safe-area-inset-top)) 14px 24px; box-sizing:border-box; background:var(--sheet-bg); }
             body.destination-search-open #menu-button,body.destination-search-open .desktop-brand,body.destination-search-open #theme-toggle-header { display:none; }
             body.destination-search-open #header-journey-search,body.destination-search-open #header-journey-search.expanded { position:static; display:flex; width:100%; max-width:none; min-height:216px; margin:0; padding:4px 14px; box-sizing:border-box; border-radius:22px; box-shadow:none; }
             body.destination-search-open #journey-origin-row { display:flex !important; }
@@ -1648,7 +1648,8 @@
             body.destination-search-open #journey-to { font-size:16px; font-weight:700; }
             body.destination-search-open .journey-search-submit { display:flex; align-items:center; justify-content:center; }
             body.destination-search-open #destination-search-close { display:grid; }
-            body.destination-search-open .place-suggestions { position:fixed; top:202px; right:18px; left:18px; max-height:calc(100dvh - 224px); overflow:auto; border:0; border-radius:0; box-shadow:none; }
+            body.destination-search-open .place-suggestions { position:fixed; top:202px; right:14px; left:14px; max-height:calc(100dvh - 224px); overflow:auto; border:0; border-radius:0; box-shadow:none; }
+            body.destination-search-open #destination-search-recents { width:100%; }
             body.destination-search-open .place-suggestions button { min-height:72px; padding:14px 8px; font-size:16px; font-weight:700; }
             body:has(#header-journey-search.expanded) #map-view-toggle { bottom:18px; }
             body:not(:has(#bottom-sheet.detail-mode)) #map-view-toggle { bottom:164px; }
