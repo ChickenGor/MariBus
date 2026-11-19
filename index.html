@@ -2030,6 +2030,7 @@
         const API_BASE = location.protocol === 'file:' || IS_LOCAL_FRONTEND ? 'http://localhost:5000' : location.origin;
         const map = L.map('map', { zoomControl: false }).setView([3.1390, 101.6869], 12);
         window.__mariBusMap = map;
+        let journeyMapFocused = false;
         // Google TransitLayer renders route lines and every stop together. It
         // cannot be configured as "lines only", so do not put it on the idle
         // home map: a city-wide field of stop icons is harder to read than a
@@ -2038,8 +2039,75 @@
         const homeTransitLayer = window.google?.maps?.TransitLayer
             ? new google.maps.TransitLayer()
             : null;
+        // Google TransitLayer cannot display rail geometry without every stop
+        // marker. Build a calm home-map rail layer from the GTFS routes MariBus
+        // already serves instead, then keep it out of the way during a journey.
+        const homeRailLayer = L.layerGroup().addTo(map);
+        const HOME_RAIL_CACHE_KEY = 'maribus-home-rail-lines-v1';
+        const HOME_RAIL_ROUTE_CODES = ['KJL', 'AGL', 'SPL', 'PYL', 'MRL', 'BRT'];
+        let homeRailLines = [];
+        let homeRailLoadStarted = false;
+        let homeRailLoadPromise = null;
+        const homeRailVisible = () => {
+            const agency = document.getElementById('agency-select')?.value;
+            return !journeyMapFocused
+                && !document.body.classList.contains('walking-path-editing')
+                && ['rapid-bus-kl', 'rapid-rail-kl'].includes(agency);
+        };
+        const renderHomeRailLines = () => {
+            homeRailLayer.clearLayers();
+            if (!homeRailVisible()) return;
+            homeRailLines.forEach(line => {
+                if (!Array.isArray(line.points) || line.points.length < 2) return;
+                const color = safeRouteColor(line.color, 'rapid-rail-kl');
+                L.polyline(line.points, { color:darkenRouteColor(color, .58), weight:7, opacity:.78 }).addTo(homeRailLayer);
+                L.polyline(line.points, { color, weight:3.5, opacity:.96 }).addTo(homeRailLayer);
+            });
+        };
+        const restoreCachedHomeRailLines = () => {
+            try {
+                const cached = JSON.parse(sessionStorage.getItem(HOME_RAIL_CACHE_KEY) || 'null');
+                if (Array.isArray(cached?.lines) && cached.lines.length) homeRailLines = cached.lines;
+            } catch (_) {}
+        };
+        const loadHomeRailLines = async () => {
+            if (homeRailLoadStarted) return homeRailLoadPromise;
+            homeRailLoadStarted = true;
+            restoreCachedHomeRailLines();
+            renderHomeRailLines();
+            homeRailLoadPromise = (async () => {
+                try {
+                    const matches = await Promise.all(HOME_RAIL_ROUTE_CODES.map(async code => {
+                        const response = await fetch(`${API_BASE}/api/routes/search?agency=rapid-rail-kl&q=${encodeURIComponent(code)}`);
+                        const result = await response.json();
+                        return result.success ? result.data || [] : [];
+                    }));
+                    const representatives = [...new Map(matches.flat().map(item => [
+                        `${item.route_id}:${item.direction_id ?? ''}`,
+                        item,
+                    ])).values()];
+                    const fetched = await Promise.all(representatives.map(async item => {
+                        const params = new URLSearchParams({ agency:'rapid-rail-kl', direction_id:item.direction_id ?? '' });
+                        const response = await fetch(`${API_BASE}/api/routes/${encodeURIComponent(item.route_id)}?${params}`);
+                        const result = await response.json();
+                        const data = result.success ? result.data : null;
+                        const points = (data?.shape?.length ? data.shape.map(point => [Number(point.lat), Number(point.lon)]) : data?.stops?.map(stop => [Number(stop.stop_lat), Number(stop.stop_lon)])) || [];
+                        return points.length > 1 ? { points, color:data.route?.route_color || item.route_color || '' } : null;
+                    }));
+                    homeRailLines = fetched.filter(Boolean);
+                    try { sessionStorage.setItem(HOME_RAIL_CACHE_KEY, JSON.stringify({ lines:homeRailLines })); } catch (_) {}
+                    renderHomeRailLines();
+                } catch (error) {
+                    // The main map remains fully usable if an optional home
+                    // network cannot be read while offline or the API is busy.
+                    console.warn('Home rail lines unavailable', error);
+                }
+            })();
+            return homeRailLoadPromise;
+        };
         const updateHomeTransitLayer = () => {
             homeTransitLayer?.setMap(null);
+            renderHomeRailLines();
         };
         window.__mariBusRefreshHomeTransitLayer = updateHomeTransitLayer;
         updateHomeTransitLayer();
@@ -2049,6 +2117,7 @@
         new MutationObserver(updateHomeTransitLayer).observe(document.body, {
             attributes:true, attributeFilter:['class'],
         });
+        window.setTimeout(() => { void loadHomeRailLines(); }, 700);
         window.dispatchEvent(new Event('maribus-map-ready'));
         L.control.zoom({ position: 'bottomleft' }).addTo(map);
 
@@ -2250,7 +2319,6 @@
         let activeJourneyRouteNames = new Set();
         let currentJourneyOptions = [];
         let journeyRankingPreference = localStorage.getItem('maribus-journey-ranking') || 'fastest';
-        let journeyMapFocused = false;
         let journeyDetailBackAction = null;
         let countdownValue = 30;
         let countdownInterval;
@@ -2807,6 +2875,7 @@
             stopMarkersLayer.clearLayers();
             activeRouteLayer.clearLayers();
             closeTransitPanel();
+            window.__mariBusRefreshHomeTransitLayer?.();
             fetchBuses();
         }
 
@@ -3104,6 +3173,7 @@
             } else {
                 journeyMapFocused = false;
                 activeJourneyRouteNames.clear();
+                window.__mariBusRefreshHomeTransitLayer?.();
                 fetchBuses();
             }
         }
@@ -3139,6 +3209,7 @@
             // selected journey. Hide the fleet layer while inspecting A-to-B.
             markersGroup.clearLayers();
             journeyMapFocused = true;
+            window.__mariBusRefreshHomeTransitLayer?.();
             if (countdownInterval) clearInterval(countdownInterval);
             countdownInterval = null;
             document.getElementById('refresh-timer').innerText = 'Journey mode';
