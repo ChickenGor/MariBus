@@ -2204,6 +2204,7 @@
 
         let busMarkersDict = {};
         let busLiveDataDict = {};
+        let lastLiveFeedCheckedAt = null;
         let allLiveBusMarkers = [];
         let liveVehicleLayerEnabled = false;
         let visibleBusRefreshTimer = null;
@@ -2661,6 +2662,7 @@
                 });
                 busMarkersDict = nextBusMarkers;
                 busLiveDataDict = nextBusLiveData;
+                lastLiveFeedCheckedAt = new Date();
                 routeMarkersDict = nextRouteMarkers;
                 allLiveBusMarkers = newMarkers;
                 refreshVisibleBusMarkers();
@@ -5059,6 +5061,10 @@
             progress.querySelector('.journey-progress-message').textContent = message;
         }
 
+        function liveCheckedLabel(value = lastLiveFeedCheckedAt || new Date()) {
+            return new Intl.DateTimeFormat('en-MY', { hour:'numeric', minute:'2-digit' }).format(value);
+        }
+
         function routeDistanceBetween(stops, fromIndex, toIndex, initialPoint = null) {
             if (fromIndex < 0 || toIndex < fromIndex || !stops.length) return 0;
             let total = initialPoint ? distanceMetres(initialPoint, stops[fromIndex]) : 0;
@@ -5069,15 +5075,22 @@
         async function updateLiveJourneyTracking(journeys) {
             const agency = document.getElementById('agency-select').value;
             journeyLiveVehicleLayer.clearLayers();
+            if (isScheduleOnlyAgency(agency)) {
+                journeys.forEach((journey, index) => {
+                    setJourneyProgress(index, 0, `Scheduled timetable • board ${journey.departure_time}`);
+                });
+                return;
+            }
             try {
                 const response = await fetch(`${API_BASE}/api/live-buses?agency=${encodeURIComponent(agency)}`);
                 const liveResult = await response.json();
                 const vehicles = liveResult.success ? liveResult.data : [];
+                const checkedAt = liveResult.success ? new Date() : null;
                 await Promise.all(journeys.map(async (journey, index) => {
                     const firstLeg = journey.legs?.[0] || journey;
                     const vehicle = vehicles.find(item => item.trip?.tripId === firstLeg.trip_id);
                     if (!vehicle?.position) {
-                        setJourneyProgress(index, 0, `Scheduled • departs ${journey.departure_time}`);
+                        setJourneyProgress(index, 0, `Scheduled • board ${journey.departure_time} • live location unavailable`);
                         return;
                     }
                     const params = new URLSearchParams({ agency, trip_id:firstLeg.trip_id, direction_id:firstLeg.direction_id ?? journey.direction_id ?? '' });
@@ -5112,7 +5125,7 @@
                         : ((journey.legs ? destinationTarget?.stop_name : journey.to_stop?.stop_name) || 'destination');
                     const message = nearestIndex >= destinationIndex
                         ? `Bus has reached or passed ${targetLabel}`
-                        : `Live • ${etaMinutes} min to ${targetLabel} • ${stopsAway} stop${stopsAway === 1 ? '' : 's'} • next ${stops[nextIndex].stop_name}`;
+                        : `Live estimate • ${etaMinutes} min to ${targetLabel} • ${stopsAway} stop${stopsAway === 1 ? '' : 's'} • checked ${liveCheckedLabel(checkedAt)} • next ${stops[nextIndex].stop_name}`;
                     setJourneyProgress(index, nearestIndex >= destinationIndex ? 100 : progressPercent, message, true);
                     if (index === activeTrackedJourneyIndex && beforeA) updateRouteListLivePosition(stops, nearestIndex, nextIndex, boardIndex, etaMinutes, journey.from_stop?.stop_name);
                     if (index === activeTrackedJourneyIndex) {
@@ -5130,6 +5143,9 @@
                 }));
             } catch (error) {
                 console.warn('Live journey tracking unavailable', error);
+                journeys.forEach((journey, index) => {
+                    setJourneyProgress(index, 0, `Scheduled • board ${journey.departure_time} • live feed unavailable`);
+                });
             }
         }
 
@@ -5395,9 +5411,10 @@
             if (estimates.length) {
                 const closest = estimates[0];
                 const station = firstTransit.transit?.departure_stop?.name || 'boarding station';
-                return `<div class="live-journey-status live"><span class="live-dot"></span><span>Estimated ~${closest.minutes} min to ${escapeHtml(station)} · ${matches.length} live bus${matches.length === 1 ? '' : 'es'} on ${escapeHtml(routeName)}</span></div>`;
+                return `<div class="live-journey-status live"><span class="live-dot"></span><span>Live estimate · ~${closest.minutes} min to ${escapeHtml(station)} · ${matches.length} vehicle${matches.length === 1 ? '' : 's'} on ${escapeHtml(routeName)} · checked ${escapeHtml(liveCheckedLabel())}</span></div>`;
             }
-            return `<div class="live-journey-status"><span class="live-dot"></span><span>No approaching live ${escapeHtml(routeName)} bus can be estimated</span></div>`;
+            const scheduled = firstTransit.transit?.departure_time?.text || '';
+            return `<div class="live-journey-status"><span class="live-dot"></span><span>Scheduled${scheduled ? ` · departs ${escapeHtml(scheduled)}` : ''} · live arrival unavailable for ${escapeHtml(routeName)}</span></div>`;
         }
 
         function googleStepPoint(location) {
