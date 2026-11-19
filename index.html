@@ -294,7 +294,8 @@
             font-family: inherit !important;
         }
         .place-suggestions { position:absolute; top:calc(100% + 4px); left:0; right:0; z-index:3000; overflow:hidden; border:1px solid var(--border-color); border-radius:12px; background:var(--sheet-bg); box-shadow:0 10px 24px var(--shadow-color); }
-        .place-suggestions button { display:block; width:100%; padding:10px 12px; border:0; border-bottom:1px solid var(--border-color); background:transparent; color:var(--text-main); font:inherit; text-align:left; cursor:pointer; }
+        .place-suggestions button { display:block; width:100%; padding:10px 12px; border:0; border-bottom:1px solid var(--border-color); background:transparent; color:var(--text-main); font:inherit; text-align:left; cursor:pointer; animation:journey-card-enter .18s cubic-bezier(.2,.8,.2,1) both; transition:background-color .14s ease, transform .14s ease; }
+        .place-suggestions button:active { transform:scale(.985); background:var(--input-bg); }
         .place-suggestions button:last-child { border-bottom:0; }
         .place-suggestions .route-search-result { color:var(--maribus-teal-deep); font-weight:800; }
         .search-result-row { display:flex; align-items:center; gap:10px; }
@@ -941,7 +942,8 @@
         .arrival-route { font-weight:800; min-width:48px; }
         .arrival-destination, .stop-name { flex:1; font-size:13px; }
         .arrival-minutes { font-weight:800; color:#2563eb; white-space:nowrap; }
-        .route-action { width:100%; border:0; border-radius:10px; padding:9px 12px; margin-top:10px; background:#2563eb; color:white; font-weight:700; cursor:pointer; }
+        .route-action { width:100%; border:0; border-radius:10px; padding:9px 12px; margin-top:10px; background:#2563eb; color:white; font-weight:700; cursor:pointer; transition:transform .14s ease, filter .14s ease, box-shadow .14s ease; }
+        .route-action:active { transform:scale(.975); filter:brightness(.94); }
         .track-bus-action { background:#f93999; }
         #bus-tracking-banner { position:absolute; z-index:1200; top:92px; left:50%; display:flex; align-items:center; gap:10px; width:min(390px,calc(100vw - 32px)); padding:10px 10px 10px 14px; border:1px solid color-mix(in srgb,#f93999 34%,var(--border-color)); border-radius:16px; background:color-mix(in srgb,var(--sheet-bg) 94%,transparent); box-shadow:0 8px 28px var(--shadow-color); box-sizing:border-box; transform:translateX(-50%); backdrop-filter:blur(14px); }
         #bus-tracking-banner[hidden] { display:none; }
@@ -990,12 +992,13 @@
         @keyframes circle-inner162 { 0%{stroke-dashoffset:9} 25%{stroke-dashoffset:0} 65%{stroke-dashoffset:106} 80%,100%{stroke-dashoffset:97} }
         @keyframes text-animation76 { 0%{clip-path:inset(0 100% 0 0)} 50%{clip-path:inset(0)} 100%{clip-path:inset(0 0 0 100%)} }
         @keyframes panel-state-enter { from { opacity:0; transform:translateY(4px); } }
-        @keyframes journey-card-enter { from { opacity:0; transform:translateY(6px); } }
+        @keyframes journey-card-enter { from { opacity:0; transform:translateY(8px); } }
+        @keyframes journey-card-selected { 0% { transform:scale(.985); } 65% { transform:scale(1.008); } 100% { transform:scale(1); } }
         @media (prefers-reduced-motion:reduce) {
             #wifi-loader * { animation:none !important; }
             #wifi-loader .text::after { display:none; }
         }
-        .journey-card.modern { cursor:pointer; padding:10px; margin:6px 0; animation:journey-card-enter .22s cubic-bezier(.2,.8,.2,1) both; transition:border-color .2s, background .2s, transform .16s ease; }
+        .journey-card.modern { cursor:pointer; padding:10px; margin:6px 0; animation:journey-card-enter .22s cubic-bezier(.2,.8,.2,1) both; animation-delay:var(--entry-delay,0ms); transition:border-color .2s, background .2s, box-shadow .2s, transform .16s ease; will-change:transform; }
         .journey-section-title { margin:12px 2px 7px; color:var(--text-muted); font-size:11px; font-weight:900; letter-spacing:.45px; text-transform:uppercase; }
         .walking-option-card { display:grid; grid-template-columns:72px 1fr; gap:11px; align-items:center; }
         .walking-option-time { display:grid; min-height:66px; place-items:center; border-radius:10px; background:rgba(37,99,235,.1); color:#1d4ed8; font-size:19px; font-weight:900; line-height:1; text-align:center; }
@@ -1014,7 +1017,8 @@
         .route-hero-step .journey-route { flex:0 0 auto; }
         .route-hero-step strong { color:var(--text-main); }
         .journey-card.modern:active { transform:scale(.99); }
-        .journey-card.modern.selected { border:2px solid #2563eb; background:rgba(37,99,235,.04); }
+        @media (hover:hover) { .journey-card.modern:hover { transform:translateY(-1px); box-shadow:0 7px 18px rgba(15,23,42,.08); } }
+        .journey-card.modern.selected { border:2px solid #2563eb; background:rgba(37,99,235,.04); box-shadow:0 7px 20px rgba(37,99,235,.13); animation:journey-card-selected .28s cubic-bezier(.2,.8,.2,1) both; }
         .journey-option-top { display:block; }
         .journey-option-head { display:flex; align-items:center; justify-content:space-between; gap:12px; }
         .transit-priority { display:grid; grid-template-columns:.9fr 1.18fr 1.32fr 34px; gap:4px; margin:1px 0 6px; padding:3px; border-radius:11px; background:var(--input-bg); }
@@ -1294,7 +1298,7 @@
             #bottom-sheet.detail-mode.sheet-custom-size { max-height:94dvh; }
             #bottom-sheet.detail-mode.sheet-half #transit-panel.open,
             #bottom-sheet.detail-mode.sheet-expanded #transit-panel.open { flex:1 1 auto; }
-            #bottom-sheet.detail-mode.sheet-dragging { transition:none; user-select:none; }
+            #bottom-sheet.detail-mode.sheet-dragging { transition:none; user-select:none; will-change:height; }
             /* Keep the visible grip small, but give it a full finger-sized
                target.  A four-pixel line cannot reliably receive a mobile
                drag gesture. */
@@ -4828,7 +4832,7 @@
                             && (other.legs ? other.legs.map(leg => leg.route_id).join('|') : other.route_id) === signature
                             && other.departure_time !== journey.departure_time)
                         .map(other => other.departure_time))].slice(0, 2);
-                    return `<article class="journey-card modern ${index === 0 && !walkingPreferred && !googlePreferred ? 'selected' : ''}" data-nearby-index="${index}" role="button" tabindex="0" aria-pressed="${index === 0 && !walkingPreferred && !googlePreferred ? 'true' : 'false'}" aria-label="Journey option ${index + 1}, ${escapeHtml(formatJourneyDuration(journey.total_minutes))}">
+                    return `<article class="journey-card modern ${index === 0 && !walkingPreferred && !googlePreferred ? 'selected' : ''}" style="--entry-delay:${Math.min(index, 6) * 38}ms" data-nearby-index="${index}" role="button" tabindex="0" aria-pressed="${index === 0 && !walkingPreferred && !googlePreferred ? 'true' : 'false'}" aria-label="Journey option ${index + 1}, ${escapeHtml(formatJourneyDuration(journey.total_minutes))}">
                         <div class="journey-option-top">
                             <span class="journey-rank-label">${index === 0 && !googlePreferred ? 'Recommended' : 'MariBus schedule'}</span>
                             <div class="journey-option-head"><div class="journey-total">${escapeHtml(formatJourneyDuration(journey.total_minutes))}<small>from now</small></div><div class="journey-main-time">${escapeHtml(journey.departure_time)} &ndash; ${escapeHtml(journey.arrival_time)}</div></div>
@@ -6071,7 +6075,7 @@
                         if (walkingDifference <= -2) comparisons.push(`${Math.abs(walkingDifference)} min less walking`);
                         if (transferCount < recommended.transferCount) comparisons.push(`${recommended.transferCount - transferCount} fewer transfer${recommended.transferCount - transferCount === 1 ? '' : 's'}`);
                     }
-                    return `<article class="journey-card modern ${displayIndex === 0 && !walkingPreferred ? 'selected' : ''}" data-google-transit-index="${routeIndex}" role="button" tabindex="0" aria-pressed="${displayIndex === 0 && !walkingPreferred ? 'true' : 'false'}" aria-label="${escapeHtml(label)} journey, ${escapeHtml(leg.duration?.text || '')}">
+                    return `<article class="journey-card modern ${displayIndex === 0 && !walkingPreferred ? 'selected' : ''}" style="--entry-delay:${Math.min(displayIndex, 6) * 38}ms" data-google-transit-index="${routeIndex}" role="button" tabindex="0" aria-pressed="${displayIndex === 0 && !walkingPreferred ? 'true' : 'false'}" aria-label="${escapeHtml(label)} journey, ${escapeHtml(leg.duration?.text || '')}">
                         <div class="journey-option-top">
                             <span class="journey-rank-label">${escapeHtml(label)}</span>
                             <div class="journey-option-head"><div class="journey-total">${escapeHtml(leg.duration?.text || '')}</div><div class="journey-main-time">${escapeHtml(leg.departure_time?.text || '')} &ndash; ${escapeHtml(leg.arrival_time?.text || '')}</div></div>
