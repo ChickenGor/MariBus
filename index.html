@@ -1106,6 +1106,8 @@
         .google-flow-copy strong { font-size:12px; }
         .google-flow-copy span { margin-top:3px; color:var(--text-muted); font-size:11px; line-height:1.35; }
         .google-flow-time { margin-top:5px !important; color:#2563eb !important; font-size:10px !important; font-weight:850; }
+        .journey-details-back { display:inline-flex; align-items:center; gap:6px; min-height:34px; margin:0 0 10px; padding:7px 11px; border:1px solid var(--border-color); border-radius:999px; background:var(--input-bg); color:var(--text-main); font:inherit; font-size:11px; font-weight:850; cursor:pointer; }
+        .journey-details-back:hover { border-color:#2563eb; color:#2563eb; }
         .start-guidance-button { width:100%; margin:0 0 10px; padding:10px 12px; border:0; border-radius:11px; background:#2563eb; color:#fff; font:inherit; font-size:12px; font-weight:850; cursor:pointer; }
         .guided-journey-card { padding:12px; border:1px solid rgba(37,99,235,.28); border-radius:15px; background:rgba(37,99,235,.05); }
         .guided-stage-kicker { color:#2563eb; font-size:10px; font-weight:900; letter-spacing:.6px; text-transform:uppercase; }
@@ -3096,6 +3098,19 @@
                 activeJourneyRouteNames.clear();
                 fetchBuses();
             }
+        }
+
+        // Detail views live inside the same bottom sheet as the route list. Keep
+        // their return action in the content itself, rather than repurposing the
+        // sheet close button (which should always close the sheet).
+        function returnToJourneyOptions() {
+            const goBack = journeyDetailBackAction;
+            journeyDetailBackAction = null;
+            if (typeof goBack === 'function') {
+                goBack();
+                return;
+            }
+            closeTransitPanel(true);
         }
 
         function resumeTransitPanel() {
@@ -5342,9 +5357,6 @@
                 }
                 openRouteTransitPanel('Route details', `${journey.from_stop.stop_name} → ${journey.to_stop.stop_name}`, localJourneyFlowHtml(journey, sections));
                 journeyDetailBackAction = () => tryNearbyStopJourneys();
-                const closeButton = document.querySelector('#transit-panel .panel-close');
-                closeButton.innerHTML = '&#8592;';
-                closeButton.setAttribute('aria-label', 'Back to journey options');
                 if (currentJourneyOptions.length) updateLiveJourneyTracking(currentJourneyOptions);
             } catch (error) {
                 openTransitPanel('Route unavailable', '', '<p class="panel-message">The stop list could not be loaded.</p>');
@@ -5371,7 +5383,7 @@
                 return `<div class="google-flow-step"><span class="google-flow-icon" style="color:${color}">${iconSvg('bus')}</span><div class="google-flow-copy"><strong>Take <span class="journey-route" style="background:${color}">${escapeHtml(label)}</span></strong><span>Board at ${escapeHtml(board)}${rideStopCount ? ` · ${rideStopCount} stops` : ''}<br>Get off at ${escapeHtml(exit)}${leg.headsign ? ` · towards ${escapeHtml(leg.headsign)}` : ''}</span></div></div><details class="extra-stops"><summary>Show stops on this service</summary>${renderJourneyStopList(stops, fromStop, toStop)}</details>${transfer}`;
             }).join('');
             const endingWalk = walkMinutes ? `<div class="google-flow-step"><span class="google-flow-icon">${iconSvg('walk')}</span><div class="google-flow-copy"><strong>Finish on foot</strong><span>Walk to your destination</span></div></div>` : '';
-            return `${summary}<div class="google-journey-flow">${openingWalk}${rides || '<p class="panel-message">Stop-by-stop details are unavailable for this scheduled trip.</p>'}${endingWalk}</div>`;
+            return `<button class="journey-details-back" type="button" onclick="returnToJourneyOptions()">&larr; All route options</button>${summary}<div class="google-journey-flow">${openingWalk}${rides || '<p class="panel-message">Stop-by-stop details are unavailable for this scheduled trip.</p>'}${endingWalk}</div>`;
         }
 
         function malaysiaTime(timestamp) {
@@ -6142,7 +6154,7 @@
                 <div class="journey-detail-summary-main"><strong>${escapeHtml(leg.duration?.text || 'Journey')}</strong><span>${escapeHtml(timeRange.text || 'Scheduled times unavailable')}</span></div>
                 <div class="journey-detail-summary-stat"><div><strong>${walkingMinutes} min</strong><span>walking</span></div><div><strong>${transfers}</strong><span>${transfers === 1 ? 'transfer' : 'transfers'}</span></div></div>
             </section>`;
-            return `${summary}<button class="start-guidance-button" type="button" onclick="startGuidedJourney(${Number(routeIndex)})">Start guidance</button><div class="google-journey-flow">${steps.map(step => {
+            return `<button class="journey-details-back" type="button" onclick="returnToJourneyOptions()">&larr; All route options</button>${summary}<button class="start-guidance-button" type="button" onclick="startGuidedJourney(${Number(routeIndex)})">Start guidance</button><div class="google-journey-flow">${steps.map(step => {
                 if (step.travel_mode === google.maps.TravelMode.WALKING) {
                     return `<div class="google-flow-step"><span class="google-flow-icon">${iconSvg('walk')}</span><div class="google-flow-copy"><strong>Walk ${escapeHtml(step.duration?.text || '')}</strong><span>${step.contributedPath ? `Via ${escapeHtml(step.contributedPath)} · ` : ''}${escapeHtml(plainGoogleInstruction(step.instructions))}${step.distance?.text ? ` · ${escapeHtml(step.distance.text)}` : ''}</span></div></div>`;
                 }
@@ -6168,9 +6180,6 @@
             const timeRange = googleRouteTimeRange(route);
             openRouteTransitPanel('Journey details', timeRange.text || `${leg?.duration?.text || ''}`, googleJourneyFlowHtml(route, routeIndex));
             journeyDetailBackAction = () => tryGoogleTransitJourney(true);
-            const closeButton = document.querySelector('#transit-panel .panel-close');
-            closeButton.innerHTML = '&#8592;';
-            closeButton.setAttribute('aria-label', 'Back to journey options');
         }
 
         function googleTransitLineColor(step) {
