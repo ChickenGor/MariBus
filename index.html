@@ -1091,10 +1091,13 @@
         .live-journey-status.live { color:#15803d; background:rgba(22,163,74,.1); font-weight:750; }
         .live-dot { width:7px; height:7px; flex:0 0 7px; border-radius:50%; background:#94a3b8; }
         .live-journey-status.live .live-dot { background:#16a34a; box-shadow:0 0 0 4px rgba(22,163,74,.14); }
+        .journey-map-hint { display:flex; align-items:center; gap:7px; margin:0 0 9px; padding:8px 10px; border-radius:10px; background:var(--input-bg); color:var(--text-muted); font-size:10px; font-weight:750; }
+        .journey-map-hint .ui-icon { width:15px; height:15px; color:#2563eb; }
         .google-journey-flow { display:grid; gap:0; padding:2px 0 8px; }
         .google-flow-step { position:relative; display:grid; grid-template-columns:34px 1fr; gap:10px; min-height:54px; padding:7px 0; }
         .journey-step-button { width:100%; border:0; border-radius:12px; background:transparent; color:inherit; font:inherit; text-align:left; cursor:pointer; transition:background .18s ease, transform .18s ease; }
         .journey-step-button:hover,.journey-step-button:focus-visible,.journey-step-button.is-focused { background:rgba(37,99,235,.08); outline:none; }
+        .journey-step-button.is-focused { box-shadow:inset 3px 0 0 #2563eb; }
         .journey-step-button:active { transform:scale(.99); }
         .google-flow-step:not(:last-child)::after { content:""; position:absolute; top:37px; bottom:-8px; left:16px; width:2px; background:var(--border-color); }
         .journey-detail-summary { display:grid; grid-template-columns:1.35fr 1fr; gap:8px; margin:0 0 14px; }
@@ -3155,6 +3158,7 @@
             if (!bounds.isEmpty()) map.native.fitBounds(bounds, 80);
             document.querySelectorAll('[data-route-step]').forEach(element => {
                 element.classList.toggle('is-focused', Number(element.dataset.routeStep) === Number(stepIndex));
+                element.setAttribute('aria-pressed', String(Number(element.dataset.routeStep) === Number(stepIndex)));
             });
         }
 
@@ -6184,9 +6188,9 @@
                 <div class="journey-detail-summary-main"><strong>${escapeHtml(leg.duration?.text || 'Journey')}</strong><span>${escapeHtml(timeRange.text || 'Scheduled times unavailable')}</span></div>
                 <div class="journey-detail-summary-stat"><div><strong>${walkingMinutes} min</strong><span>walking</span></div><div><strong>${transfers}</strong><span>${transfers === 1 ? 'transfer' : 'transfers'}</span></div></div>
             </section>`;
-            return `<button class="journey-details-back" type="button" onclick="returnToJourneyOptions()">&larr; All route options</button>${summary}<button class="start-guidance-button" type="button" onclick="startGuidedJourney(${Number(routeIndex)})">Start guidance</button><div class="google-journey-flow">${steps.map(step => {
+            return `<button class="journey-details-back" type="button" onclick="returnToJourneyOptions()">&larr; All route options</button>${summary}<button class="start-guidance-button" type="button" onclick="startGuidedJourney(${Number(routeIndex)})">Start guidance</button><p class="journey-map-hint">${iconSvg('navigation')}Tap a step to focus it on the map</p><div class="google-journey-flow">${steps.map((step, stepIndex) => {
                 if (step.travel_mode === google.maps.TravelMode.WALKING) {
-                    return `<div class="google-flow-step"><span class="google-flow-icon">${iconSvg('walk')}</span><div class="google-flow-copy"><strong>Walk ${escapeHtml(step.duration?.text || '')}</strong><span>${step.contributedPath ? `Via ${escapeHtml(step.contributedPath)} · ` : ''}${escapeHtml(plainGoogleInstruction(step.instructions))}${step.distance?.text ? ` · ${escapeHtml(step.distance.text)}` : ''}</span></div></div>`;
+                    return `<button class="google-flow-step journey-step-button" type="button" data-route-step="${stepIndex}" aria-pressed="false" onclick="focusJourneyRouteStep(${stepIndex})"><span class="google-flow-icon">${iconSvg('walk')}</span><span class="google-flow-copy"><strong>Walk ${escapeHtml(step.duration?.text || '')}</strong><span>${step.contributedPath ? `Via ${escapeHtml(step.contributedPath)} · ` : ''}${escapeHtml(plainGoogleInstruction(step.instructions))}${step.distance?.text ? ` · ${escapeHtml(step.distance.text)}` : ''}</span></span></button>`;
                 }
                 const transit = step.transit || {};
                 const line = transit.line || {};
@@ -6198,7 +6202,7 @@
                 const depart = transit.departure_time?.text || '';
                 const arrive = transit.arrival_time?.text || '';
                 const schedule = depart && arrive ? `Depart ${depart} · arrive ${arrive}` : depart ? `Departs ${depart}` : arrive ? `Arrives ${arrive}` : '';
-                return `<button class="google-flow-step journey-step-button" type="button" data-route-step="${stepIndex}" onclick="focusJourneyRouteStep(${stepIndex})"><span class="google-flow-icon">${iconSvg(mode.icon)}</span><span class="google-flow-copy"><strong>Ride ${escapeHtml(mode.label)} ${escapeHtml(routeName)}</strong><span>Board at ${escapeHtml(from)}${stopCount ? ` · ${stopCount} stop${stopCount === 1 ? '' : 's'}` : ''}<br>Get off at ${escapeHtml(to)}${transit.headsign ? ` · towards ${escapeHtml(transit.headsign)}` : ''}</span>${schedule ? `<span class="google-flow-time">${escapeHtml(schedule)}</span>` : ''}</span></button>`;
+                return `<button class="google-flow-step journey-step-button" type="button" data-route-step="${stepIndex}" aria-pressed="false" onclick="focusJourneyRouteStep(${stepIndex})"><span class="google-flow-icon">${iconSvg(mode.icon)}</span><span class="google-flow-copy"><strong>Ride ${escapeHtml(mode.label)} ${escapeHtml(routeName)}</strong><span>Board at ${escapeHtml(from)}${stopCount ? ` · ${stopCount} stop${stopCount === 1 ? '' : 's'}` : ''}<br>Get off at ${escapeHtml(to)}${transit.headsign ? ` · towards ${escapeHtml(transit.headsign)}` : ''}</span>${schedule ? `<span class="google-flow-time">${escapeHtml(schedule)}</span>` : ''}</span></button>`;
             }).join('')}</div>`;
         }
 
