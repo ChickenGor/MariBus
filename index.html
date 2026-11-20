@@ -1030,6 +1030,7 @@
         .transit-priority button { min-width:0; min-height:32px; padding:0 6px; border:0; border-radius:8px; background:transparent; color:var(--text-muted); font:inherit; font-size:10px; font-weight:800; white-space:nowrap; cursor:pointer; transition:background .18s,color .18s,transform .14s ease; }
         .transit-priority button:active,.panel-state button:active,.apply-transit-modes:active { transform:scale(.98); }
         .transit-priority button.active { background:var(--sheet-bg); color:#2563eb; box-shadow:0 2px 8px var(--shadow-color); }
+        .journey-priority-check { display:inline-block; margin-left:3px; font-size:9px; line-height:1; vertical-align:1px; }
         .transit-priority .adjust-transit-button { width:34px; padding:0; display:grid; place-items:center; }
         .transit-priority .adjust-transit-button .ui-icon { width:16px; height:16px; }
         @media(max-width:420px){.transit-priority button{font-size:8.5px;padding:0 3px}}
@@ -4952,11 +4953,14 @@
 
         function journeyPriorityControlsHtml() {
             const choices = [
-                ['fastest', 'Fastest'],
-                ['less-walking', 'Less walking'],
-                ['fewer-transfers', 'Fewer transfers'],
+                ['fastest', 'Fastest', 'Rank routes primarily by total travel time'],
+                ['less-walking', 'Less walking', 'Rank routes primarily by the amount of walking'],
+                ['fewer-transfers', 'Fewer transfers', 'Rank routes primarily by the number of changes'],
             ];
-            return `<div class="transit-priority" role="group" aria-label="Rank journey options">${choices.map(([value, label]) => `<button type="button" data-journey-priority="${value}" class="${journeyRankingPreference === value ? 'active' : ''}" aria-pressed="${journeyRankingPreference === value}">${label}</button>`).join('')}</div>`;
+            return `<div class="transit-priority" role="group" aria-label="Rank journey options">${choices.map(([value, label, description]) => {
+                const selected = journeyRankingPreference === value;
+                return `<button type="button" data-journey-priority="${value}" class="${selected ? 'active' : ''}" aria-pressed="${selected}" title="${description}">${label}${selected ? '<span class="journey-priority-check" aria-hidden="true">✓</span>' : ''}</button>`;
+            }).join('')}</div>`;
         }
 
         function rankJourneyOptions(options) {
@@ -5237,7 +5241,7 @@
                     const timeRange = googleRouteTimeRange(candidate.route);
                     const isRecommended = googlePreferred && candidate.routeIndex === preferredGoogleCandidate.routeIndex;
                     return `<article class="journey-card modern ${isRecommended && !walkingPreferred ? 'selected' : ''}" data-hybrid-google-index="${candidate.routeIndex}" role="button" tabindex="0" aria-pressed="${isRecommended && !walkingPreferred ? 'true' : 'false'}" aria-label="Google Transit journey, ${escapeHtml(formatJourneyDuration(candidate.durationMinutes))}">
-                        <div class="journey-option-top"><span class="journey-rank-label">${isRecommended ? 'Recommended' : 'Google Transit'}</span>
+                        <div class="journey-option-top"><span class="journey-rank-label">${isRecommended ? escapeHtml(candidate.rankReason || 'Recommended') : 'Google Transit'}</span>
                             <div class="journey-option-head"><div class="journey-total">${escapeHtml(formatJourneyDuration(candidate.durationMinutes))}<small>from now</small></div><div class="journey-main-time">${escapeHtml(timeRange.text || 'Scheduled times unavailable')}</div></div>
                             <div class="journey-steps">${escapeHtml(candidate.lines)}</div>
                             <div class="journey-meta">${candidate.walkingMinutes} min walking · ${candidate.transfers} transfer${candidate.transfers === 1 ? '' : 's'} · Google Transit</div>
