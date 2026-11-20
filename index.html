@@ -1807,6 +1807,9 @@
         <button id="guided-head-north" class="guided-camera-button active" type="button" onclick="headNorthGuidedJourney()" title="North-up map" aria-label="Keep north at the top" aria-pressed="true">
             <svg class="ui-icon" viewBox="0 0 24 24"><path d="m12 3 6 16-6-3-6 3z"></path><path d="M12 3v13"></path></svg>
         </button>
+        <button id="guided-compass" class="guided-camera-button" type="button" onclick="toggleCompassGuidedJourney()" title="Compass follow" aria-label="Follow the direction your phone faces" aria-pressed="false">
+            <svg class="ui-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"></circle><path d="m15.5 8.5-2.2 5.3-5.3 2.2 2.2-5.3 5.3-2.2Z"></path></svg>
+        </button>
         <button id="guided-recenter" class="guided-camera-button" type="button" onclick="recenterGuidedJourney()" title="Face along route" aria-label="Recenter and face along route" aria-pressed="false">
             <svg class="ui-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M12 2v3M12 19v3M2 12h3M19 12h3"></path><circle cx="12" cy="12" r="7"></circle></svg>
         </button>
@@ -2364,6 +2367,9 @@
         let guidedJourneyMarker = null;
         let guidedJourneyFollowMode = true;
         let guidedJourneyHeadingMode = 'north';
+        let guidedCompassHeading = null;
+        let guidedCompassLastUpdatedAt = 0;
+        let guidedCompassListener = null;
         let guidedRouteSegments = [];
         let guidedRerouteInFlight = false;
         let guidedLiveStopRequest = null;
@@ -6188,7 +6194,10 @@
             const liveHeading = Number(position.coords.heading);
             const movingWithReliableHeading = Number.isFinite(liveHeading) && Number(position.coords.speed) >= 1;
             let heading = map.native.getHeading?.() || 0;
-            if (movingWithReliableHeading) {
+            const hasFreshCompassHeading = Number.isFinite(guidedCompassHeading) && Date.now() - guidedCompassLastUpdatedAt < 5000;
+            if (guidedJourneyHeadingMode === 'compass' && hasFreshCompassHeading) {
+                heading = guidedCompassHeading;
+            } else if (movingWithReliableHeading) {
                 heading = liveHeading;
             } else if (guidedJourneyLastPosition && guidedDistanceMetres(guidedJourneyLastPosition, next) > 5) {
                 heading = guidedBearing(guidedJourneyLastPosition, next);
@@ -6279,17 +6288,86 @@
             map.native.setCenter({ lat:cameraLatitude * 180 / Math.PI, lng:cameraLongitude * 180 / Math.PI });
             map.native.setZoom(Math.max(18, map.native.getZoom() || 0));
             map.native.setHeading(cameraHeading);
-            map.native.setTilt(guidedJourneyHeadingMode === 'north' ? 0 : 55);
+            map.native.setTilt(guidedJourneyHeadingMode === 'north' ? 0 : guidedJourneyHeadingMode === 'compass' ? 45 : 55);
             return true;
+        }
+
+        function normaliseCompassHeading(value) {
+            const heading = Number(value);
+            if (!Number.isFinite(heading)) return null;
+            return ((heading % 360) + 360) % 360;
+        }
+
+        function smoothCompassHeading(previous, next) {
+            if (!Number.isFinite(previous)) return next;
+            const shortestTurn = ((next - previous + 540) % 360) - 180;
+            return normaliseCompassHeading(previous + shortestTurn * 0.22);
+        }
+
+        function updateGuidedCompass(event) {
+            // iOS provides a calibrated compass value. Most Android browsers
+            // provide alpha in the opposite direction around the vertical axis.
+            const raw = Number.isFinite(Number(event.webkitCompassHeading))
+                ? Number(event.webkitCompassHeading)
+                : Number.isFinite(Number(event.alpha)) ? 360 - Number(event.alpha) : null;
+            const next = normaliseCompassHeading(raw);
+            if (next === null) return;
+            guidedCompassHeading = smoothCompassHeading(guidedCompassHeading, next);
+            guidedCompassLastUpdatedAt = Date.now();
+            if (guidedJourney && guidedJourneyFollowMode && guidedJourneyHeadingMode === 'compass') {
+                centerGuidedJourneyCamera(guidedJourneyLastPosition, guidedCompassHeading);
+            }
+        }
+
+        async function enableCompassGuidedJourney() {
+            if (!guidedJourney || !window.DeviceOrientationEvent) {
+                showMenuNotice('Compass guidance is not available on this device');
+                return false;
+            }
+            try {
+                if (typeof window.DeviceOrientationEvent.requestPermission === 'function') {
+                    const permission = await window.DeviceOrientationEvent.requestPermission();
+                    if (permission !== 'granted') {
+                        showMenuNotice('Compass permission was not granted');
+                        return false;
+                    }
+                }
+                if (!guidedCompassListener) {
+                    guidedCompassListener = updateGuidedCompass;
+                    window.addEventListener('deviceorientation', guidedCompassListener, true);
+                }
+                guidedJourneyFollowMode = true;
+                guidedJourneyHeadingMode = 'compass';
+                centerGuidedJourneyCamera(guidedJourneyLastPosition, guidedCompassHeading ?? 0);
+                updateGuidedCameraControls();
+                showMenuNotice('Compass follow is on');
+                return true;
+            } catch (error) {
+                console.warn('Compass permission unavailable', error);
+                showMenuNotice('Could not enable compass follow');
+                return false;
+            }
+        }
+
+        function toggleCompassGuidedJourney() {
+            if (guidedJourneyHeadingMode === 'compass') {
+                headNorthGuidedJourney();
+                return;
+            }
+            enableCompassGuidedJourney();
         }
 
         function updateGuidedCameraControls() {
             const northButton = document.getElementById('guided-head-north');
+            const compassButton = document.getElementById('guided-compass');
             const recenterButton = document.getElementById('guided-recenter');
             const northActive = guidedJourneyFollowMode && guidedJourneyHeadingMode === 'north';
+            const compassActive = guidedJourneyFollowMode && guidedJourneyHeadingMode === 'compass';
             const routeActive = guidedJourneyFollowMode && guidedJourneyHeadingMode === 'route';
             northButton?.classList.toggle('active', northActive);
             northButton?.setAttribute('aria-pressed', String(northActive));
+            compassButton?.classList.toggle('active', compassActive);
+            compassButton?.setAttribute('aria-pressed', String(compassActive));
             recenterButton?.classList.toggle('active', routeActive);
             recenterButton?.setAttribute('aria-pressed', String(routeActive));
         }
@@ -6298,6 +6376,8 @@
             if (!guidedJourney) return;
             guidedJourneyFollowMode = true;
             guidedJourneyHeadingMode = 'north';
+            map.native.setHeading(0);
+            map.native.setTilt(0);
             centerGuidedJourneyCamera(guidedJourneyLastPosition, 0);
             updateGuidedCameraControls();
             showMenuNotice('North is now at the top');
@@ -6305,7 +6385,7 @@
 
         function recenterGuidedJourney() {
             guidedJourneyFollowMode = true;
-            guidedJourneyHeadingMode = 'north';
+            guidedJourneyHeadingMode = 'route';
             if (!centerGuidedJourneyCamera()) {
                 showMenuNotice('Waiting for your location…');
                 return;
@@ -6335,11 +6415,17 @@
 
         function stopGuidedJourney(resetCamera = true) {
             if (guidedJourneyWatchId !== null) navigator.geolocation?.clearWatch?.(guidedJourneyWatchId);
+            if (guidedCompassListener) {
+                window.removeEventListener('deviceorientation', guidedCompassListener, true);
+            }
             guidedJourneyWatchId = null;
             guidedJourney = null;
             guidedJourneyLastPosition = null;
             guidedJourneyFollowMode = true;
-            guidedJourneyHeadingMode = 'route';
+            guidedJourneyHeadingMode = 'north';
+            guidedCompassHeading = null;
+            guidedCompassLastUpdatedAt = 0;
+            guidedCompassListener = null;
             guidedRouteSegments = [];
             guidedRerouteInFlight = false;
             guidedJourneyMarker?.setMap(null);
@@ -6800,7 +6886,7 @@
             startBusTracking, stopBusTracking, backTransitPanel, toggleDetailSheetSize,
             startGuidedJourney, advanceGuidedJourney, recenterGuidedJourney, endGuidedJourney,
             selectSidebarRegion, toggleLiveVehicles, recenterMapPosition, backFromGuidedJourney,
-            headNorthGuidedJourney, setGetOffAlertPreference, fetchBuses, retrySmartStop,
+            headNorthGuidedJourney, toggleCompassGuidedJourney, setGetOffAlertPreference, fetchBuses, retrySmartStop,
             openMobileJourneyPlanner, closeDestinationSearch, toggleMobileLiveVehicles
         });
 
