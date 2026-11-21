@@ -1762,8 +1762,11 @@
         .journey-details-back:hover { border-color:var(--ui-accent); color:var(--ui-accent); }
         .guided-stage-progress span,.guided-ride-progress-fill,.guided-progress-step.current { background:var(--ui-accent); }
         .guided-alert-fab.active,.guided-alert-menu button.active { border-color:var(--ui-accent); background:var(--ui-accent-soft); color:var(--ui-accent); }
-        .user-location-dot { background:var(--ui-accent); }
-        .user-location-pulse { background:color-mix(in srgb,var(--ui-accent) 22%,transparent); }
+        /* Blue remains the familiar, high-contrast convention for the rider's
+           live position; it is not used for any transit line. */
+        .user-location-label { display:none; }
+        .user-location-dot { background:#2f80ff; box-shadow:0 2px 10px rgba(47,128,255,.6); }
+        .user-location-pulse { background:rgba(47,128,255,.34); }
         .route-stop-info { border-color:color-mix(in srgb,var(--ui-accent) 24%,var(--border-color)); background:color-mix(in srgb,var(--ui-accent) 4%,var(--sheet-bg)); }
         .start-guidance-action { background:var(--ui-accent) !important; }
 
@@ -2050,7 +2053,7 @@
             <span class="map-dock-icon"><svg class="ui-icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>
             <span>Destination</span>
         </button>
-        <button class="map-dock-action" type="button" onclick="locateMe()">
+        <button class="map-dock-action" type="button" onclick="openNearbyDepartures()">
             <span class="map-dock-icon"><svg class="ui-icon" viewBox="0 0 24 24"><path d="M5 16V6c0-2 2-3 7-3s7 1 7 3v10M5 11h14M8 19h8M7 16h.01M17 16h.01M7 19v2M17 19v2"></path></svg></span>
             <span>Nearby stops</span>
         </button>
@@ -3673,7 +3676,7 @@
                 bindNearbyStopCards(groups);
             } catch (error) {
                 console.warn('Nearby departures unavailable', error);
-                openTransitPanel('Nearby departures unavailable', '', panelStateHtml('Could not refresh departures', 'Check your connection. Your current map and previous information have been preserved.', 'Try again', 'locateMe()'));
+                openTransitPanel('Nearby departures unavailable', '', panelStateHtml('Could not refresh departures', 'Check your connection. Your current map and previous information have been preserved.', 'Try again', 'openNearbyDepartures()'));
             }
         }
 
@@ -7051,17 +7054,15 @@
         }
 
         let userLocationMarker;
+        let locationRequestPurpose = 'locate';
         function locateMe() {
+            locationRequestPurpose = 'locate';
             map.locate({ setView: true, maxZoom: 15 });
         }
 
-        function restoreCachedNearbyDepartures() {
-            try {
-                const saved = JSON.parse(localStorage.getItem('maribus-nearby-location') || 'null');
-                if (!saved || Date.now() - Number(saved.savedAt) > 10 * 60 * 1000) return;
-                if (!Number.isFinite(Number(saved.lat)) || !Number.isFinite(Number(saved.lng))) return;
-                loadNearbyDepartures(Number(saved.lat), Number(saved.lng), { quiet:true });
-            } catch (_) {}
+        function openNearbyDepartures() {
+            locationRequestPurpose = 'nearby';
+            map.locate({ setView: true, maxZoom: 15 });
         }
 
         function userLocationMarkerIcon() {
@@ -7129,11 +7130,20 @@
                     }
                 }
             }
-            loadNearbyDepartures(e.latlng.lat, e.latlng.lng);
+            if (locationRequestPurpose === 'nearby') {
+                locationRequestPurpose = 'locate';
+                loadNearbyDepartures(e.latlng.lat, e.latlng.lng);
+            }
         });
 
         map.on('locationerror', function (e) {
-            openTransitPanel('Location unavailable', '', panelStateHtml('Location access is required', 'Enable precise location permission to see nearby departures and walking guidance.', 'Try location again', 'locateMe()'));
+            const wasRequestingNearby = locationRequestPurpose === 'nearby';
+            locationRequestPurpose = 'locate';
+            if (wasRequestingNearby) {
+                openTransitPanel('Location unavailable', '', panelStateHtml('Location access is required', 'Enable precise location permission to see nearby departures and walking guidance.', 'Try location again', 'openNearbyDepartures()'));
+            } else {
+                showMenuNotice('Location access is unavailable');
+            }
         });
 
         Object.assign(window, {
@@ -7144,7 +7154,7 @@
             startGuidedJourney, advanceGuidedJourney, recenterGuidedJourney, endGuidedJourney,
             selectSidebarRegion, toggleLiveVehicles, recenterMapPosition, backFromGuidedJourney,
             headNorthGuidedJourney, toggleCompassGuidedJourney, setGetOffAlertPreference, toggleGetOffAlertMenu, fetchBuses, retrySmartStop,
-            openMobileJourneyPlanner, closeDestinationSearch, toggleMobileLiveVehicles
+            openMobileJourneyPlanner, closeDestinationSearch, toggleMobileLiveVehicles, openNearbyDepartures
         });
 
         map.on('zoomend', scheduleRouteStopVisibility);
@@ -7171,7 +7181,6 @@
         restoreSavedStopFromUrl();
         initializeBottomSheetDrag();
         fetchBuses();
-        restoreCachedNearbyDepartures();
         });
     </script>
     
