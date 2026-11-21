@@ -65,6 +65,25 @@ Source: © OpenStreetMap contributors, available under the Open Database
 License (ODbL). The IDs above are saved only for audit and matching purposes;
 they are not yet used by the MariBus application.
 
+## GTFS matching pass — draft only
+
+The local MariBus GTFS database was compared with the first three OSM
+candidates by name, stop reference and coordinate distance. A close coordinate
+match confirms that the records probably describe the same **boarding point**;
+it does not confirm the correct station entrance or pedestrian route.
+
+| Candidate | MariBus GTFS record | OSM distance | Result | Next verification |
+| --- | --- | --- | --- | --- |
+| `SJ735` | `rapid-bus-kl / 1006286 / SJ735 LRT PUSAT BANDAR PUCHONG` | 14.2 m | Strong bus-platform match | Identify the pedestrian route from this platform to rail stop `rapid-rail-kl / SP25 / PUSAT BANDAR PUCHONG`, then field-check the entrance. |
+| `SJ749` | `rapid-bus-kl / 1006311 / SJ749 LRT PERINDUSTRIAN PUCHONG` | 8.3 m | Strong bus-platform match | Identify the pedestrian route from this platform to rail stop `rapid-rail-kl / SP26 / TAMAN PERINDUSTRIAN PUCHONG`, then field-check the entrance. |
+| `SJ12` / Sunway Lagoon candidate | MariBus has `rapid-bus-kl / 1005838 / STESEN BRT SUNWAY LAGOON` and `rapid-rail-kl / BRT3 / SUNWAY LAGOON` | 83.4 m to the first OSM candidate | Not safe to match automatically | Find the actual BRT platform object and the mall/station pedestrian connector before adding anything. |
+
+### Draft promotion decision
+
+No walking connection is promoted yet. The two Puchong records may become the
+first curated connections after their station entrance and pedestrian geometry
+are checked. Sunway Lagoon remains an audit target, not an app data source.
+
 ## OSM tags to inspect
 
 Start with these tags and their nearby connected ways:
