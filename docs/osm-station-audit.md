@@ -84,6 +84,51 @@ No walking connection is promoted yet. The two Puchong records may become the
 first curated connections after their station entrance and pedestrian geometry
 are checked. Sunway Lagoon remains an audit target, not an app data source.
 
+## Pedestrian geometry pass — draft only
+
+### Pusat Bandar Puchong / `SJ735`
+
+- OSM maps the rail station as [SP25 Pusat Bandar Puchong](https://www.openstreetmap.org/way/407156819)
+  with `wheelchair=yes` and maps the nearby rail platforms separately.
+- The surrounding area contains several mapped covered footways and bridges,
+  including [way 263459944](https://www.openstreetmap.org/way/263459944) and
+  [way 1131261081](https://www.openstreetmap.org/way/1131261081).
+- No separately tagged station entrance was found in the audit area.
+
+**Decision:** do not draft rider-facing entrance guidance yet. MariBus may
+later use this as a generic “walk to the station concourse” connection only
+after a field check identifies the correct entrance.
+
+### Perindustrian Puchong / `SJ749`
+
+- OSM maps the station as [SP26 Taman Perindustrian Puchong](https://www.openstreetmap.org/way/407156821)
+  with `wheelchair=yes`.
+- The `SJ749` platform candidate is [node 9555752505](https://www.openstreetmap.org/node/9555752505).
+- [Entrance A](https://www.openstreetmap.org/node/9924537172) is a mapped
+  `railway=subway_entrance` **7.5 m** from the `SJ749` platform candidate.
+- Nearby pedestrian ways include covered, wheelchair-tagged footways, such as
+  [way 994895104](https://www.openstreetmap.org/way/994895104) and
+  [way 1527770928](https://www.openstreetmap.org/way/1527770928).
+- Entrance B is about 102 m from that platform candidate, so it is not the
+  default recommendation.
+
+**Draft connection (not yet in the app):**
+
+> From SJ749 LRT Perindustrian Puchong, use Entrance A to reach the LRT
+> station. Confirm the signed pedestrian path and accessibility on site before
+> displaying this instruction to riders.
+
+## Field-check checklist for the first connection
+
+Before promotion, confirm all of the following in person:
+
+1. `SJ749` is the correct boarding/alighting platform for the selected bus
+   direction.
+2. Entrance A is publicly accessible from that platform.
+3. The connecting path is continuous, safe and open during service hours.
+4. The route does not require stairs when claiming an accessible connection.
+5. The station signage actually identifies the entrance as `A`.
+
 ## OSM tags to inspect
 
 Start with these tags and their nearby connected ways:
