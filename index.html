@@ -1897,6 +1897,18 @@
         body.destination-search-open .recent-search-item strong { font-size:15px; font-weight:700; }
         body.destination-search-open .recent-search-item small { color:#626466; font-weight:600; }
         body.destination-search-open .place-suggestions { top:354px !important; max-height:calc(100dvh - 374px) !important; }
+        .journey-time-controls.time-now { grid-template-columns:1fr !important; }
+        .journey-time-controls.time-now #journey-date-input,
+        .journey-time-controls.time-now #journey-time-input { display:none; }
+        .place-list-row { display:flex; align-items:center; gap:5px; border-bottom:1px solid var(--border-color); }
+        .place-list-row .recent-search-item { flex:1; border-bottom:0; }
+        .place-bookmark-button { width:38px; height:38px; flex:0 0 38px; display:grid; place-items:center; border:0; border-radius:10px; background:transparent; color:var(--text-muted); cursor:pointer; }
+        .place-bookmark-button:hover { background:var(--input-bg); color:var(--ui-orange); }
+        .place-bookmark-button.saved { color:var(--ui-orange); }
+        .place-bookmark-button.saved .ui-icon { fill:currentColor; }
+        #destination-search-saved { display:none; width:calc(100vw - 36px); max-width:620px; margin:18px 0 0; }
+        body.destination-search-open #destination-search-saved:not(:empty) { display:block; }
+        .saved-places-heading { margin:0 0 10px; color:var(--text-muted); font-size:13px; font-weight:800; }
     </style>
 </head>
 
@@ -1931,6 +1943,7 @@
             </div>
             <div class="journey-time-controls" aria-label="Travel time preference">
                 <select id="journey-time-mode" aria-label="Travel time preference">
+                    <option value="leave_now">Leave now</option>
                     <option value="depart_at">Leave at</option>
                     <option value="arrive_by">Arrive by</option>
                 </select>
@@ -1939,6 +1952,7 @@
             </div>
             <button id="journey-search-submit" class="journey-search-submit" type="button" onclick="planJourneyFromSearch()">Search routes</button>
         </div>
+        <section id="destination-search-saved" aria-label="Saved places"></section>
         <section id="destination-search-recents" aria-label="Recent destination searches"></section>
     </header>
 
@@ -2608,6 +2622,7 @@
         }
 
         const RECENT_DESTINATIONS_KEY = 'maribus-recent-destinations';
+        const SAVED_PLACES_KEY = 'maribus-saved-places';
 
         function recentDestinations() {
             try {
@@ -2624,23 +2639,66 @@
             try { localStorage.setItem(RECENT_DESTINATIONS_KEY, JSON.stringify(items.slice(0, 5))); } catch {}
         }
 
+        function savedPlaces() {
+            try {
+                const value = JSON.parse(localStorage.getItem(SAVED_PLACES_KEY) || '[]');
+                return Array.isArray(value) ? value.filter(place => Number.isFinite(Number(place?.lat)) && Number.isFinite(Number(place?.lng)) && place?.name) : [];
+            } catch { return []; }
+        }
+
+        function sameSavedPlace(left, right) {
+            if (!left || !right) return false;
+            return left.placeId && right.placeId
+                ? left.placeId === right.placeId
+                : Number(left.lat) === Number(right.lat) && Number(left.lng) === Number(right.lng) && left.name === right.name;
+        }
+
+        function toggleSavedPlace(place) {
+            if (!place?.name || !Number.isFinite(Number(place.lat)) || !Number.isFinite(Number(place.lng))) return;
+            const normalized = { name:String(place.name), lat:Number(place.lat), lng:Number(place.lng), placeId:String(place.placeId || '') };
+            const existing = savedPlaces();
+            const alreadySaved = existing.some(item => sameSavedPlace(item, normalized));
+            const next = alreadySaved ? existing.filter(item => !sameSavedPlace(item, normalized)) : [normalized, ...existing].slice(0, 20);
+            try { localStorage.setItem(SAVED_PLACES_KEY, JSON.stringify(next)); } catch {}
+            renderDestinationSearchRecents();
+        }
+
+        function placeListRow(place, index, source, targetLabel, isSaved) {
+            const title = isSaved ? `Remove ${place.name} from saved places` : `Save ${place.name}`;
+            return `<div class="place-list-row"><button class="recent-search-item" type="button" data-place-source="${source}" data-place-index="${index}"><span class="search-result-icon">${iconSvg('search')}</span><span><strong>${escapeHtml(place.name)}</strong><small>${source === 'saved' ? `Use as ${targetLabel.toLowerCase()}` : `Use as ${targetLabel.toLowerCase()}`}</small></span></button><button class="place-bookmark-button${isSaved ? ' saved' : ''}" type="button" data-save-place-source="${source}" data-save-place-index="${index}" title="${escapeHtml(title)}" aria-label="${escapeHtml(title)}">${iconSvg('bookmark')}</button></div>`;
+        }
+
         function renderDestinationSearchRecents() {
             const container = document.getElementById('destination-search-recents');
+            const savedContainer = document.getElementById('destination-search-saved');
             if (!container) return;
             container.hidden = false;
             const items = recentDestinations();
+            const saved = savedPlaces();
             const targetLabel = activeJourneyField === 'from' ? 'Starting point' : 'Destination';
-            if (!items.length) {
-                container.innerHTML = '<p class="destination-search-empty">Search for a place, destination, or bus line.</p>';
-                return;
+            if (savedContainer) {
+                savedContainer.innerHTML = saved.length
+                    ? `<h2 class="saved-places-heading">Saved places</h2><div class="recent-search-list">${saved.map((place, index) => placeListRow(place, index, 'saved', targetLabel, true)).join('')}</div>`
+                    : '';
             }
-            container.innerHTML = `<h2 class="recent-search-heading">Recent searches</h2><div class="recent-search-list">${items.map((place, index) => `<button class="recent-search-item" type="button" data-recent-destination="${index}"><span class="search-result-icon">${iconSvg('search')}</span><span><strong>${escapeHtml(place.name)}</strong><small>Use as ${targetLabel.toLowerCase()}</small></span></button>`).join('')}</div>`;
-            container.querySelectorAll('[data-recent-destination]').forEach(button => button.addEventListener('click', () => {
-                const place = items[Number(button.dataset.recentDestination)];
+            if (!items.length) {
+                container.innerHTML = saved.length ? '' : '<p class="destination-search-empty">Search for a place, destination, or bus line.</p>';
+            } else {
+                container.innerHTML = `<h2 class="recent-search-heading">Recent searches</h2><div class="recent-search-list">${items.map((place, index) => placeListRow(place, index, 'recent', targetLabel, saved.some(item => sameSavedPlace(item, place)))).join('')}</div>`;
+            }
+            document.querySelectorAll('[data-place-source]').forEach(button => button.addEventListener('click', () => {
+                const list = button.dataset.placeSource === 'saved' ? saved : items;
+                const place = list[Number(button.dataset.placeIndex)];
                 if (!place) return;
                 const kind = activeJourneyField;
                 document.getElementById(`journey-${kind}`).value = place.name;
                 void matchPlaceToStop(kind, place);
+            }));
+            document.querySelectorAll('[data-save-place-source]').forEach(button => button.addEventListener('click', event => {
+                event.stopPropagation();
+                const list = button.dataset.savePlaceSource === 'saved' ? saved : items;
+                const place = list[Number(button.dataset.savePlaceIndex)];
+                if (place) toggleSavedPlace(place);
             }));
         }
 
@@ -4165,13 +4223,30 @@
             document.getElementById('journey-time').value = time;
             document.getElementById('journey-date-input').value = date;
             document.getElementById('journey-time-input').value = time;
-            document.getElementById('journey-time-mode').value = 'depart_at';
+            document.getElementById('journey-time-mode').value = 'leave_now';
+            updateJourneyTimeControls();
+        }
+
+        function updateJourneyTimeControls() {
+            const controls = document.querySelector('.journey-time-controls');
+            const mode = document.getElementById('journey-time-mode')?.value || 'leave_now';
+            controls?.classList.toggle('time-now', mode === 'leave_now');
+            if (mode === 'leave_now') {
+                const now = new Date();
+                const date = [now.getFullYear(), String(now.getMonth() + 1).padStart(2, '0'), String(now.getDate()).padStart(2, '0')].join('-');
+                const time = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+                document.getElementById('journey-date').value = date;
+                document.getElementById('journey-time').value = time;
+                document.getElementById('journey-date-input').value = date;
+                document.getElementById('journey-time-input').value = time;
+            }
         }
 
         function journeyTiming() {
             const dateInput = document.getElementById('journey-date-input');
             const timeInput = document.getElementById('journey-time-input');
             const modeInput = document.getElementById('journey-time-mode');
+            updateJourneyTimeControls();
             const date = dateInput.value || document.getElementById('journey-date').value;
             const time = timeInput.value || document.getElementById('journey-time').value;
             document.getElementById('journey-date').value = date;
@@ -4239,7 +4314,7 @@
                     sessionToken = null; suggestions = []; suggestionList.hidden = true;
                     if (!place.location) return;
                     document.body.classList.remove('route-code-entry');
-                    if (kind === 'to') saveRecentDestination({ lat:place.location.lat(), lng:place.location.lng(), name:place.displayName || place.formattedAddress || input.value, placeId:place.id || '' });
+                    saveRecentDestination({ lat:place.location.lat(), lng:place.location.lng(), name:place.displayName || place.formattedAddress || input.value, placeId:place.id || '' });
                     await matchPlaceToStop(kind, { lat:place.location.lat(), lng:place.location.lng(), name:place.displayName || place.formattedAddress || input.value, placeId:place.id || '' });
                 };
                 const chooseStopSuggestion = async stop => {
@@ -4258,7 +4333,7 @@
                     };
                     input.value = place.name;
                     document.getElementById(`journey-${kind}-match`).textContent = `${operatorLabel(stop.source_agency)} stop${stop.stop_code ? ` · ${stop.stop_code}` : ''}`;
-                    if (kind === 'to') saveRecentDestination(place);
+                    saveRecentDestination(place);
                     updateJourneyPlaceMarkers();
                     continueJourneyAfterPlaceMatch(kind);
                 };
