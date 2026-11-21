@@ -370,6 +370,10 @@
         .map-view-button {
             width:44px;
             height:38px;
+            display:grid;
+            flex:0 0 38px;
+            place-items:center;
+            padding:0;
             border:0;
             border-radius:12px;
             color:var(--muted-color);
@@ -378,6 +382,17 @@
             cursor:pointer;
         }
         .map-view-button .ui-icon { width:19px; height:19px; }
+        .map-view-button .ui-icon { display:block; }
+
+        /* A location marker should identify the rider without covering the map.
+           The label is part of the marker, not a large, dismissible map popup. */
+        .user-location-marker { background:transparent; border:0; }
+        .user-location-pin { position:relative; width:30px; height:30px; display:grid; place-items:center; }
+        .user-location-pulse { position:absolute; inset:0; border-radius:50%; background:rgba(37,99,235,.22); animation:user-location-pulse 2.1s ease-out infinite; }
+        .user-location-dot { position:relative; width:14px; height:14px; border:3px solid #fff; border-radius:50%; background:#2563eb; box-shadow:0 2px 8px rgba(15,23,42,.38); }
+        .user-location-label { position:absolute; bottom:31px; left:50%; transform:translateX(-50%); width:max-content; max-width:150px; padding:6px 9px; border:1px solid rgba(255,255,255,.58); border-radius:999px; background:rgba(20,22,26,.92); box-shadow:0 5px 16px rgba(0,0,0,.26); color:#fff; font:750 12px/1 Manrope,sans-serif; letter-spacing:.01em; white-space:nowrap; }
+        .user-location-label::after { content:""; position:absolute; top:100%; left:50%; width:7px; height:7px; background:rgba(20,22,26,.92); transform:translate(-50%,-4px) rotate(45deg); }
+        @keyframes user-location-pulse { 0% { transform:scale(.62); opacity:.9; } 75%,100% { transform:scale(1.35); opacity:0; } }
         .map-tool-button {
             width:44px;
             height:38px;
@@ -6885,12 +6900,29 @@
             } catch (_) {}
         }
 
+        function userLocationMarkerIcon() {
+            return L.divIcon({
+                className:'user-location-marker',
+                iconSize:[30, 30],
+                iconAnchor:[15, 15],
+                html:'<div class="user-location-pin" aria-hidden="true"><span class="user-location-label">You\'re here</span><span class="user-location-pulse"></span><span class="user-location-dot"></span></div>',
+            });
+        }
+
         map.on('locationfound', function (e) {
-            // 1. Draw or move the user's "You Are Here" GPS marker
-            if (userLocationMarker) map.removeLayer(userLocationMarker);
-            userLocationMarker = L.circleMarker(e.latlng, {
-                radius: 8, color: 'white', weight: 3, fillColor: '#6366f1', fillOpacity: 1
-            }).addTo(map).bindPopup("<b style='color:#111827;'>You are here</b>").openPopup();
+            // Keep location visible but compact: a live marker is clearer than a
+            // popup that obscures the nearby-departures map.
+            if (userLocationMarker) {
+                userLocationMarker.setLatLng(e.latlng);
+            } else {
+                userLocationMarker = L.marker(e.latlng, {
+                    icon:userLocationMarkerIcon(),
+                    title:'Your current location',
+                    alt:'Your current location',
+                    keyboard:false,
+                    zIndexOffset:900,
+                }).addTo(map);
+            }
 
             try {
                 localStorage.setItem('maribus-nearby-location', JSON.stringify({ lat:e.latlng.lat, lng:e.latlng.lng, savedAt:Date.now() }));
