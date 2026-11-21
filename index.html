@@ -1794,6 +1794,106 @@
         body.dark-mode #mobile-map-dock { background:linear-gradient(145deg,#343436,#202022); }
         body.dark-mode .map-dock-action.primary,
         body.dark-mode body:not(:has(#bottom-sheet.detail-mode)) .map-dock-action.primary { background:#f1f1ef; color:#111; }
+
+        /* Journey planner uses the same compact, layered language as the map
+           dock: one navigation header, one surface, and a clearly grouped time choice. */
+        body.destination-search-open #top-bar {
+            align-items:stretch;
+            padding-top:max(16px,env(safe-area-inset-top));
+        }
+        body.destination-search-open #destination-search-close {
+            align-self:flex-start;
+            min-width:0;
+            height:36px;
+            margin:0 0 14px;
+            padding:0 11px;
+            border:0;
+            border-radius:10px;
+            background:transparent;
+            color:var(--text-main);
+            font-size:13px;
+            font-weight:750;
+        }
+        body.destination-search-open #header-journey-search,
+        body.destination-search-open #header-journey-search.expanded {
+            align-self:center;
+            min-height:0 !important;
+            padding:8px 14px 12px !important;
+            border:1px solid var(--border-color);
+            border-radius:22px;
+            background:var(--input-bg);
+            box-shadow:0 12px 28px rgba(0,0,0,.10);
+        }
+        body.destination-search-open #header-journey-search .journey-input-row { min-height:50px !important; }
+        body.destination-search-open #header-journey-search input { font-size:16px; font-weight:600; }
+        body.destination-search-open #journey-location-button,
+        body.destination-search-open #journey-swap-button {
+            display:grid !important;
+            width:36px;
+            height:36px;
+            min-height:36px;
+            flex:0 0 36px;
+            place-items:center;
+            padding:0;
+            border-radius:10px;
+            color:var(--text-main);
+            background:transparent;
+        }
+        body.destination-search-open #journey-location-button { color:#fff; background:var(--ui-accent); border-radius:50%; }
+        body.destination-search-open #journey-swap-button .ui-icon { width:21px; height:21px; }
+        #journey-swap-button:disabled { opacity:.32; cursor:not-allowed; }
+        body.destination-search-open .journey-time-controls {
+            grid-template-columns:1fr 1fr;
+            gap:0;
+            margin-top:7px;
+            padding:0;
+            overflow:hidden;
+            border:1px solid var(--border-color);
+            border-radius:16px;
+            background:var(--sheet-bg);
+        }
+        body.destination-search-open .journey-time-controls select {
+            grid-column:1 / -1;
+            height:44px;
+            padding:0 14px;
+            border:0;
+            border-bottom:1px solid var(--border-color);
+            border-radius:0;
+            background-color:transparent;
+            font-size:14px;
+            font-weight:800;
+        }
+        body.destination-search-open .journey-time-controls input {
+            height:48px;
+            padding:0 12px;
+            border:0;
+            border-radius:0;
+            background:transparent;
+            font-size:13px;
+            font-weight:650;
+        }
+        body.destination-search-open #journey-date-input { border-right:1px solid var(--border-color); }
+        body.destination-search-open .journey-search-submit {
+            min-height:52px;
+            margin:10px 0 0;
+            border-radius:14px;
+            background:var(--ui-accent);
+            color:var(--sheet-bg);
+            font-size:15px;
+            font-weight:800;
+        }
+        body.destination-search-open .journey-search-submit:disabled {
+            background:#c9c9c7;
+            color:#777775;
+            cursor:not-allowed;
+        }
+        body.dark-mode.destination-search-open .journey-search-submit:disabled { background:#383838; color:#898989; }
+        body.destination-search-open #destination-search-recents { margin-top:22px; }
+        body.destination-search-open .recent-search-heading { color:var(--text-muted); font-size:13px; font-weight:800; }
+        body.destination-search-open .recent-search-item { min-height:66px; padding:10px 4px; }
+        body.destination-search-open .recent-search-item strong { font-size:15px; font-weight:700; }
+        body.destination-search-open .recent-search-item small { color:#626466; font-weight:600; }
+        body.destination-search-open .place-suggestions { top:354px !important; max-height:calc(100dvh - 374px) !important; }
     </style>
 </head>
 
@@ -1823,8 +1923,8 @@
             <div class="journey-divider"></div>
             <div class="journey-input-row">
                 <span id="destination-prefix" class="point-label"><svg class="ui-icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></span>
-                <input id="journey-to" autocomplete="off" placeholder="To" aria-label="Destination">
-                <button id="journey-swap-button" type="button" onclick="swapJourneyPoints()" title="Swap locations" aria-label="Swap locations">&#8645;</button>
+                <input id="journey-to" autocomplete="off" placeholder="Where to?" aria-label="Destination">
+                <button id="journey-swap-button" type="button" onclick="swapJourneyPoints()" title="Swap starting point and destination" aria-label="Swap starting point and destination"><svg class="ui-icon" viewBox="0 0 24 24"><path d="M4 7h13m0 0-3-3m3 3-3 3M20 17H7m0 0 3-3m-3 3 3 3"></path></svg></button>
             </div>
             <div class="journey-time-controls" aria-label="Travel time preference">
                 <select id="journey-time-mode" aria-label="Travel time preference">
@@ -2543,12 +2643,15 @@
 
         function updateJourneySearchFlow() {
             const submit = document.getElementById('journey-search-submit');
+            const swap = document.getElementById('journey-swap-button');
             if (!submit) return;
             const hasFrom = Boolean(journeySelection.from?.place);
             const hasTo = Boolean(journeySelection.to?.place);
+            submit.disabled = !(hasFrom && hasTo);
+            if (swap) swap.disabled = !(hasFrom || hasTo);
             if (hasFrom && hasTo) {
-                submit.textContent = 'Search routes';
-                submit.setAttribute('aria-label', 'Search routes');
+                submit.textContent = 'Find routes  →';
+                submit.setAttribute('aria-label', 'Find routes');
             } else if (hasFrom) {
                 submit.textContent = 'Choose destination';
                 submit.setAttribute('aria-label', 'Choose a destination first');
@@ -2556,7 +2659,7 @@
                 submit.textContent = 'Choose starting point';
                 submit.setAttribute('aria-label', 'Choose a starting point first');
             } else {
-                submit.textContent = 'Choose From and To';
+                submit.textContent = 'Choose starting point and destination';
                 submit.setAttribute('aria-label', 'Choose a starting point and destination');
             }
         }
@@ -4690,7 +4793,7 @@
         }
 
         function swapJourneyPoints() {
-            if (!journeySelection.from || !journeySelection.to) return;
+            if (!journeySelection.from && !journeySelection.to) return;
             [journeySelection.from, journeySelection.to] = [journeySelection.to, journeySelection.from];
             const fromInput = document.getElementById('journey-from');
             const toInput = document.getElementById('journey-to');
@@ -4699,7 +4802,9 @@
             const toMatch = document.getElementById('journey-to-match');
             [fromMatch.textContent, toMatch.textContent] = [toMatch.textContent, fromMatch.textContent];
             updateJourneyPlaceMarkers();
-            planJourney();
+            updateJourneySearchFlow();
+            renderDestinationSearchRecents();
+            if (journeySelection.from?.place && journeySelection.to?.place) planJourney();
         }
 
         function restoreSavedStopFromUrl() {
