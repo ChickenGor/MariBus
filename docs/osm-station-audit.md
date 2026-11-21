@@ -48,6 +48,23 @@ location:
 - Confidence: `verified`, `needs field check`, or `do not use`
 - Last checked date and source notes
 
+## Initial OSM lookup results — 22 November 2026
+
+These are **map-data observations**, not field verification. They must not yet
+be displayed as MariBus navigation instructions.
+
+| Place | OSM object | Useful tags found | Audit status / implication |
+| --- | --- | --- | --- |
+| LRT Pusat Bandar Puchong | [node 7968399666](https://www.openstreetmap.org/node/7968399666) | `public_transport=platform`, `highway=bus_stop`, `ref=SJ735`, `covered=yes`, `shelter=yes`, `tactile_paving=yes`, `wheelchair=yes` | Strong candidate. Match `SJ735` to the MariBus GTFS stop, then verify which station entrance/platform it serves. |
+| LRT Perindustrian Puchong | [node 9555752505](https://www.openstreetmap.org/node/9555752505) | `public_transport=platform`, `highway=bus_stop`, `ref=SJ749`, `operator=Rapid Bus`, `shelter=yes`, `tactile_paving=yes`, `wheelchair=yes` | Strong candidate. Confirm GTFS match and walking link to the rail entrance. |
+| Sunway Metro/BRT Sunway Lagoon | [node 11862350523](https://www.openstreetmap.org/node/11862350523) | `public_transport=platform`, `highway=bus_stop`, `ref=SJ12`, `route_ref=SJ02`, `departures_board=realtime` | Candidate. OSM currently describes a Smart Selangor/Rapid Bus platform; do not assume it represents the BRT platform without a field check. |
+| LRT USJ 7 | [node 4345465572](https://www.openstreetmap.org/node/4345465572) | Name and coordinates found through OSM search; detailed tag fetch needs retry | Candidate pending tag inspection. High priority because rail/BRT interchange walking is valuable. |
+| MRT TRX / The Exchange TRX | [way 1226407685](https://www.openstreetmap.org/way/1226407685) | `highway=pedestrian`, `place=square`, named `MRT Plaza (TRX Link)` | Do **not** use as the station. This is a pedestrian plaza/link and proves the station, entrances and mall connector must be mapped as separate objects. |
+
+Source: © OpenStreetMap contributors, available under the Open Database
+License (ODbL). The IDs above are saved only for audit and matching purposes;
+they are not yet used by the MariBus application.
+
 ## OSM tags to inspect
 
 Start with these tags and their nearby connected ways:
