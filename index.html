@@ -1619,16 +1619,16 @@
             #mobile-map-dock {
                 position:fixed; right:14px; bottom:max(14px,env(safe-area-inset-bottom)); left:14px; z-index:1950;
                 display:grid; grid-template-columns:minmax(0,1.15fr) minmax(0,.9fr) 54px; gap:10px;
-                min-height:126px; padding:10px; box-sizing:border-box; border:1px solid rgba(40,93,102,.11);
+                min-height:112px; padding:8px; box-sizing:border-box; border:1px solid rgba(40,93,102,.11);
                 border-radius:26px; background:color-mix(in srgb,var(--sheet-bg) 95%,transparent);
                 box-shadow:0 16px 42px rgba(19,52,58,.22); backdrop-filter:blur(20px);
                 transition:opacity .2s ease,transform .25s cubic-bezier(.2,.8,.2,1);
             }
             .map-dock-action {
                 min-width:0; min-height:0; display:flex; flex-direction:column; align-items:flex-start;
-                justify-content:space-between; gap:12px; padding:15px 13px; box-sizing:border-box;
+                justify-content:space-between; gap:8px; padding:12px; box-sizing:border-box;
                 border:1px solid var(--border-color); border-radius:19px; background:var(--sheet-bg);
-                color:var(--text-main); font:inherit; font-size:11px; font-weight:800; line-height:1.15;
+                color:var(--text-main); font:inherit; font-size:11px; font-weight:750; line-height:1.15;
                 text-align:left; text-decoration:none; cursor:pointer; box-shadow:0 5px 16px rgba(19,52,58,.08);
             }
             .map-dock-action.primary {
@@ -1636,7 +1636,7 @@
                 background:var(--input-bg);
             }
             .map-dock-action.primary::after {
-                content:"Plan your trip"; color:var(--text-muted); font-size:8px; font-weight:650;
+                content:"Plan your trip"; color:var(--text-muted); font-size:8px; font-weight:700;
             }
             .map-dock-icon { width:24px; height:24px; display:grid; place-items:center; }
             .map-dock-icon .ui-icon { width:22px; height:22px; }
@@ -1716,14 +1716,14 @@
             }
             body:not(:has(#bottom-sheet.detail-mode)) #bottom-sheet { display:none; }
             body:not(:has(#bottom-sheet.detail-mode)) #mobile-map-dock {
-                position:fixed; left:24px; bottom:24px; z-index:1950; width:360px; min-height:112px;
+                position:fixed; left:24px; bottom:24px; z-index:1950; width:360px; min-height:100px;
                 display:grid; grid-template-columns:minmax(0,1.15fr) minmax(0,.9fr) 48px; gap:9px; padding:9px;
                 border:1px solid rgba(40,93,102,.11); border-radius:22px;
                 background:color-mix(in srgb,var(--sheet-bg) 94%,transparent); box-shadow:0 14px 34px rgba(19,52,58,.2); backdrop-filter:blur(18px);
             }
             body:not(:has(#bottom-sheet.detail-mode)) .map-dock-action {
-                min-width:0; min-height:92px; display:flex; flex-direction:column; align-items:flex-start; justify-content:flex-end; gap:7px;
-                padding:13px; border:1px solid rgba(40,93,102,.08); border-radius:16px; background:var(--sheet-bg); color:var(--text-main); font:inherit; font-size:11px; font-weight:850; text-decoration:none; cursor:pointer;
+                min-width:0; min-height:82px; display:flex; flex-direction:column; align-items:flex-start; justify-content:flex-end; gap:6px;
+                padding:11px; border:1px solid rgba(40,93,102,.08); border-radius:16px; background:var(--sheet-bg); color:var(--text-main); font:inherit; font-size:11px; font-weight:750; text-decoration:none; cursor:pointer;
             }
             /* Home-map controls use a neutral black accent, not the MariBus teal. */
             body:not(:has(#bottom-sheet.detail-mode)) .map-dock-action.primary { color:#fff; background:#16181b; border-color:#16181b; }
@@ -1739,8 +1739,8 @@
 
         /* Shared controls are deliberately neutral. Official line badges and
            route strokes keep their supplied colours elsewhere in the UI. */
-        :root { --ui-accent:#161616; --ui-accent-soft:#ececec; --ui-accent-strong:#090909; --ui-orange:#e26943; --ui-orange-soft:#f9e4dc; }
-        body.dark-mode { --ui-accent:#f1f1ef; --ui-accent-soft:#2a2a2a; --ui-accent-strong:#f5f5f3; --ui-orange:#f07a52; --ui-orange-soft:#4a2a21; }
+        :root { --ui-accent:#161616; --ui-accent-soft:#ececec; --ui-accent-strong:#090909; --ui-orange:#e77b5b; --ui-orange-soft:#fae7e1; }
+        body.dark-mode { --ui-accent:#f1f1ef; --ui-accent-soft:#2a2a2a; --ui-accent-strong:#f5f5f3; --ui-orange:#e77b5b; --ui-orange-soft:#4c2d25; }
         :focus-visible { outline-color:var(--ui-accent); }
         #planner-toggle,#plan-journey-button,.route-action,.panel-state button,
         .apply-transit-modes,.start-guidance-button,.guided-nav-stage-action,
@@ -1771,7 +1771,7 @@
            the rider into the primary trip-planning action. */
         #mobile-map-dock {
             border-color:rgba(255,255,255,.11);
-            background:linear-gradient(145deg,#3a3a3d,#262629);
+            background:linear-gradient(145deg,#353538,#202023);
             box-shadow:0 18px 38px rgba(0,0,0,.30),inset 0 1px 0 rgba(255,255,255,.12);
         }
         .map-dock-action {
@@ -2162,8 +2162,8 @@
             homeRailLines.forEach(line => {
                 if (!Array.isArray(line.points) || line.points.length < 2) return;
                 const color = safeRouteColor(line.color, 'rapid-rail-kl');
-                L.polyline(line.points, { color:darkenRouteColor(color, .58), weight:7, opacity:.78 }).addTo(homeRailLayer);
-                L.polyline(line.points, { color, weight:3.5, opacity:.96 }).addTo(homeRailLayer);
+                L.polyline(line.points, { color:darkenRouteColor(color, .58), weight:6, opacity:.78 }).addTo(homeRailLayer);
+                L.polyline(line.points, { color, weight:3, opacity:.96 }).addTo(homeRailLayer);
             });
         };
         const restoreCachedHomeRailLines = () => {
@@ -2928,8 +2928,8 @@
                     : data.stops.map(stop => [Number(stop.stop_lat), Number(stop.stop_lon)]);
                 if (coordinates.length < 2 || trackedBusId !== details.vehicleId) return;
                 const color = safeRouteColor(data.route?.route_color, details.sourceAgency);
-                L.polyline(coordinates, { color:'#7a163f', weight:12, opacity:.95 }).addTo(trackedBusRouteLayer);
-                L.polyline(coordinates, { color, weight:8, opacity:1 }).addTo(trackedBusRouteLayer);
+                L.polyline(coordinates, { color:'#7a163f', weight:10, opacity:.95 }).addTo(trackedBusRouteLayer);
+                L.polyline(coordinates, { color, weight:6.5, opacity:1 }).addTo(trackedBusRouteLayer);
             } catch (error) {
                 console.warn('Tracked bus route unavailable', error);
                 showMenuNotice('Tracking the bus, but its route line is unavailable');
@@ -3355,11 +3355,11 @@
             const segment = journeyStepSegments.find(item => item.stepIndex === Number(stepIndex));
             if (!segment || !map?.native) return;
             journeyStepSegments.forEach(item => {
-                item.outline.setOptions({ strokeWeight:item.isTransit ? 10 : 7, strokeOpacity:.9 });
-                item.routeLine.setOptions({ strokeWeight:item.isTransit ? 6 : 4, strokeOpacity:item.isTransit ? 1 : 0 });
+                item.outline.setOptions({ strokeWeight:item.isTransit ? 8.5 : 6, strokeOpacity:.9 });
+                item.routeLine.setOptions({ strokeWeight:item.isTransit ? 5 : 3.5, strokeOpacity:item.isTransit ? 1 : 0 });
             });
-            segment.outline.setOptions({ strokeWeight:segment.isTransit ? 14 : 10, strokeOpacity:1 });
-            segment.routeLine.setOptions({ strokeWeight:segment.isTransit ? 9 : 5, strokeOpacity:1 });
+            segment.outline.setOptions({ strokeWeight:segment.isTransit ? 12 : 8.5, strokeOpacity:1 });
+            segment.routeLine.setOptions({ strokeWeight:segment.isTransit ? 7 : 4.5, strokeOpacity:1 });
             const bounds = new google.maps.LatLngBounds();
             segment.path.forEach(point => bounds.extend(point));
             if (!bounds.isEmpty()) map.native.fitBounds(bounds, 80);
@@ -4518,8 +4518,8 @@
                 // loop, short-turn, and opposite-direction variants.
                 if (!matchingRoute || matchingRoute.boardDistance > 350 || matchingRoute.exitDistance > 350) return false;
                 const path = matchingRoute.route.overview_path;
-                const outline = new google.maps.Polyline({ map:map.native, path, strokeColor:'#7a163f', strokeWeight:12, strokeOpacity:.95, zIndex:4 });
-                const routeLine = new google.maps.Polyline({ map:map.native, path, strokeColor:color, strokeWeight:8, strokeOpacity:1, zIndex:5 });
+                const outline = new google.maps.Polyline({ map:map.native, path, strokeColor:'#7a163f', strokeWeight:10, strokeOpacity:.95, zIndex:4 });
+                const routeLine = new google.maps.Polyline({ map:map.native, path, strokeColor:color, strokeWeight:6.5, strokeOpacity:1, zIndex:5 });
                 routeDirectionsRenderers.push(outline, routeLine);
                 const bounds = new google.maps.LatLngBounds();
                 path.forEach(point => bounds.extend(point));
@@ -4572,11 +4572,11 @@
                     }
                     const outlineLine = new google.maps.Polyline({
                         map:map.native, path:roadPath, strokeColor:'#7a163f',
-                        strokeWeight:12, strokeOpacity:.95, zIndex:4,
+                        strokeWeight:10, strokeOpacity:.95, zIndex:4,
                     });
                     const colorLine = new google.maps.Polyline({
                         map:map.native, path:roadPath, strokeColor:color,
-                        strokeWeight:8, strokeOpacity:1, zIndex:5,
+                        strokeWeight:6.5, strokeOpacity:1, zIndex:5,
                     });
                     routeDirectionsRenderers.push(outlineLine, colorLine);
                     roadPath.forEach(point => bounds.extend(point));
@@ -4623,10 +4623,10 @@
                     console.warn('Verified route chunk could not be road matched', error);
                 }
                 const outline = new google.maps.Polyline({
-                    map:map.native, path, strokeColor:'#7a163f', strokeWeight:12, strokeOpacity:.95, zIndex:4,
+                    map:map.native, path, strokeColor:'#7a163f', strokeWeight:10, strokeOpacity:.95, zIndex:4,
                 });
                 const routeLine = new google.maps.Polyline({
-                    map:map.native, path, strokeColor:color, strokeWeight:8, strokeOpacity:1, zIndex:5,
+                    map:map.native, path, strokeColor:color, strokeWeight:6.5, strokeOpacity:1, zIndex:5,
                 });
                 routeDirectionsRenderers.push(outline, routeLine);
                 path.forEach(point => bounds.extend(point));
@@ -4854,8 +4854,8 @@
         }
 
         function drawOutlinedRoute(coordinates, color) {
-            L.polyline(coordinates, { color:'#7a163f', weight:12, opacity:.95 }).addTo(activeRouteLayer);
-            return L.polyline(coordinates, { color, weight:8, opacity:1 }).addTo(activeRouteLayer);
+            L.polyline(coordinates, { color:'#7a163f', weight:10, opacity:.95 }).addTo(activeRouteLayer);
+            return L.polyline(coordinates, { color, weight:6.5, opacity:1 }).addTo(activeRouteLayer);
         }
 
         function walkingPathPoint(value) {
@@ -6686,12 +6686,12 @@
                 const outline = new google.maps.Polyline({
                     map:map.native, path, clickable:false,
                     strokeColor:darkenRouteColor(color, isTransit ? .5 : .45), strokeOpacity:.95,
-                    strokeWeight:isTransit ? 10 : 7, zIndex:20,
+                    strokeWeight:isTransit ? 8.5 : 6, zIndex:20,
                 });
                 const lineOptions = {
                     map:map.native, path, clickable:false,
                     strokeColor:color, strokeOpacity:1,
-                    strokeWeight:isTransit ? 6 : 4, zIndex:21,
+                    strokeWeight:isTransit ? 5 : 3.5, zIndex:21,
                 };
                 if (!isTransit) {
                     lineOptions.strokeOpacity = 0;
