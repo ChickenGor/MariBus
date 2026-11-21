@@ -1346,7 +1346,7 @@
                 transition:height .28s cubic-bezier(.2,.8,.2,1), background-color .3s, box-shadow .3s;
             }
             #bottom-sheet.detail-mode #transit-panel.open { flex:0 1 auto; min-height:0; overflow-y:auto; overscroll-behavior:contain; }
-            #bottom-sheet.detail-mode.sheet-half { height:52dvh; }
+            #bottom-sheet.detail-mode.sheet-half { height:60dvh; max-height:60dvh; }
             #bottom-sheet.detail-mode.sheet-expanded { height:90dvh; max-height:90dvh; }
             /* A manually dragged sheet must not inherit the compact 34dvh
                ceiling from detail-mode. Leave a small strip of map visible. */
@@ -1909,6 +1909,14 @@
         #destination-search-saved { display:none; width:calc(100vw - 36px); max-width:620px; margin:18px 0 0; }
         body.destination-search-open #destination-search-saved:not(:empty) { display:block; }
         .saved-places-heading { margin:0 0 10px; color:var(--text-muted); font-size:13px; font-weight:800; }
+
+        /* Route results own the whole map canvas. Do not leave a hidden header
+           strip above the map on WebViews that do not fully support :has(). */
+        @media (max-width:767px) {
+            body.route-results-open:not(.destination-search-open) #top-bar { display:none !important; }
+            body.route-results-open #map { position:fixed; inset:0; width:100vw; height:100dvh; }
+            body.route-results-open #map-view-toggle { bottom:calc(60dvh + 14px); }
+        }
     </style>
 </head>
 
@@ -3235,6 +3243,7 @@
             sheet.classList.remove('route-browse-mode');
             document.getElementById('resume-journey-button').classList.remove('visible');
             sheet.classList.add('detail-mode');
+            document.body.classList.add('route-results-open');
             if (!preserveSheetState && window.innerWidth < 768 && !sheet.classList.contains('sheet-dragging')) {
                 sheet.classList.remove('sheet-half', 'sheet-expanded', 'sheet-custom-size', 'sheet-expanded-content');
                 // Route choices need enough vertical room for their boarding
@@ -3243,8 +3252,16 @@
                 if (title === 'Journey options') sheet.classList.add('sheet-half');
                 sheet.style.height = '';
             }
+            if (title === 'Journey options' && window.innerWidth < 768 && !sheet.classList.contains('sheet-custom-size') && !sheet.classList.contains('sheet-dragging')) {
+                sheet.classList.remove('sheet-expanded');
+                sheet.classList.add('sheet-half');
+                sheet.style.height = '';
+            }
             if (!preserveSheetState) sheet.scrollTop = 0;
             updateDetailSheetToggle();
+            requestAnimationFrame(() => {
+                window.google?.maps?.event?.trigger(map.native, 'resize');
+            });
         }
 
         function panelStateHtml(title, detail, actionLabel = '', action = '') {
@@ -3409,6 +3426,7 @@
             panel.classList.remove('open');
             const sheet = document.getElementById('bottom-sheet');
             sheet.classList.remove('detail-mode', 'sheet-half', 'sheet-expanded', 'sheet-custom-size', 'sheet-expanded-content', 'sheet-dragging', 'route-browse-mode');
+            document.body.classList.remove('route-results-open');
             sheet.style.height = '';
             const resumeButton = document.getElementById('resume-journey-button');
             if (forceClose) {
@@ -4704,7 +4722,7 @@
                 routeDirectionsRenderers.push(outline, routeLine);
                 const bounds = new google.maps.LatLngBounds();
                 path.forEach(point => bounds.extend(point));
-                if (!bounds.isEmpty()) map.native.fitBounds(bounds, 45);
+                if (!bounds.isEmpty()) fitJourneyBounds(bounds, 45);
                 return true;
             } catch (error) {
                 console.warn('Matching Google transit geometry unavailable; using GTFS geometry', error);
@@ -4762,7 +4780,7 @@
                     routeDirectionsRenderers.push(outlineLine, colorLine);
                     roadPath.forEach(point => bounds.extend(point));
                 }
-                if (fitViewport && !bounds.isEmpty()) map.native.fitBounds(bounds, 45);
+                if (fitViewport && !bounds.isEmpty()) fitJourneyBounds(bounds, 45);
                 return routeDirectionsRenderers.length > 0;
             } catch (error) {
                 routeDirectionsRenderers.forEach(renderer => renderer.setMap(null));
@@ -4813,7 +4831,7 @@
                 path.forEach(point => bounds.extend(point));
                 renderedSegments++;
             }
-            if (renderedSegments && !bounds.isEmpty()) map.native.fitBounds(bounds, 45);
+            if (renderedSegments && !bounds.isEmpty()) fitJourneyBounds(bounds, 45);
             return renderedSegments > 0;
         }
 
@@ -6836,6 +6854,17 @@
             return `#${channel(match[1])}${channel(match[2])}${channel(match[3])}`;
         }
 
+        function fitJourneyBounds(bounds, desktopPadding = 64) {
+            if (!map?.native || !bounds || bounds.isEmpty?.()) return;
+            if (window.innerWidth >= 768 || !document.body.classList.contains('route-results-open')) {
+                map.native.fitBounds(bounds, desktopPadding);
+                return;
+            }
+            const sheetTop = document.getElementById('bottom-sheet')?.getBoundingClientRect?.().top;
+            const bottom = Number.isFinite(sheetTop) ? Math.max(32, window.innerHeight - sheetTop + 18) : Math.round(window.innerHeight * .62);
+            map.native.fitBounds(bounds, { top:42, right:78, bottom, left:34 });
+        }
+
         function renderGoogleTransitRoute(response, routeIndex, showAlternatives = false) {
             if (walkingDirectionsRenderer) walkingDirectionsRenderer.setMap(null);
             routeDirectionsRenderers.forEach(renderer => renderer.setMap(null));
@@ -6885,7 +6914,7 @@
                 journeyStepSegments.push({ stepIndex, path, outline, routeLine, isTransit });
                 if (showAlternatives) guidedRouteSegments.push({ stepIndex, path, outline, routeLine });
             });
-            if (!bounds.isEmpty()) map.native.fitBounds(bounds, 64);
+            if (!bounds.isEmpty()) fitJourneyBounds(bounds, 64);
         }
 
         // Keep Google candidate retrieval independent from rendering so the
