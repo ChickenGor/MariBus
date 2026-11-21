@@ -5947,20 +5947,32 @@
         function googleTransitSummarySteps(steps) {
             const summary = [];
             let walkingSeconds = 0;
+            let walkingStartIndex = -1;
+            let walkingEndIndex = -1;
             const flushWalking = () => {
                 if (!walkingSeconds) return;
                 if (walkingSeconds >= 60) {
-                    summary.push({ travel_mode:google.maps.TravelMode.WALKING, duration:{ value:walkingSeconds, text:formatJourneyDuration(walkingSeconds / 60) } });
+                    summary.push({
+                        travel_mode:google.maps.TravelMode.WALKING,
+                        duration:{ value:walkingSeconds, text:formatJourneyDuration(walkingSeconds / 60) },
+                        sourceStepIndex:walkingStartIndex,
+                        sourceStepEndIndex:walkingEndIndex,
+                        mergedWalk:true,
+                    });
                 }
                 walkingSeconds = 0;
+                walkingStartIndex = -1;
+                walkingEndIndex = -1;
             };
-            steps.forEach(step => {
+            steps.forEach((step, index) => {
                 if (step.travel_mode === google.maps.TravelMode.WALKING) {
+                    if (walkingStartIndex < 0) walkingStartIndex = index;
+                    walkingEndIndex = index;
                     walkingSeconds += Number(step.duration?.value || 0);
                     return;
                 }
                 flushWalking();
-                summary.push(step);
+                summary.push({ ...step, sourceStepIndex:index });
             });
             flushWalking();
             return summary;
@@ -6810,6 +6822,10 @@
 
         function googleJourneyFlowHtml(route, routeIndex) {
             const steps = route.legs?.[0]?.steps || [];
+            // Directions may split a single walk into several tiny geometry
+            // segments. Riders need "Walk 9 min to the station", not nine
+            // separate one-minute cards with no useful instruction.
+            const displaySteps = googleTransitSummarySteps(steps);
             const leg = route.legs?.[0] || {};
             const timeRange = googleRouteTimeRange(route);
             const walkingMinutes = Math.max(0, Math.ceil(googleRouteWalkingSeconds(route) / 60));
@@ -6819,9 +6835,12 @@
                 <div class="journey-detail-summary-main"><strong>${escapeHtml(leg.duration?.text || 'Journey')}</strong><span>${escapeHtml(timeRange.text || 'Scheduled times unavailable')}</span></div>
                 <div class="journey-detail-summary-stat"><div><strong>${walkingMinutes} min</strong><span>walking</span></div><div><strong>${transfers}</strong><span>${transfers === 1 ? 'transfer' : 'transfers'}</span></div></div>
             </section>`;
-            return `<button class="journey-details-back" type="button" onclick="returnToJourneyOptions()">&larr; All route options</button>${summary}<button class="start-guidance-button" type="button" onclick="startGuidedJourney(${Number(routeIndex)})">Start guidance</button><p class="journey-map-hint">${iconSvg('navigation')}Tap a step to focus it on the map</p><div class="google-journey-flow">${steps.map((step, stepIndex) => {
+            return `<button class="journey-details-back" type="button" onclick="returnToJourneyOptions()">&larr; All route options</button>${summary}<button class="start-guidance-button" type="button" onclick="startGuidedJourney(${Number(routeIndex)})">Start guidance</button><p class="journey-map-hint">${iconSvg('navigation')}Tap a step to focus it on the map</p><div class="google-journey-flow">${displaySteps.map((step, displayIndex) => {
+                const stepIndex = Number(step.sourceStepIndex ?? displayIndex);
                 if (step.travel_mode === google.maps.TravelMode.WALKING) {
-                    return `<button class="google-flow-step journey-step-button" type="button" data-route-step="${stepIndex}" aria-pressed="false" onclick="focusJourneyRouteStep(${stepIndex})"><span class="google-flow-icon">${iconSvg('walk')}</span><span class="google-flow-copy"><strong>Walk ${escapeHtml(step.duration?.text || '')}</strong><span>${step.contributedPath ? `Via ${escapeHtml(step.contributedPath)} · ` : ''}${escapeHtml(plainGoogleInstruction(step.instructions))}${step.distance?.text ? ` · ${escapeHtml(step.distance.text)}` : ''}</span></span></button>`;
+                    const nextRide = displaySteps.slice(displayIndex + 1).find(candidate => candidate.travel_mode === google.maps.TravelMode.TRANSIT);
+                    const walkTarget = nextRide?.transit?.departure_stop?.name || 'your destination';
+                    return `<button class="google-flow-step journey-step-button" type="button" data-route-step="${stepIndex}" aria-pressed="false" onclick="focusJourneyRouteStep(${stepIndex})"><span class="google-flow-icon">${iconSvg('walk')}</span><span class="google-flow-copy"><strong>Walk ${escapeHtml(step.duration?.text || '')}</strong><span>To ${escapeHtml(walkTarget)}${step.distance?.text ? ` · ${escapeHtml(step.distance.text)}` : ''}</span></span></button>`;
                 }
                 const transit = step.transit || {};
                 const line = transit.line || {};
