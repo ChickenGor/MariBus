@@ -112,7 +112,7 @@ after a field check identifies the correct entrance.
 - Entrance B is about 102 m from that platform candidate, so it is not the
   default recommendation.
 
-**Draft connection (not yet in the app):**
+**Initial draft connection (not yet in the app):**
 
 > From SJ749 LRT Perindustrian Puchong, use Entrance A to reach the LRT
 > station. Confirm the signed pedestrian path and accessibility on site before
@@ -128,6 +128,30 @@ Before promotion, confirm all of the following in person:
 3. The connecting path is continuous, safe and open during service hours.
 4. The route does not require stairs when claiming an accessible connection.
 5. The station signage actually identifies the entrance as `A`.
+
+## Field verification — SJ749 to LRT Perindustrian Puchong
+
+Checked by a MariBus rider on 22 November 2026:
+
+| Check | Result |
+| --- | --- |
+| Start point is the intended SJ749 platform | Yes |
+| Pedestrian path is safe and continuous | Yes |
+| Path is covered | Yes |
+| Access options | Stairs, escalator and lift |
+| Physical sign says `Entrance A` | No |
+
+### Verified rider-facing instruction
+
+> From Hentian Bas LRT Perindustrian Puchong (SJ749), follow the covered path
+> to **Pintu Masuk / Station Entrance** for the LRT. Stairs, escalator and a
+> lift are available.
+
+The OSM entrance node currently uses the name `A`, but the physical sign does
+not show that letter. MariBus must therefore display **Station Entrance** and
+must not show `Entrance A`. This is a verified connection, but its exact
+walk-line geometry still needs to be traced before it can be added to the
+MariBus walking network.
 
 ## OSM tags to inspect
 
