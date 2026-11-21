@@ -1529,31 +1529,32 @@
             }
         }
 
-        /* MariBus visual refresh: calm navigation surfaces with vivid live-transit accents. */
+        /* MariBus visual system: monochrome navigation surfaces let official
+           transit-line colours carry the visual meaning. */
         :root {
-            --bg-color:#eef3f2;
-            --sheet-bg:#fbfdfc;
-            --text-main:#17272b;
-            --text-muted:#66787b;
-            --border-color:#dbe5e3;
-            --input-bg:#f0f5f4;
-            --shadow-color:rgba(19,52,58,.14);
-            --maribus-teal:#285d66;
-            --maribus-teal-deep:#18444d;
-            --maribus-teal-soft:#dcebec;
+            --bg-color:#f3f3f1;
+            --sheet-bg:#ffffff;
+            --text-main:#141414;
+            --text-muted:#6f7275;
+            --border-color:#dedfdf;
+            --input-bg:#f1f1ef;
+            --shadow-color:rgba(0,0,0,.13);
+            --maribus-teal:#202124;
+            --maribus-teal-deep:#101010;
+            --maribus-teal-soft:#ececeb;
             --maribus-live:#d81b76;
         }
         body.dark-mode {
-            --bg-color:#090a0c;
-            --sheet-bg:#121316;
-            --text-main:#f5f7fa;
-            --text-muted:#aab1bc;
-            --border-color:#2a2d33;
-            --input-bg:#1b1e23;
+            --bg-color:#080808;
+            --sheet-bg:#151515;
+            --text-main:#f5f5f3;
+            --text-muted:#aaabad;
+            --border-color:#303030;
+            --input-bg:#212121;
             --shadow-color:rgba(0,0,0,.68);
-            --maribus-teal:#5d626b;
-            --maribus-teal-deep:#f5f7fa;
-            --maribus-teal-soft:#25282d;
+            --maribus-teal:#6d6d6d;
+            --maribus-teal-deep:#f5f5f3;
+            --maribus-teal-soft:#292929;
         }
         :focus-visible { outline-color:var(--maribus-teal); }
         .journey-card[role="button"]:focus-visible,.route-live-bus:focus-visible,.nearby-stop-card:focus-visible {
@@ -1735,6 +1736,36 @@
             body:not(:has(#bottom-sheet.detail-mode)) .map-dock-rail .map-dock-action .ui-icon { width:18px; height:18px; }
             body:not(:has(#bottom-sheet.detail-mode)) #map-view-toggle { right:22px; bottom:22px; }
         }
+
+        /* Shared controls are deliberately neutral. Official line badges and
+           route strokes keep their supplied colours elsewhere in the UI. */
+        :root { --ui-accent:#161616; --ui-accent-soft:#ececec; --ui-accent-strong:#090909; }
+        body.dark-mode { --ui-accent:#f1f1ef; --ui-accent-soft:#2a2a2a; --ui-accent-strong:#f5f5f3; }
+        :focus-visible { outline-color:var(--ui-accent); }
+        #planner-toggle,#plan-journey-button,.route-action,.panel-state button,
+        .apply-transit-modes,.start-guidance-button,.guided-nav-stage-action,
+        .guided-action.primary,.route-stop-info-actions button { background:var(--ui-accent); color:var(--sheet-bg); }
+        #planner-toggle { box-shadow:0 5px 15px rgba(0,0,0,.22); }
+        .point-label,.location-choice,.arrival-minutes,.journey-map-hint .ui-icon,
+        .google-flow-icon,.google-flow-time,.guided-stage-kicker,.journey-stop-label,
+        .route-live-error button { color:var(--ui-accent); }
+        #journey-location-button,.sidebar-signin .sidebar-item { background:var(--ui-accent); }
+        .sidebar-profile-avatar { background:var(--ui-accent); }
+        .search-result-icon.transit,.walking-option-time { background:var(--ui-accent-soft); color:var(--ui-accent); }
+        .map-tool-button:hover { color:var(--ui-accent); background:var(--ui-accent-soft); }
+        .map-view-button.active,.guided-camera-button.active { color:var(--ui-accent); background:var(--ui-accent-soft); }
+        body.dark-mode .map-view-button.active,body.dark-mode .guided-camera-button.active { color:#111; background:#f1f1ef; }
+        .journey-card.modern.selected { border-color:var(--ui-accent); background:color-mix(in srgb,var(--ui-accent) 4%,var(--sheet-bg)); box-shadow:0 7px 20px rgba(0,0,0,.12); }
+        .transit-priority button.active { color:var(--ui-accent); }
+        .transit-mode-chip.active,.departure-choice:hover,.departure-choice:focus-visible { border-color:var(--ui-accent); color:var(--ui-accent); background:color-mix(in srgb,var(--ui-accent) 7%,var(--sheet-bg)); }
+        .journey-step-button.is-focused { box-shadow:inset 3px 0 0 var(--ui-accent); }
+        .journey-details-back:hover { border-color:var(--ui-accent); color:var(--ui-accent); }
+        .guided-stage-progress span,.guided-ride-progress-fill,.guided-progress-step.current { background:var(--ui-accent); }
+        .guided-alert-fab.active,.guided-alert-menu button.active { border-color:var(--ui-accent); background:var(--ui-accent-soft); color:var(--ui-accent); }
+        .user-location-dot { background:var(--ui-accent); }
+        .user-location-pulse { background:color-mix(in srgb,var(--ui-accent) 22%,transparent); }
+        .route-stop-info { border-color:color-mix(in srgb,var(--ui-accent) 24%,var(--border-color)); background:color-mix(in srgb,var(--ui-accent) 4%,var(--sheet-bg)); }
+        .start-guidance-action { background:var(--ui-accent) !important; }
     </style>
 </head>
 
