@@ -384,15 +384,15 @@
         .map-view-button .ui-icon { width:19px; height:19px; }
         .map-view-button .ui-icon { display:block; }
 
-        /* A location marker should identify the rider without covering the map.
-           The label is part of the marker, not a large, dismissible map popup. */
+        /* The rider's location is deliberately a compact pulse, not a pin:
+           it reads as a live position and cannot be confused with A/B stops. */
         .user-location-marker { background:transparent; border:0; }
-        .user-location-pin { position:relative; width:30px; height:30px; display:grid; place-items:center; }
-        .user-location-pulse { position:absolute; inset:0; border-radius:50%; background:rgba(37,99,235,.22); animation:user-location-pulse 2.1s ease-out infinite; }
-        .user-location-dot { position:relative; width:14px; height:14px; border:3px solid #fff; border-radius:50%; background:#2563eb; box-shadow:0 2px 8px rgba(15,23,42,.38); }
-        .user-location-label { position:absolute; bottom:31px; left:50%; transform:translateX(-50%); width:max-content; max-width:150px; padding:6px 9px; border:1px solid rgba(255,255,255,.58); border-radius:999px; background:rgba(20,22,26,.92); box-shadow:0 5px 16px rgba(0,0,0,.26); color:#fff; font:750 12px/1 Manrope,sans-serif; letter-spacing:.01em; white-space:nowrap; }
-        .user-location-label::after { content:""; position:absolute; top:100%; left:50%; width:7px; height:7px; background:rgba(20,22,26,.92); transform:translate(-50%,-4px) rotate(45deg); }
-        @keyframes user-location-pulse { 0% { transform:scale(.62); opacity:.9; } 75%,100% { transform:scale(1.35); opacity:0; } }
+        .user-location-pin { position:relative; width:38px; height:38px; display:grid; place-items:center; }
+        .user-location-pulse { position:absolute; inset:3px; border-radius:50%; background:rgba(201,255,102,.26); box-shadow:0 0 0 7px rgba(201,255,102,.12); animation:user-location-pulse 2s ease-out infinite; }
+        .user-location-dot { position:relative; width:15px; height:15px; border:3px solid #fff; border-radius:50%; background:#c9ff66; box-shadow:0 0 0 4px rgba(18,22,36,.64),0 3px 10px rgba(0,0,0,.38); }
+        .user-location-label { position:absolute; top:50%; left:42px; transform:translateY(-50%); width:max-content; max-width:150px; padding:7px 10px; border:1px solid rgba(255,255,255,.1); border-radius:9px; background:rgba(19,20,43,.96); box-shadow:0 6px 18px rgba(0,0,0,.3); color:#fff; font:800 13px/1 Manrope,sans-serif; letter-spacing:.01em; white-space:nowrap; }
+        .user-location-label::before { content:""; position:absolute; top:50%; right:100%; width:8px; height:8px; background:rgba(19,20,43,.96); transform:translate(4px,-50%) rotate(45deg); }
+        @keyframes user-location-pulse { 0% { transform:scale(.58); opacity:.95; } 72%,100% { transform:scale(1.35); opacity:0; } }
         .map-tool-button {
             width:44px;
             height:38px;
@@ -1762,11 +1762,8 @@
         .journey-details-back:hover { border-color:var(--ui-accent); color:var(--ui-accent); }
         .guided-stage-progress span,.guided-ride-progress-fill,.guided-progress-step.current { background:var(--ui-accent); }
         .guided-alert-fab.active,.guided-alert-menu button.active { border-color:var(--ui-accent); background:var(--ui-accent-soft); color:var(--ui-accent); }
-        /* Blue remains the familiar, high-contrast convention for the rider's
-           live position; it is not used for any transit line. */
-        .user-location-label { display:none; }
-        .user-location-dot { background:#2f80ff; box-shadow:0 2px 10px rgba(47,128,255,.6); }
-        .user-location-pulse { background:rgba(47,128,255,.34); }
+        /* The lime live-location pulse stays distinct from every transit line
+           and remains legible over either the light or dark Google basemap. */
         .route-stop-info { border-color:color-mix(in srgb,var(--ui-accent) 24%,var(--border-color)); background:color-mix(in srgb,var(--ui-accent) 4%,var(--sheet-bg)); }
         .start-guidance-action { background:var(--ui-accent) !important; }
 
@@ -7172,9 +7169,9 @@
         function userLocationMarkerIcon() {
             return L.divIcon({
                 className:'user-location-marker',
-                iconSize:[30, 30],
-                iconAnchor:[15, 15],
-                html:'<div class="user-location-pin" aria-hidden="true"><span class="user-location-label">You\'re here</span><span class="user-location-pulse"></span><span class="user-location-dot"></span></div>',
+                iconSize:[38, 38],
+                iconAnchor:[19, 19],
+                html:'<div class="user-location-pin" aria-hidden="true"><span class="user-location-label">You are here!</span><span class="user-location-pulse"></span><span class="user-location-dot"></span></div>',
             });
         }
 
