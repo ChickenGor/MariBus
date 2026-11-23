@@ -151,10 +151,11 @@
                 return { url:`data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`, scaledSize:new google.maps.Size(displaySize,displaySize), anchor:new google.maps.Point(displaySize / 2,displaySize / 2) };
             }
             if (kind === 'live-3d') {
-                // A real image icon is required here. The legacy Google Marker
-                // adapter cannot render the HTML inside a Leaflet divIcon and
-                // otherwise falls back to Google's red default pin.
-                return { url:'static/img/live-bus-3d.png', scaledSize:new google.maps.Size(58,58), anchor:new google.maps.Point(29,29) };
+                // A real image icon is required here. Wrap it in a colour badge
+                // so the neutral 3D vehicle still identifies with its route.
+                const badgeColor = markerColor || '#2563eb';
+                const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="68" height="68" viewBox="0 0 68 68"><circle cx="34" cy="34" r="31" fill="${badgeColor}" fill-opacity=".22"/><circle cx="34" cy="34" r="25" fill="${badgeColor}" stroke="#ffffff" stroke-width="3"/><image href="/static/img/live-bus-3d.png" x="4" y="4" width="60" height="60" preserveAspectRatio="xMidYMid meet"/></svg>`;
+                return { url:`data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`, scaledSize:new google.maps.Size(68,68), anchor:new google.maps.Point(34,34) };
             }
             const pillWidth = Math.max(46, Math.min(104, text.length * 8 + 22));
             const pillSvg = text ? `<svg xmlns="http://www.w3.org/2000/svg" width="${pillWidth}" height="34" viewBox="0 0 ${pillWidth} 34"><rect x="1" y="1" width="${pillWidth - 2}" height="32" rx="16" fill="${markerColor}" stroke="white" stroke-width="2"/><text x="50%" y="22" text-anchor="middle" font-family="Manrope,Arial,sans-serif" font-size="12" font-weight="800" fill="white">${String(text).replace(/[&<>"']/g, '')}</text></svg>` : '';
