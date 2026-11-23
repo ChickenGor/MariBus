@@ -150,6 +150,12 @@
                 const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="46" height="46" viewBox="0 0 46 46">${halo}${heading}<rect x="10" y="8" width="26" height="30" rx="7" fill="#d81b76" stroke="white" stroke-width="3"/><rect x="14" y="13" width="18" height="9" rx="2.5" fill="white" fill-opacity=".95"/><path d="M23 13v9M14 26h18" fill="none" stroke="white" stroke-width="2"/><circle cx="16.5" cy="31.5" r="1.7" fill="white"/><circle cx="29.5" cy="31.5" r="1.7" fill="white"/><path d="M14 38v3M32 38v3" stroke="#111827" stroke-width="3" stroke-linecap="round"/></svg>`;
                 return { url:`data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`, scaledSize:new google.maps.Size(displaySize,displaySize), anchor:new google.maps.Point(displaySize / 2,displaySize / 2) };
             }
+            if (kind === 'live-3d') {
+                // A real image icon is required here. The legacy Google Marker
+                // adapter cannot render the HTML inside a Leaflet divIcon and
+                // otherwise falls back to Google's red default pin.
+                return { url:'static/img/live-bus-3d.png', scaledSize:new google.maps.Size(58,58), anchor:new google.maps.Point(29,29) };
+            }
             const pillWidth = Math.max(46, Math.min(104, text.length * 8 + 22));
             const pillSvg = text ? `<svg xmlns="http://www.w3.org/2000/svg" width="${pillWidth}" height="34" viewBox="0 0 ${pillWidth} 34"><rect x="1" y="1" width="${pillWidth - 2}" height="32" rx="16" fill="${markerColor}" stroke="white" stroke-width="2"/><text x="50%" y="22" text-anchor="middle" font-family="Manrope,Arial,sans-serif" font-size="12" font-weight="800" fill="white">${String(text).replace(/[&<>"']/g, '')}</text></svg>` : '';
             if (kind === 'endpoint') {
@@ -303,7 +309,7 @@
                 : undefined);
             const stopScale = html.includes('route-stop-clear') ? 7 : html.includes('route-stop-major') ? 5 : 3;
             const bearing = Number(html.match(/data-bearing="([\d.]+)"/)?.[1]);
-            return { text:textFromIconHtml(html), kind:html.includes('journey-endpoint-marker') ? 'endpoint' : html.includes('route-browse-live-marker') ? 'route-live' : html.includes('stop-marker') ? 'stop' : 'vehicle', color,
+            return { text:textFromIconHtml(html), kind:html.includes('journey-endpoint-marker') ? 'endpoint' : html.includes('live-bus-3d-marker') ? 'live-3d' : html.includes('route-browse-live-marker') ? 'route-live' : html.includes('stop-marker') ? 'stop' : 'vehicle', color,
                 scale:stopScale, strokeWeight:html.includes('route-stop-subtle') ? 1 : 1.8, selected:html.includes('route-browse-live-marker selected'), bearing:Number.isFinite(bearing) ? bearing : undefined };
         },
         marker:(point, options) => new MarkerWrapper(point, options),
