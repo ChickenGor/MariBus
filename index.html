@@ -1969,7 +1969,9 @@
         body.destination-search-open .recent-search-item { min-height:66px; padding:10px 4px; }
         body.destination-search-open .recent-search-item strong { font-size:15px; font-weight:700; }
         body.destination-search-open .recent-search-item small { color:#626466; font-weight:600; }
-        body.destination-search-open .place-suggestions { top:354px !important; max-height:calc(100dvh - 374px) !important; }
+        /* The planner is compact in Leave now mode, so results should start
+           directly below it rather than retaining the old tall-form offset. */
+        body.destination-search-open .place-suggestions { top:232px !important; max-height:calc(100dvh - 252px) !important; }
         .journey-time-controls.time-now { grid-template-columns:1fr !important; }
         .journey-time-controls.time-now #journey-date-input,
         .journey-time-controls.time-now #journey-time-input { display:none; }
