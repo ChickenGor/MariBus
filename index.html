@@ -965,15 +965,16 @@
         .route-action { width:100%; border:0; border-radius:10px; padding:9px 12px; margin-top:10px; background:#2563eb; color:white; font-weight:700; cursor:pointer; transition:transform .14s ease, filter .14s ease, box-shadow .14s ease; }
         .route-action:active { transform:scale(.975); filter:brightness(.94); }
         .track-bus-action { background:#f93999; }
-        #bus-tracking-banner { position:absolute; z-index:1200; top:92px; left:50%; display:flex; align-items:center; gap:10px; width:min(390px,calc(100vw - 32px)); padding:10px 10px 10px 14px; border:1px solid color-mix(in srgb,#f93999 34%,var(--border-color)); border-radius:16px; background:color-mix(in srgb,var(--sheet-bg) 94%,transparent); box-shadow:0 8px 28px var(--shadow-color); box-sizing:border-box; transform:translateX(-50%); backdrop-filter:blur(14px); }
+        #bus-tracking-banner { position:absolute; z-index:1200; top:92px; left:50%; display:flex; align-items:center; gap:9px; width:min(350px,calc(100vw - 32px)); min-height:68px; padding:8px 9px 8px 11px; border:1px solid color-mix(in srgb,#f93999 34%,var(--border-color)); border-radius:15px; background:color-mix(in srgb,var(--sheet-bg) 94%,transparent); box-shadow:0 8px 28px var(--shadow-color); box-sizing:border-box; transform:translateX(-50%); backdrop-filter:blur(14px); }
         #bus-tracking-banner[hidden] { display:none; }
-        .tracking-bus-icon { width:32px; height:32px; display:grid; place-items:center; flex:0 0 auto; border:2px solid #fff; border-radius:10px; background:#d81b76; color:#fff; box-shadow:0 2px 7px rgba(15,23,42,.24); }
+        .tracking-bus-icon { width:38px; height:38px; display:grid; place-items:center; flex:0 0 auto; border:2px solid #fff; border-radius:12px; background:#d81b76; color:#fff; box-shadow:0 2px 7px rgba(15,23,42,.24); overflow:hidden; }
         .tracking-bus-icon svg { width:19px; height:19px; fill:none; stroke:currentColor; stroke-width:2; }
+        .tracking-bus-icon img { width:48px; height:48px; object-fit:contain; filter:drop-shadow(0 1px 1px rgba(15,23,42,.25)); }
         .tracking-bus-copy { min-width:0; flex:1; }
         .tracking-bus-copy strong,.tracking-bus-copy small { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
         .tracking-bus-copy strong { font-size:13px; }
         .tracking-bus-copy small { margin-top:2px; color:var(--text-muted); font-size:10px; }
-        #stop-bus-tracking { flex:0 0 auto; border:0; border-radius:11px; padding:8px 10px; background:var(--input-bg); color:var(--text-main); font:800 10px/1 Manrope,sans-serif; cursor:pointer; }
+        #stop-bus-tracking { flex:0 0 auto; border:0; border-radius:10px; padding:8px 9px; background:var(--input-bg); color:var(--text-main); font:800 10px/1 Manrope,sans-serif; cursor:pointer; }
         .stop-marker { box-sizing:border-box; width:14px; height:14px; border-radius:50%; background:#fff; border:3px solid #2563eb; box-shadow:0 1px 5px rgba(15,23,42,.28); transition:width .18s,height .18s,border-width .18s,opacity .18s; }
         .stop-marker.route-stop-subtle { width:7px; height:7px; border-width:1px; box-shadow:0 0 0 1px rgba(15,23,42,.28); opacity:.84; }
         .stop-marker.route-stop-major { width:11px; height:11px; border-width:2px; }
@@ -2016,7 +2017,7 @@
     <div id="map"></div>
 
     <div id="bus-tracking-banner" role="status" aria-live="polite" hidden>
-        <span class="tracking-bus-icon"><svg viewBox="0 0 24 24"><path d="M5 16V6c0-2 2-3 7-3s7 1 7 3v10M5 11h14M8 19h8M7 16h.01M17 16h.01M7 19v2M17 19v2"></path></svg></span>
+        <span class="tracking-bus-icon"><img src="static/img/live-bus-3d.png" alt=""></span>
         <span class="tracking-bus-copy"><strong id="tracked-bus-title">Tracking bus</strong><small id="tracked-bus-status">Waiting for its next live position…</small></span>
         <button id="stop-bus-tracking" type="button" onclick="stopBusTracking()">Stop</button>
     </div>
@@ -3046,6 +3047,8 @@
                             sourceAgency,
                             routeId:vehicle.route_info?.route_id || vehicle.trip?.routeId || '',
                             tripId:vehicle.route_info?.trip_id || vehicle.trip?.tripId || '',
+                            routeColor:vehicle.route_info?.route_color || '',
+                            bearing:Number(vehicle.position.bearing),
                             latitude:Number(vehicle.position.latitude),
                             longitude:Number(vehicle.position.longitude),
                             speedKmh:vehicle.position.speed > 0 ? Math.round(vehicle.position.speed * 3.6) : null,
@@ -3099,6 +3102,8 @@
                 ? [details.destinationName ? `Towards ${details.destinationName}` : 'Live vehicle', details.speedKmh ? `${details.speedKmh} km/h` : 'Position updated'].join(' · ')
                 : 'Waiting for its next live position…';
             if (details && moveMap) {
+                busMarkersDict[trackedBusId]?.setIcon(liveBus3dMarkerIcon(details.bearing, details.routeColor));
+                busMarkersDict[trackedBusId]?.setZIndexOffset?.(2400);
                 map.native.panTo({ lat:details.latitude, lng:details.longitude });
                 if ((map.native.getZoom() || 0) < 16) map.native.setZoom(16);
             }
@@ -3118,7 +3123,7 @@
                     : data.stops.map(stop => [Number(stop.stop_lat), Number(stop.stop_lon)]);
                 if (coordinates.length < 2 || trackedBusId !== details.vehicleId) return;
                 const color = safeRouteColor(data.route?.route_color, details.sourceAgency);
-                L.polyline(coordinates, { color:'#7a163f', weight:10, opacity:.95 }).addTo(trackedBusRouteLayer);
+                L.polyline(coordinates, { color:darkenRouteColor(color, .52), weight:10, opacity:.95 }).addTo(trackedBusRouteLayer);
                 L.polyline(coordinates, { color, weight:6.5, opacity:1 }).addTo(trackedBusRouteLayer);
             } catch (error) {
                 console.warn('Tracked bus route unavailable', error);
@@ -3138,6 +3143,15 @@
         function stopBusTracking(notify = true) {
             const previousBus = trackedBusId;
             trackedBusId = null;
+            const marker = previousBus ? busMarkersDict[previousBus] : null;
+            const details = previousBus ? busLiveDataDict[previousBus] : null;
+            if (marker && details) {
+                marker.setIcon(L.divIcon({
+                    html:`<div class="marker-wrapper"><div class="route-pill default-pill">${escapeHtml(details.routeShortName || 'Bus')}</div></div>`,
+                    className:'', iconSize:null,
+                }));
+                marker.setZIndexOffset?.(0);
+            }
             trackedBusRouteLayer.clearLayers();
             document.getElementById('bus-tracking-banner').hidden = true;
             if (notify && previousBus) showMenuNotice(`Stopped tracking ${previousBus}`);
