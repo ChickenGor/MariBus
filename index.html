@@ -967,6 +967,7 @@
         .track-bus-action { background:#f93999; }
         #bus-tracking-banner { position:absolute; z-index:1200; top:92px; left:50%; display:grid; grid-template-columns:38px minmax(0,1fr) auto; align-items:center; gap:7px 9px; width:min(350px,calc(100vw - 32px)); min-height:68px; padding:8px 9px 8px 11px; border:1px solid color-mix(in srgb,#f93999 34%,var(--border-color)); border-radius:15px; background:color-mix(in srgb,var(--sheet-bg) 94%,transparent); box-shadow:0 8px 28px var(--shadow-color); box-sizing:border-box; transform:translateX(-50%); backdrop-filter:blur(14px); }
         #bus-tracking-banner[hidden] { display:none; }
+        #bus-tracking-banner.onboard { border-color:color-mix(in srgb,#16a34a 58%,var(--border-color)); }
         .tracking-bus-icon { width:38px; height:38px; display:grid; place-items:center; flex:0 0 auto; border:2px solid #fff; border-radius:12px; background:#d81b76; color:#fff; box-shadow:0 2px 7px rgba(15,23,42,.24); overflow:hidden; }
         .tracking-bus-icon svg { width:19px; height:19px; fill:none; stroke:currentColor; stroke-width:2; }
         .tracking-bus-icon img { width:48px; height:48px; object-fit:contain; filter:drop-shadow(0 1px 1px rgba(15,23,42,.25)); }
@@ -978,6 +979,8 @@
         .tracking-bus-actions { grid-column:1 / -1; display:grid; grid-template-columns:1fr 1fr auto; gap:6px; }
         .tracking-bus-actions button { min-height:29px; border:0; border-radius:8px; padding:0 9px; font:800 10px/1 Manrope,sans-serif; cursor:pointer; }
         #tracking-board-bus { background:#f93999; color:#fff; }
+        #bus-tracking-banner.onboard #tracking-board-bus { background:#16a34a; }
+        #bus-tracking-banner.onboard #tracked-bus-progress { background:color-mix(in srgb,#16a34a 12%,var(--input-bg)); color:#166534; }
         #tracking-get-off { background:var(--input-bg); color:var(--text-main); }
         #stop-bus-tracking { border:0; border-radius:8px; padding:0 9px; background:var(--input-bg); color:var(--text-main); font:800 10px/1 Manrope,sans-serif; cursor:pointer; }
         .stop-marker { box-sizing:border-box; width:14px; height:14px; border-radius:50%; background:#fff; border:3px solid #2563eb; box-shadow:0 1px 5px rgba(15,23,42,.28); transition:width .18s,height .18s,border-width .18s,opacity .18s; }
@@ -3125,6 +3128,7 @@
             const details = busLiveDataDict[trackedBusId];
             const banner = document.getElementById('bus-tracking-banner');
             banner.hidden = false;
+            banner.classList.toggle('onboard', trackedBusRideState === 'onboard');
             document.getElementById('tracked-bus-title').textContent = details
                 ? `${details.routeShortName} · ${details.vehicleId}`
                 : `Tracking ${trackedBusId}`;
@@ -3141,7 +3145,7 @@
                         ? `Next: ${nextStop?.name || 'stop'} · reaches ${boarding.name} in ~${boarding.minutes} min`
                         : `${nextStop ? `Next: ${nextStop.name} · ${nextStop.stopsRemaining} stop${nextStop.stopsRemaining === 1 ? '' : 's'} remaining` : 'Finding route progress…'}`))
                 : 'Waiting for its next live position…';
-            document.getElementById('tracking-board-bus').textContent = trackedBusRideState === 'onboard' ? 'On board' : 'Get on';
+            document.getElementById('tracking-board-bus').textContent = trackedBusRideState === 'onboard' ? 'On board ✓' : 'Get on';
             document.getElementById('tracking-board-bus').disabled = trackedBusRideState === 'onboard';
             document.getElementById('tracking-get-off').disabled = trackedBusRideState !== 'onboard';
             if (details && moveMap) {
@@ -3194,7 +3198,7 @@
             if (!trackedBusId) return;
             trackedBusRideState = 'onboard';
             refreshTrackedBus({ moveMap:false });
-            showMenuNotice('On-board mode enabled');
+            showMenuNotice('You are on board. Get-off tracking is ready.');
         }
 
         function finishTrackedBusRide() {
@@ -3253,6 +3257,7 @@
             }
             trackedBusRouteLayer.clearLayers();
             document.getElementById('bus-tracking-banner').hidden = true;
+            document.getElementById('bus-tracking-banner').classList.remove('onboard');
             if (notify && previousBus) showMenuNotice(`Stopped tracking ${previousBus}`);
         }
 

@@ -151,10 +151,12 @@
                 return { url:`data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`, scaledSize:new google.maps.Size(displaySize,displaySize), anchor:new google.maps.Point(displaySize / 2,displaySize / 2) };
             }
             if (kind === 'live-3d') {
-                // A real image icon is required here. Wrap it in a colour badge
-                // so the neutral 3D vehicle still identifies with its route.
+                // Google Maps renders marker data URLs in an isolated SVG
+                // context, so an external PNG inside that SVG is unreliable.
+                // Draw the small isometric bus directly instead. Its body uses
+                // the route colour, making the vehicle visible and meaningful.
                 const badgeColor = markerColor || '#2563eb';
-                const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="68" height="68" viewBox="0 0 68 68"><circle cx="34" cy="34" r="31" fill="${badgeColor}" fill-opacity=".22"/><circle cx="34" cy="34" r="25" fill="${badgeColor}" stroke="#ffffff" stroke-width="3"/><image href="/static/img/live-bus-3d.png" x="4" y="4" width="60" height="60" preserveAspectRatio="xMidYMid meet"/></svg>`;
+                const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="68" height="68" viewBox="0 0 68 68"><circle cx="34" cy="34" r="30" fill="${badgeColor}" fill-opacity=".20"/><g transform="translate(34 34) rotate(${Number.isFinite(bearing) ? bearing : 0}) translate(-34 -34)"><path d="M20 19h26l6 8v23l-6 6H22l-6-6V27z" fill="${badgeColor}" stroke="#fff" stroke-width="2.5" stroke-linejoin="round"/><path d="M23 23h20l5 7H19z" fill="#1d2635"/><path d="M23 33h22v12H23z" fill="#dff5ff" opacity=".92"/><path d="M27 34v10M34 34v10M41 34v10" stroke="#516070" stroke-width="2"/><path d="M18 27l5-4v22l-5 5z" fill="#000" fill-opacity=".18"/><path d="M45 33l7-6v23l-7 6z" fill="#000" fill-opacity=".24"/><circle cx="25" cy="52" r="4" fill="#1b2430" stroke="#fff" stroke-width="1.5"/><circle cx="45" cy="52" r="4" fill="#1b2430" stroke="#fff" stroke-width="1.5"/><path d="M25 28h18" stroke="#fff" stroke-width="1.5" opacity=".8"/></g></svg>`;
                 return { url:`data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`, scaledSize:new google.maps.Size(68,68), anchor:new google.maps.Point(34,34) };
             }
             const pillWidth = Math.max(46, Math.min(104, text.length * 8 + 22));
