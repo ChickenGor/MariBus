@@ -1813,9 +1813,21 @@
         .map-dock-action.primary::after,
         body:not(:has(#bottom-sheet.detail-mode)) .map-dock-action.primary::after { color:#787878; }
         .map-dock-rail .map-dock-action { background:rgba(20,20,22,.70); }
+        .map-dock-live-label { display:inline-flex; align-items:center; gap:5px; color:#f5f5f3; font:900 9px/1 Manrope,sans-serif; letter-spacing:.55px; }
+        .map-dock-live-label::before { content:""; width:6px; height:6px; border-radius:50%; background:#8e8e92; }
+        #mobile-live-action.active .map-dock-live-label { color:var(--ui-orange); }
+        #mobile-live-action.active .map-dock-live-label::before { background:var(--ui-orange); box-shadow:0 0 0 3px color-mix(in srgb,var(--ui-orange) 20%,transparent); }
         body.dark-mode #mobile-map-dock { background:linear-gradient(145deg,#343436,#202022); }
         body.dark-mode .map-dock-action.primary,
         body.dark-mode body:not(:has(#bottom-sheet.detail-mode)) .map-dock-action.primary { background:#f1f1ef; color:#111; }
+
+        /* The map-view rail belongs to the same floating control family as
+           the home dock: compact charcoal, one clear selected state. */
+        #map-view-toggle { border-color:rgba(255,255,255,.12); background:linear-gradient(160deg,#353538,#202023); box-shadow:0 12px 28px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.1); }
+        .map-view-button,.map-tool-button { color:#d7d7d9; }
+        .map-view-button:hover,.map-tool-button:hover { color:#fff; background:rgba(255,255,255,.1); }
+        .map-view-button.active,.map-tool-button.active { color:#161616; background:#f3f3f1; box-shadow:inset 0 1px 0 #fff; }
+        body.dark-mode .map-view-button.active,body.dark-mode .map-tool-button.active { color:#161616; background:#f3f3f1; }
 
         /* Journey planner uses the same compact, layered language as the map
            dock: one navigation header, one surface, and a clearly grouped time choice. */
@@ -2103,7 +2115,7 @@
                 <svg class="ui-icon" viewBox="0 0 24 24"><path d="M6 4h12v17l-6-4-6 4z"></path></svg>
             </a>
             <button id="mobile-live-action" class="map-dock-action" type="button" onclick="toggleMobileLiveVehicles()" aria-label="Show live buses" title="Live buses" aria-pressed="false">
-                <svg class="ui-icon" viewBox="0 0 24 24"><path d="M5 16V6c0-2 2-3 7-3s7 1 7 3v10M5 11h14M8 19h8M7 16h.01M17 16h.01M7 19v2M17 19v2"></path></svg>
+                <span class="map-dock-live-label">LIVE</span>
             </button>
         </span>
     </nav>
