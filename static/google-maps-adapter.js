@@ -159,6 +159,13 @@
                 const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="68" height="68" viewBox="0 0 68 68"><circle cx="34" cy="34" r="30" fill="${badgeColor}" fill-opacity=".20"/><g transform="translate(34 34) rotate(${Number.isFinite(bearing) ? bearing : 0}) translate(-34 -34)"><path d="M20 19h26l6 8v23l-6 6H22l-6-6V27z" fill="${badgeColor}" stroke="#fff" stroke-width="2.5" stroke-linejoin="round"/><path d="M23 23h20l5 7H19z" fill="#1d2635"/><path d="M23 33h22v12H23z" fill="#dff5ff" opacity=".92"/><path d="M27 34v10M34 34v10M41 34v10" stroke="#516070" stroke-width="2"/><path d="M18 27l5-4v22l-5 5z" fill="#000" fill-opacity=".18"/><path d="M45 33l7-6v23l-7 6z" fill="#000" fill-opacity=".24"/><circle cx="25" cy="52" r="4" fill="#1b2430" stroke="#fff" stroke-width="1.5"/><circle cx="45" cy="52" r="4" fill="#1b2430" stroke="#fff" stroke-width="1.5"/><path d="M25 28h18" stroke="#fff" stroke-width="1.5" opacity=".8"/></g></svg>`;
                 return { url:`data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`, scaledSize:new google.maps.Size(68,68), anchor:new google.maps.Point(34,34) };
             }
+            if (kind === 'user-location') {
+                // This is a person, not a destination. Keep it visually
+                // distinct from route pins and let the pulse communicate that
+                // it is a live GPS position.
+                const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="58" height="58" viewBox="0 0 58 58"><circle cx="29" cy="29" r="24" fill="#2563eb" fill-opacity=".12"><animate attributeName="r" values="14;27;14" dur="2.4s" repeatCount="indefinite"/><animate attributeName="fill-opacity" values=".28;0;.28" dur="2.4s" repeatCount="indefinite"/></circle><circle cx="29" cy="29" r="15" fill="#2563eb" fill-opacity=".18"/><circle cx="29" cy="29" r="9" fill="#2563eb" stroke="#fff" stroke-width="3"/><circle cx="29" cy="29" r="3" fill="#dbeafe"/></svg>`;
+                return { url:`data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`, scaledSize:new google.maps.Size(58,58), anchor:new google.maps.Point(29,29) };
+            }
             const pillWidth = Math.max(46, Math.min(104, text.length * 8 + 22));
             const pillSvg = text ? `<svg xmlns="http://www.w3.org/2000/svg" width="${pillWidth}" height="34" viewBox="0 0 ${pillWidth} 34"><rect x="1" y="1" width="${pillWidth - 2}" height="32" rx="16" fill="${markerColor}" stroke="white" stroke-width="2"/><text x="50%" y="22" text-anchor="middle" font-family="Manrope,Arial,sans-serif" font-size="12" font-weight="800" fill="white">${String(text).replace(/[&<>"']/g, '')}</text></svg>` : '';
             if (kind === 'endpoint') {
@@ -312,7 +319,7 @@
                 : undefined);
             const stopScale = html.includes('route-stop-clear') ? 7 : html.includes('route-stop-major') ? 5 : 3;
             const bearing = Number(html.match(/data-bearing="([\d.]+)"/)?.[1]);
-            return { text:textFromIconHtml(html), kind:html.includes('journey-endpoint-marker') ? 'endpoint' : html.includes('live-bus-3d-marker') ? 'live-3d' : html.includes('route-browse-live-marker') ? 'route-live' : html.includes('stop-marker') ? 'stop' : 'vehicle', color,
+            return { text:textFromIconHtml(html), kind:html.includes('journey-endpoint-marker') ? 'endpoint' : html.includes('live-bus-3d-marker') ? 'live-3d' : html.includes('user-location-marker') ? 'user-location' : html.includes('route-browse-live-marker') ? 'route-live' : html.includes('stop-marker') ? 'stop' : 'vehicle', color,
                 scale:stopScale, strokeWeight:html.includes('route-stop-subtle') ? 1 : 1.8, selected:html.includes('route-browse-live-marker selected'), bearing:Number.isFinite(bearing) ? bearing : undefined };
         },
         marker:(point, options) => new MarkerWrapper(point, options),

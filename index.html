@@ -390,8 +390,8 @@
            it reads as a live position and cannot be confused with A/B stops. */
         .user-location-marker { background:transparent; border:0; }
         .user-location-pin { position:relative; width:38px; height:38px; display:grid; place-items:center; }
-        .user-location-pulse { position:absolute; inset:3px; border-radius:50%; background:rgba(201,255,102,.26); box-shadow:0 0 0 7px rgba(201,255,102,.12); animation:user-location-pulse 2s ease-out infinite; }
-        .user-location-dot { position:relative; width:15px; height:15px; border:3px solid #fff; border-radius:50%; background:#c9ff66; box-shadow:0 0 0 4px rgba(18,22,36,.64),0 3px 10px rgba(0,0,0,.38); }
+        .user-location-pulse { position:absolute; inset:3px; border-radius:50%; background:rgba(37,99,235,.20); box-shadow:0 0 0 7px rgba(37,99,235,.10); animation:user-location-pulse 2.4s ease-out infinite; }
+        .user-location-dot { position:relative; width:15px; height:15px; border:3px solid #fff; border-radius:50%; background:#2563eb; box-shadow:0 0 0 4px rgba(37,99,235,.18),0 3px 10px rgba(0,0,0,.25); }
         .user-location-label { position:absolute; top:50%; left:42px; transform:translateY(-50%); width:max-content; max-width:150px; padding:7px 10px; border:1px solid rgba(255,255,255,.1); border-radius:9px; background:rgba(19,20,43,.96); box-shadow:0 6px 18px rgba(0,0,0,.3); color:#fff; font:800 13px/1 Manrope,sans-serif; letter-spacing:.01em; white-space:nowrap; }
         .user-location-label::before { content:""; position:absolute; top:50%; right:100%; width:8px; height:8px; background:rgba(19,20,43,.96); transform:translate(4px,-50%) rotate(45deg); }
         @keyframes user-location-pulse { 0% { transform:scale(.58); opacity:.95; } 72%,100% { transform:scale(1.35); opacity:0; } }
@@ -7550,7 +7550,7 @@
                 className:'user-location-marker',
                 iconSize:[38, 38],
                 iconAnchor:[19, 19],
-                html:'<div class="user-location-pin" aria-hidden="true"><span class="user-location-label">You are here!</span><span class="user-location-pulse"></span><span class="user-location-dot"></span></div>',
+                html:'<div class="user-location-pin" aria-hidden="true"><span class="user-location-pulse"></span><span class="user-location-dot"></span></div>',
             });
         }
 
@@ -7566,7 +7566,7 @@
                     alt:'Your current location',
                     keyboard:false,
                     zIndexOffset:900,
-                }).addTo(map);
+                }).addTo(map).bindPopup('<strong>You are here</strong><br><span>Current location</span>');
             }
 
             try {
