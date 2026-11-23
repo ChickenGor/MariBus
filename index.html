@@ -4658,6 +4658,18 @@
                         button.addEventListener('click', () => void chooseSuggestion(prediction));
                         return [button];
                     }));
+                    if (document.body.classList.contains('destination-search-open')) {
+                        // The keyboard and planner can change height between
+                        // phones. Anchor results to the rendered planner rather
+                        // than a hard-coded top offset, avoiding a dead gap.
+                        const plannerBounds = document.getElementById('header-journey-search')?.getBoundingClientRect();
+                        const viewportHeight = window.visualViewport?.height || window.innerHeight;
+                        if (plannerBounds) {
+                            const top = Math.round(plannerBounds.bottom + 8);
+                            suggestionList.style.setProperty('top', `${top}px`, 'important');
+                            suggestionList.style.setProperty('max-height', `${Math.max(120, Math.floor(viewportHeight - top - 12))}px`, 'important');
+                        }
+                    }
                     suggestionList.replaceChildren(...items);
                     suggestionList.hidden = !items.length;
                     if (document.body.classList.contains('destination-search-open')) {
