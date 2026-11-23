@@ -4662,7 +4662,11 @@
                         // The keyboard and planner can change height between
                         // phones. Anchor results to the rendered planner rather
                         // than a hard-coded top offset, avoiding a dead gap.
-                        const plannerBounds = document.getElementById('header-journey-search')?.getBoundingClientRect();
+                        // The outer planner retains layout space for its expanded
+                        // state on some devices. Its bounds therefore cannot be
+                        // trusted here; the visible submit button is the actual
+                        // bottom edge of the compact form.
+                        const plannerBounds = document.querySelector('#header-journey-search .journey-search-submit')?.getBoundingClientRect();
                         const viewportHeight = window.visualViewport?.height || window.innerHeight;
                         if (plannerBounds) {
                             const top = Math.round(plannerBounds.bottom + 8);
