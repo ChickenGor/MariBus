@@ -5857,7 +5857,7 @@
                 const googleCards = googleDisplayedCandidates.map(candidate => {
                     const timeRange = googleRouteTimeRange(candidate.route);
                     const isRecommended = googlePreferred && candidate.routeIndex === preferredGoogleCandidate.routeIndex;
-                    const routeSteps = googleTransitSummarySteps(candidate.route.legs?.[0]?.steps || []).filter(step => step.travel_mode !== google.maps.TravelMode.WALKING).map(googleTransitStepLabel).join('<span>&rsaquo;</span>');
+                    const routeSteps = compactTransitStepSequence(candidate.route.legs?.[0]?.steps || []);
                     return `<article class="journey-card modern ${isRecommended && !walkingPreferred ? 'selected' : ''}" data-hybrid-google-index="${candidate.routeIndex}" role="button" tabindex="0" aria-pressed="${isRecommended && !walkingPreferred ? 'true' : 'false'}" aria-label="Google Transit journey, ${escapeHtml(formatJourneyDuration(candidate.durationMinutes))}">
                         <div class="journey-option-top"><span class="journey-rank-label">${isRecommended ? escapeHtml(candidate.rankReason || 'Recommended') : 'Google Transit'}</span>
                             <div class="journey-option-head"><div class="journey-total">${escapeHtml(formatJourneyDuration(candidate.durationMinutes))}</div><div class="journey-main-time">${escapeHtml(timeRange.text || 'Scheduled times unavailable')}</div></div>
@@ -6272,6 +6272,13 @@
             });
             flushWalking();
             return summary;
+        }
+
+        function compactTransitStepSequence(steps) {
+            // A transit choice needs the walks that happen before boarding,
+            // between transfers and after alighting—not only the line badges.
+            // These values come from the provider's actual step timings.
+            return googleTransitSummarySteps(steps).map(googleTransitStepLabel).join('<span>&rsaquo;</span>');
         }
 
         // Route providers often split a continuous walk into tiny instruction
@@ -7357,7 +7364,7 @@
                     const timeRange = googleRouteTimeRange(route);
                     const steps = leg.steps || [];
                     const transitSteps = steps.filter(step => step.travel_mode === google.maps.TravelMode.TRANSIT);
-                    const routeSteps = googleTransitSummarySteps(steps).filter(step => step.travel_mode !== google.maps.TravelMode.WALKING).map(googleTransitStepLabel).join('<span>&rsaquo;</span>');
+                    const routeSteps = compactTransitStepSequence(steps);
                     const board = transitSteps[0]?.transit?.departure_stop?.name;
                     const exit = transitSteps[transitSteps.length - 1]?.transit?.arrival_stop?.name;
                     const comparisons = [];
