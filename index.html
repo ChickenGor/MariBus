@@ -2081,7 +2081,7 @@
         <div id="bus-ride-meta" class="bus-ride-meta">Route progress will appear when available.</div>
         <div class="bus-ride-track"><div id="bus-ride-fill"></div><span class="bus-ride-node start"></span><span class="bus-ride-node end"></span><span id="bus-ride-vehicle" class="bus-ride-vehicle"><svg class="ui-icon" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="15" rx="3"></rect><path d="M7 7h10M7 12h.01M17 12h.01M7 21v-3M17 21v-3"></path></svg></span></div>
         <div class="bus-ride-labels"><span id="bus-ride-from">Boarded</span><span id="bus-ride-to">Destination</span></div>
-        <div class="bus-ride-actions"><button id="bus-ride-alert" type="button" onclick="toggleBusGetOffAlert()">Set get-off alert</button><button id="bus-ride-end" type="button" onclick="finishTrackedBusRide()">End ride</button></div>
+        <div class="bus-ride-actions"><button id="bus-ride-alert" type="button" onclick="activateBusRideAction()">Get on</button><button id="bus-ride-end" type="button" onclick="finishTrackedBusRide()">Stop tracking</button></div>
     </section>
 
     <button id="guided-map-back" type="button" onclick="backFromGuidedJourney()" aria-label="Back to journey details">
@@ -2602,6 +2602,7 @@
         let trackedBusId = null;
         let trackedBusRouteStops = [];
         let trackedBusRideState = 'approaching';
+        let trackedBusRouteProgressState = 'idle';
         let routeMarkersDict = {};
         let stopMarkersLayer = L.layerGroup().addTo(map);
         let activeRouteLayer = L.layerGroup().addTo(map);
@@ -3177,7 +3178,7 @@
                     ? `${nextStop ? `Next stop: ${nextStop.name} · ` : ''}${nextStop ? `${nextStop.stopsRemaining} stop${nextStop.stopsRemaining === 1 ? '' : 's'} remaining` : 'Following this service'}`
                     : (boarding
                         ? `Next: ${nextStop?.name || 'stop'} · reaches ${boarding.name} in ~${boarding.minutes} min`
-                        : `${nextStop ? `Next: ${nextStop.name} · ${nextStop.stopsRemaining} stop${nextStop.stopsRemaining === 1 ? '' : 's'} remaining` : 'Finding route progress…'}`))
+                        : `${nextStop ? `Next: ${nextStop.name} · ${nextStop.stopsRemaining} stop${nextStop.stopsRemaining === 1 ? '' : 's'} remaining` : (trackedBusRouteProgressState === 'loading' ? 'Loading route progress…' : 'Route progress unavailable for this trip')}`))
                 : 'Waiting for its next live position…';
             document.getElementById('tracking-board-bus').textContent = trackedBusRideState === 'onboard' ? 'On board ✓' : 'Get on';
             document.getElementById('tracking-board-bus').disabled = trackedBusRideState === 'onboard';
@@ -3192,19 +3193,24 @@
         }
 
         function updateBusRideSheet(details, nextStop, confidence) {
-            if (!details || trackedBusRideState !== 'onboard') return;
+            if (!details || !trackedBusId) return;
             const destination = journeySelection.to?.place?.name || details.destinationName || 'your destination';
             const totalStops = Math.max(1, trackedBusRouteStops.length - 1);
             const remaining = nextStop?.stopsRemaining ?? 0;
             const percent = Math.max(4, Math.min(96, ((totalStops - remaining) / totalStops) * 100));
-            document.getElementById('bus-ride-route').textContent = `${details.routeShortName || 'Bus'} · on board`;
+            const onboard = trackedBusRideState === 'onboard';
+            document.getElementById('bus-ride-route').textContent = `${details.routeShortName || 'Bus'} · ${onboard ? 'on board' : 'following'}`;
             document.getElementById('bus-ride-status').textContent = confidence.tone === 'live' ? 'LIVE' : 'ESTIMATED';
             document.getElementById('bus-ride-headsign').textContent = details.destinationName ? `Towards ${details.destinationName}` : 'Following your service';
-            document.getElementById('bus-ride-next').textContent = nextStop ? `Next: ${nextStop.name}` : 'Finding next stop…';
-            document.getElementById('bus-ride-meta').textContent = nextStop ? `${nextStop.stopsRemaining} stop${nextStop.stopsRemaining === 1 ? '' : 's'} remaining · ${confidence.label}` : confidence.label;
+            document.getElementById('bus-ride-next').textContent = nextStop ? `Next: ${nextStop.name}` : (trackedBusRouteProgressState === 'loading' ? 'Loading route progress…' : 'Route progress unavailable');
+            document.getElementById('bus-ride-meta').textContent = nextStop ? `${nextStop.stopsRemaining} stop${nextStop.stopsRemaining === 1 ? '' : 's'} remaining · ${confidence.label}` : `${confidence.label} · live location still available`;
             document.getElementById('bus-ride-fill').style.width = `${percent}%`;
             document.getElementById('bus-ride-vehicle').style.left = `${percent}%`;
             document.getElementById('bus-ride-to').textContent = destination;
+            const action = document.getElementById('bus-ride-alert');
+            action.classList.toggle('armed', onboard && action.classList.contains('armed'));
+            action.textContent = onboard ? (action.classList.contains('armed') ? 'Get-off alert set' : 'Set get-off alert') : 'Get on';
+            document.getElementById('bus-ride-end').textContent = onboard ? 'End ride' : 'Stop tracking';
         }
 
         function trackedBusNextStop(details) {
@@ -3253,6 +3259,11 @@
             showMenuNotice('You are on board. Get-off tracking is ready.');
         }
 
+        function activateBusRideAction() {
+            if (trackedBusRideState !== 'onboard') return markTrackedBusBoarded();
+            toggleBusGetOffAlert();
+        }
+
         function toggleBusGetOffAlert() {
             const button = document.getElementById('bus-ride-alert');
             const armed = !button.classList.contains('armed');
@@ -3262,32 +3273,53 @@
         }
 
         function finishTrackedBusRide() {
-            if (!trackedBusId || trackedBusRideState !== 'onboard') return;
+            if (!trackedBusId) return;
+            if (trackedBusRideState !== 'onboard') {
+                stopBusTracking(false);
+                showMenuNotice('Stopped tracking this bus');
+                return;
+            }
             stopBusTracking(false);
             showMenuNotice('Ride completed');
         }
 
         async function drawTrackedBusRoute(details) {
             trackedBusRouteLayer.clearLayers();
-            if (!details?.routeId || !details?.tripId) return;
+            if (!details?.routeId) {
+                trackedBusRouteProgressState = 'unavailable';
+                refreshTrackedBus({ moveMap:false });
+                return;
+            }
+            trackedBusRouteProgressState = 'loading';
+            refreshTrackedBus({ moveMap:false });
             try {
                 const params = new URLSearchParams({ agency:details.sourceAgency, trip_id:details.tripId });
-                const response = await fetch(`${API_BASE}/api/routes/${encodeURIComponent(details.routeId)}?${params}`);
-                const result = await response.json();
+                let response = await fetch(`${API_BASE}/api/routes/${encodeURIComponent(details.routeId)}?${params}`);
+                let result = await response.json();
+                // Realtime feeds sometimes use a different trip ID from the
+                // static GTFS record. The route remains useful for progress,
+                // so retry with the route's representative scheduled trip.
+                if (!result.success) {
+                    response = await fetch(`${API_BASE}/api/routes/${encodeURIComponent(details.routeId)}?agency=${encodeURIComponent(details.sourceAgency)}`);
+                    result = await response.json();
+                }
                 if (!result.success) throw new Error(result.error || 'Route unavailable');
                 const data = result.data;
                 const coordinates = data.shape?.length
                     ? data.shape.map(point => [Number(point.lat), Number(point.lon)])
                     : data.stops.map(stop => [Number(stop.stop_lat), Number(stop.stop_lon)]);
-                if (coordinates.length < 2 || trackedBusId !== details.vehicleId) return;
+                if (coordinates.length < 2 || trackedBusId !== details.vehicleId) throw new Error('Route geometry unavailable');
                 trackedBusRouteStops = Array.isArray(data.stops) ? data.stops : [];
+                trackedBusRouteProgressState = trackedBusRouteStops.length > 1 ? 'ready' : 'unavailable';
                 const color = safeRouteColor(data.route?.route_color, details.sourceAgency);
                 L.polyline(coordinates, { color:darkenRouteColor(color, .52), weight:10, opacity:.95 }).addTo(trackedBusRouteLayer);
                 L.polyline(coordinates, { color, weight:6.5, opacity:1 }).addTo(trackedBusRouteLayer);
                 refreshTrackedBus({ moveMap:false });
             } catch (error) {
                 console.warn('Tracked bus route unavailable', error);
-                showMenuNotice('Tracking the bus, but its route line is unavailable');
+                trackedBusRouteProgressState = 'unavailable';
+                refreshTrackedBus({ moveMap:false });
+                showMenuNotice('Live location is available, but route progress is unavailable');
             }
         }
 
@@ -3295,7 +3327,8 @@
             if (!busLiveDataDict[vehicleId]) return showMenuNotice('This bus is no longer in the latest live update');
             trackedBusId = vehicleId;
             trackedBusRideState = 'approaching';
-            document.body.classList.remove('bus-ride-mode');
+            trackedBusRouteProgressState = 'loading';
+            document.body.classList.add('bus-ride-mode');
             refreshTrackedBus();
             drawTrackedBusRoute(busLiveDataDict[vehicleId]);
             window.__mariBusInfoWindow?.close();
@@ -3307,6 +3340,7 @@
             trackedBusId = null;
             trackedBusRouteStops = [];
             trackedBusRideState = 'approaching';
+            trackedBusRouteProgressState = 'idle';
             document.body.classList.remove('bus-ride-mode');
             const rideAlert = document.getElementById('bus-ride-alert');
             rideAlert?.classList.remove('armed');
