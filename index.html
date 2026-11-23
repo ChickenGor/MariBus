@@ -206,7 +206,7 @@
             padding:0 15px; border:1px solid var(--border-color); border-radius:999px;
             background:var(--input-bg); font-size:14px; font-weight:800;
         }
-        body.destination-search-open .journey-planner-header { display:flex; width:100%; }
+        body.destination-search-open .journey-planner-header { display:flex; width:100%; justify-content:flex-start; gap:8px; }
         body.destination-search-open #header-journey-search,
         body.destination-search-open #header-journey-search.expanded {
             position:static !important; display:flex; width:calc(100vw - 36px) !important; max-width:620px !important;
@@ -222,8 +222,8 @@
            search bar is horizontal, so explicitly reset its flex direction here
            instead of allowing the compact map-header rule to leak into this view. */
         body.destination-search-open #header-journey-search.expanded {
-            height:auto !important; min-height:260px !important; flex-basis:auto !important;
-            padding:4px 14px !important; flex-direction:column !important; align-items:stretch !important;
+            height:auto !important; min-height:0 !important; flex-basis:auto !important;
+            padding:3px 14px 8px !important; flex-direction:column !important; align-items:stretch !important;
         }
         body.destination-search-open #header-journey-search .journey-input-row { min-height:48px !important; }
         body.destination-search-open #journey-to { font-size:16px !important; font-weight:700; }
@@ -1881,7 +1881,7 @@
             align-self:flex-start;
             min-width:0;
             height:36px;
-            margin:0 0 14px;
+            margin:0;
             padding:0 11px;
             border:0;
             border-radius:10px;
@@ -1900,7 +1900,7 @@
             background:var(--input-bg);
             box-shadow:0 12px 28px rgba(0,0,0,.10);
         }
-        body.destination-search-open #header-journey-search .journey-input-row { min-height:50px !important; }
+        body.destination-search-open #header-journey-search .journey-input-row { min-height:44px !important; }
         body.destination-search-open #header-journey-search input { font-size:16px; font-weight:600; }
         body.destination-search-open #journey-location-button,
         body.destination-search-open #journey-swap-button {
@@ -1950,8 +1950,8 @@
         }
         body.destination-search-open #journey-date-input { border-right:1px solid var(--border-color); }
         body.destination-search-open .journey-search-submit {
-            min-height:52px;
-            margin:10px 0 0;
+            min-height:44px;
+            margin:7px 0 0;
             border-radius:14px;
             background:var(--ui-accent);
             color:var(--sheet-bg);
@@ -1964,7 +1964,7 @@
             cursor:not-allowed;
         }
         body.dark-mode.destination-search-open .journey-search-submit:disabled { background:#383838; color:#898989; }
-        body.destination-search-open #destination-search-recents { margin-top:22px; }
+        body.destination-search-open #destination-search-recents { margin-top:12px; }
         body.destination-search-open .recent-search-heading { color:var(--text-muted); font-size:13px; font-weight:800; }
         body.destination-search-open .recent-search-item { min-height:66px; padding:10px 4px; }
         body.destination-search-open .recent-search-item strong { font-size:15px; font-weight:700; }
@@ -2763,10 +2763,12 @@
             const savedContainer = document.getElementById('destination-search-saved');
             if (!container) return;
             container.hidden = false;
+            const query = document.getElementById(`journey-${activeJourneyField}`)?.value.trim() || '';
             const items = recentDestinations();
             const saved = savedPlaces();
             const targetLabel = activeJourneyField === 'from' ? 'Starting point' : 'Destination';
             if (savedContainer) {
+                savedContainer.hidden = Boolean(query);
                 savedContainer.innerHTML = saved.length
                     ? `<h2 class="saved-places-heading">Saved places</h2><div class="recent-search-list">${saved.map((place, index) => placeListRow(place, index, 'saved', targetLabel, true)).join('')}</div>`
                     : '';
@@ -4579,6 +4581,7 @@
                         else document.getElementById('destination-prefix').innerHTML = iconSvg('search');
                     }
                     updateJourneySearchFlow();
+                    if (document.body.classList.contains('destination-search-open')) renderDestinationSearchRecents();
                 });
                 let suggestions = [], stopSuggestions = [], transitLineCode = '', requestId = 0, sessionToken = null, pendingSuggestionRequest = Promise.resolve();
                 const suggestionList = document.createElement('div');
