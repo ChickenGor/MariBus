@@ -7546,12 +7546,9 @@
         }
 
         function userLocationMarkerIcon() {
-            return L.divIcon({
-                className:'user-location-marker',
-                iconSize:[38, 38],
-                iconAnchor:[19, 19],
-                html:'<div class="user-location-pin" aria-hidden="true"><span class="user-location-pulse"></span><span class="user-location-dot"></span></div>',
-            });
+            // Use an explicit adapter marker kind. HTML-class detection can be
+            // lost while Google Maps recreates a marker during rapid recentering.
+            return { kind:'user-location', color:'#2563eb' };
         }
 
         map.on('locationfound', function (e) {
@@ -7559,6 +7556,7 @@
             // popup that obscures the nearby-departures map.
             if (userLocationMarker) {
                 userLocationMarker.setLatLng(e.latlng);
+                userLocationMarker.setIcon(userLocationMarkerIcon());
             } else {
                 userLocationMarker = L.marker(e.latlng, {
                     icon:userLocationMarkerIcon(),

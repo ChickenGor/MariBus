@@ -136,7 +136,7 @@
         addTo(target) { if (target instanceof LayerGroup) { target.addLayer(this); return this; } this.attach(target.native || target); return this; }
         nativeIcon() {
             const text = this.options.icon?.text || '';
-            const kind = this.options.icon?.kind;
+            const kind = this.options.icon?.kind || (this.options.title === 'Your current location' ? 'user-location' : '');
             const markerColor = this.options.icon?.color || '#2563eb';
             if (kind === 'stop') {
                 return { path:google.maps.SymbolPath.CIRCLE, scale:this.options.icon?.scale || 5, fillColor:'#ffffff', fillOpacity:1, strokeColor:markerColor || '#475569', strokeWeight:this.options.icon?.strokeWeight || 1.5 };
