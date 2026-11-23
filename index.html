@@ -1295,6 +1295,10 @@
         .route-browse-live-marker { width:38px; height:38px; display:grid; place-items:center; border:3px solid #fff; border-radius:12px; background:#d81b76; color:#fff; box-shadow:0 3px 10px rgba(15,23,42,.3); transition:transform .18s,box-shadow .18s; }
         .route-browse-live-marker .ui-icon { width:22px; height:22px; }
         .route-browse-live-marker.selected { transform:scale(1.1); box-shadow:0 0 0 4px rgba(216,27,118,.2),0 5px 14px rgba(15,23,42,.34); }
+        .live-bus-3d-hit { width:64px; height:64px; display:grid; place-items:center; pointer-events:auto; }
+        .live-bus-3d-marker { width:58px; height:58px; display:grid; place-items:center; border-radius:50%; background:color-mix(in srgb,var(--live-route-color,#d81b76) 18%,#fff); box-shadow:0 3px 12px rgba(15,23,42,.28),0 0 0 3px color-mix(in srgb,var(--live-route-color,#d81b76) 28%,transparent); overflow:hidden; }
+        .live-bus-3d-marker img { width:70px; height:70px; object-fit:contain; transform:rotate(var(--live-bearing,0deg)); filter:drop-shadow(0 2px 2px rgba(15,23,42,.24)); }
+        body.dark-mode .live-bus-3d-marker { background:color-mix(in srgb,var(--live-route-color,#d81b76) 24%,#202023); }
         .route-live-empty,.route-live-error { padding:12px; border:1px solid var(--border-color); border-radius:12px; color:var(--text-muted); font-size:11px; background:var(--input-bg); }
         .route-live-error button { margin-left:5px; border:0; background:transparent; color:#2563eb; font:inherit; font-weight:850; cursor:pointer; }
         .route-stop-info { margin-bottom:10px; padding:12px; border:1px solid color-mix(in srgb,#2563eb 26%,var(--border-color)); border-radius:14px; background:color-mix(in srgb,#2563eb 5%,var(--sheet-bg)); }
@@ -3836,11 +3840,21 @@
             }
         }
 
-        function routeLiveMarkerIcon(selected = false, bearing = null) {
+        function routeLiveMarkerIcon(selected = false, bearing = null, routeColor = '#d81b76') {
+            if (selected) return liveBus3dMarkerIcon(bearing, routeColor);
             const bearingAttribute = Number.isFinite(Number(bearing)) ? ` data-bearing="${Number(bearing)}"` : '';
             return L.divIcon({
                 html:`<div class="route-browse-live-hit"><div class="route-browse-live-marker${selected ? ' selected' : ''}"${bearingAttribute}>${iconSvg('bus')}</div></div>`,
                 className:'', iconSize:[44,44], iconAnchor:[22,22],
+            });
+        }
+
+        function liveBus3dMarkerIcon(bearing = 0, routeColor = '#d81b76') {
+            const safeBearing = Number.isFinite(Number(bearing)) ? Number(bearing) : 0;
+            const safeColor = safeRouteColor(routeColor);
+            return L.divIcon({
+                html:`<div class="live-bus-3d-hit"><div class="live-bus-3d-marker" style="--live-bearing:${safeBearing}deg;--live-route-color:${safeColor}"><img src="static/img/live-bus-3d.png" alt="Live bus" draggable="false"></div></div>`,
+                className:'', iconSize:[64,64], iconAnchor:[32,32],
             });
         }
 
@@ -3893,7 +3907,7 @@
             selectedRouteBrowseVehicleId = vehicleId;
             routeBrowseVehicleMarkers.forEach((marker, id) => {
                 const item = routeBrowseVehicles.find(vehicle => vehicle.vehicleId === id);
-                marker.setIcon(routeLiveMarkerIcon(id === vehicleId, item?.bearing));
+                marker.setIcon(routeLiveMarkerIcon(id === vehicleId, item?.bearing, routeBrowseContext?.color));
                 marker.setZIndexOffset?.(id === vehicleId ? 2200 : 1500);
             });
             document.querySelectorAll('.route-live-bus').forEach(card => card.classList.toggle('selected', card.dataset.vehicleId === vehicleId));
@@ -4034,11 +4048,11 @@
                     const existing = routeBrowseVehicleMarkers.get(item.vehicleId);
                     if (existing) {
                         existing.setLatLng([item.point.lat, item.point.lng]);
-                        existing.setIcon(routeLiveMarkerIcon(item.vehicleId === selectedRouteBrowseVehicleId, item.bearing));
+                        existing.setIcon(routeLiveMarkerIcon(item.vehicleId === selectedRouteBrowseVehicleId, item.bearing, markerColor));
                         existing.setZIndexOffset?.(item.vehicleId === selectedRouteBrowseVehicleId ? 2200 : 1500);
                         return;
                     }
-                    const marker = L.marker([item.point.lat, item.point.lng], { icon:routeLiveMarkerIcon(item.vehicleId === selectedRouteBrowseVehicleId, item.bearing), title:`Live ${publicCode} bus`, zIndexOffset:1500, smoothMove:true });
+                    const marker = L.marker([item.point.lat, item.point.lng], { icon:routeLiveMarkerIcon(item.vehicleId === selectedRouteBrowseVehicleId, item.bearing, markerColor), title:`Live ${publicCode} bus`, zIndexOffset:1500, smoothMove:true });
                     marker.on('click', () => selectRouteBrowseVehicle(item.vehicleId, { center:false, scroll:true }));
                     marker.addTo(journeyLiveVehicleLayer);
                     routeBrowseVehicleMarkers.set(item.vehicleId, marker);
@@ -5852,10 +5866,7 @@
                     if (index === activeTrackedJourneyIndex) {
                         const routeLabel = compactRouteLabel(firstLeg.route_id, firstLeg.route_short_name);
                         const markerColor = safeRouteColor(firstLeg.route_color, agency);
-                        const icon = L.divIcon({
-                            html:`<div class="marker-wrapper"><div class="route-pill" style="background-color:${markerColor}">${escapeHtml(routeLabel)}</div></div>`,
-                            className:'', iconSize:null,
-                        });
+                        const icon = liveBus3dMarkerIcon(vehicle.position.bearing, markerColor);
                         const liveMarker = L.marker([Number(vehicle.position.latitude), Number(vehicle.position.longitude)], {
                             icon, title:`Live ${routeLabel}`,
                         }).bindPopup(`<div class="custom-popup"><strong>${escapeHtml(routeLabel)} live bus</strong><div>${etaMinutes} min to ${targetLabel}</div><div>Next: ${escapeHtml(stops[nextIndex].stop_name)}</div></div>`);
