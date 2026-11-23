@@ -2552,6 +2552,7 @@
         let liveVehicleLayerEnabled = false;
         let visibleBusRefreshTimer = null;
         let trackedBusId = null;
+        let trackedBusRouteStops = [];
         let routeMarkersDict = {};
         let stopMarkersLayer = L.layerGroup().addTo(map);
         let activeRouteLayer = L.layerGroup().addTo(map);
@@ -3116,8 +3117,9 @@
                 ? `${details.routeShortName} · ${details.vehicleId}`
                 : `Tracking ${trackedBusId}`;
             const confidence = liveVehicleConfidence(details?.timestamp);
+            const nextStop = trackedBusNextStop(details);
             document.getElementById('tracked-bus-status').textContent = details
-                ? [confidence.label, details.destinationName ? `Towards ${details.destinationName}` : 'Live vehicle', details.speedKmh ? `${details.speedKmh} km/h` : 'Position updated'].join(' · ')
+                ? [confidence.label, nextStop ? `Next: ${nextStop.name}` : (details.destinationName ? `Towards ${details.destinationName}` : 'Live vehicle'), nextStop ? `${nextStop.stopsRemaining} stop${nextStop.stopsRemaining === 1 ? '' : 's'} remaining` : (details.speedKmh ? `${details.speedKmh} km/h` : 'Position updated')].join(' · ')
                 : 'Waiting for its next live position…';
             if (details && moveMap) {
                 busMarkersDict[trackedBusId]?.setIcon(liveBus3dMarkerIcon(details.bearing, details.routeColor));
@@ -3125,6 +3127,20 @@
                 map.native.panTo({ lat:details.latitude, lng:details.longitude });
                 if ((map.native.getZoom() || 0) < 16) map.native.setZoom(16);
             }
+        }
+
+        function trackedBusNextStop(details) {
+            if (!details || trackedBusRouteStops.length < 2) return null;
+            const point = { lat:details.latitude, lng:details.longitude };
+            let closestIndex = 0;
+            trackedBusRouteStops.forEach((stop, index) => {
+                if (distanceMetres(point, stop) < distanceMetres(point, trackedBusRouteStops[closestIndex])) closestIndex = index;
+            });
+            const nextIndex = Math.min(closestIndex + 1, trackedBusRouteStops.length - 1);
+            return {
+                name:readableStopName(trackedBusRouteStops[nextIndex]?.stop_name || 'End of route'),
+                stopsRemaining:Math.max(0, trackedBusRouteStops.length - 1 - closestIndex),
+            };
         }
 
         async function drawTrackedBusRoute(details) {
@@ -3140,9 +3156,11 @@
                     ? data.shape.map(point => [Number(point.lat), Number(point.lon)])
                     : data.stops.map(stop => [Number(stop.stop_lat), Number(stop.stop_lon)]);
                 if (coordinates.length < 2 || trackedBusId !== details.vehicleId) return;
+                trackedBusRouteStops = Array.isArray(data.stops) ? data.stops : [];
                 const color = safeRouteColor(data.route?.route_color, details.sourceAgency);
                 L.polyline(coordinates, { color:darkenRouteColor(color, .52), weight:10, opacity:.95 }).addTo(trackedBusRouteLayer);
                 L.polyline(coordinates, { color, weight:6.5, opacity:1 }).addTo(trackedBusRouteLayer);
+                refreshTrackedBus({ moveMap:false });
             } catch (error) {
                 console.warn('Tracked bus route unavailable', error);
                 showMenuNotice('Tracking the bus, but its route line is unavailable');
@@ -3161,6 +3179,7 @@
         function stopBusTracking(notify = true) {
             const previousBus = trackedBusId;
             trackedBusId = null;
+            trackedBusRouteStops = [];
             const marker = previousBus ? busMarkersDict[previousBus] : null;
             const details = previousBus ? busLiveDataDict[previousBus] : null;
             if (marker && details) {
