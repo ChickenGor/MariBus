@@ -983,6 +983,31 @@
         #bus-tracking-banner.onboard #tracked-bus-progress { background:color-mix(in srgb,#16a34a 12%,var(--input-bg)); color:#166534; }
         #tracking-get-off { background:var(--input-bg); color:var(--text-main); }
         #stop-bus-tracking { border:0; border-radius:8px; padding:0 9px; background:var(--input-bg); color:var(--text-main); font:800 10px/1 Manrope,sans-serif; cursor:pointer; }
+        #bus-ride-sheet { position:absolute; z-index:2100; right:12px; bottom:max(14px,env(safe-area-inset-bottom)); left:12px; display:none; padding:14px; border:1px solid rgba(255,255,255,.14); border-radius:22px; background:rgba(18,18,20,.96); color:#fff; box-shadow:0 14px 36px rgba(0,0,0,.3); backdrop-filter:blur(18px); }
+        body.bus-ride-mode #bus-ride-sheet { display:block; }
+        body.bus-ride-mode #bus-tracking-banner { display:none !important; }
+        body.bus-ride-mode #top-bar,body.bus-ride-mode #mobile-map-dock { display:none !important; }
+        body.bus-ride-mode #map-view-toggle { right:12px; bottom:192px; background:rgba(18,18,20,.94); }
+        body.bus-ride-mode #map-view-toggle > :not(#map-current-location) { display:none; }
+        body.bus-ride-mode #map-current-location { color:#fff; }
+        .bus-ride-kicker { display:flex; align-items:center; justify-content:space-between; gap:10px; color:#f7f7f5; font-size:12px; font-weight:900; }
+        .bus-ride-kicker span { display:inline-flex; align-items:center; gap:6px; min-width:0; }
+        .bus-ride-live-dot { width:7px; height:7px; border-radius:50%; background:#43d17c; box-shadow:0 0 0 4px rgba(67,209,124,.15); }
+        #bus-ride-headsign { margin-top:4px; overflow:hidden; color:#b6bbc4; font-size:11px; font-weight:700; text-overflow:ellipsis; white-space:nowrap; }
+        .bus-ride-next { margin-top:13px; font-size:19px; font-weight:900; letter-spacing:-.3px; }
+        .bus-ride-meta { margin-top:3px; color:#c5cad2; font-size:11px; font-weight:700; }
+        .bus-ride-track { position:relative; height:5px; margin:18px 7px 11px; border-radius:999px; background:#444953; }
+        #bus-ride-fill { height:100%; border-radius:inherit; background:#f93999; transition:width .4s ease; }
+        .bus-ride-node { position:absolute; top:50%; width:11px; height:11px; border:2px solid #fff; border-radius:50%; background:#1c1c1f; transform:translate(-50%,-50%); }
+        .bus-ride-node.start { left:0; }.bus-ride-node.end { left:100%; }
+        .bus-ride-vehicle { position:absolute; top:50%; left:0; width:24px; height:20px; display:grid; place-items:center; border-radius:7px; background:#f93999; color:#fff; transform:translate(-50%,-50%); transition:left .4s ease; }
+        .bus-ride-vehicle .ui-icon { width:14px; height:14px; }
+        .bus-ride-labels { display:flex; justify-content:space-between; gap:12px; color:#aeb5bf; font-size:10px; font-weight:750; }
+        .bus-ride-labels span { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }.bus-ride-labels span:last-child { text-align:right; }
+        .bus-ride-actions { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:15px; }
+        .bus-ride-actions button { min-height:42px; border:0; border-radius:12px; font:850 12px/1 Manrope,sans-serif; cursor:pointer; }
+        #bus-ride-alert { background:#2d3036; color:#fff; } #bus-ride-alert.armed { background:#fbe8f1; color:#cc1670; }
+        #bus-ride-end { background:#f93999; color:#fff; }
         .stop-marker { box-sizing:border-box; width:14px; height:14px; border-radius:50%; background:#fff; border:3px solid #2563eb; box-shadow:0 1px 5px rgba(15,23,42,.28); transition:width .18s,height .18s,border-width .18s,opacity .18s; }
         .stop-marker.route-stop-subtle { width:7px; height:7px; border-width:1px; box-shadow:0 0 0 1px rgba(15,23,42,.28); opacity:.84; }
         .stop-marker.route-stop-major { width:11px; height:11px; border-width:2px; }
@@ -2049,6 +2074,15 @@
         <span id="tracked-bus-progress">Finding the next stop…</span>
         <span class="tracking-bus-actions"><button id="tracking-board-bus" type="button" onclick="markTrackedBusBoarded()">Get on</button><button id="tracking-get-off" type="button" onclick="finishTrackedBusRide()" disabled>Get off</button><button id="stop-bus-tracking" type="button" onclick="stopBusTracking()">Stop</button></span>
     </div>
+    <section id="bus-ride-sheet" aria-live="polite" aria-label="On-board bus mode">
+        <div class="bus-ride-kicker"><span><i class="bus-ride-live-dot"></i><strong id="bus-ride-route">On board</strong></span><span id="bus-ride-status">LIVE</span></div>
+        <div id="bus-ride-headsign">Following your service</div>
+        <div id="bus-ride-next" class="bus-ride-next">Finding next stop…</div>
+        <div id="bus-ride-meta" class="bus-ride-meta">Route progress will appear when available.</div>
+        <div class="bus-ride-track"><div id="bus-ride-fill"></div><span class="bus-ride-node start"></span><span class="bus-ride-node end"></span><span id="bus-ride-vehicle" class="bus-ride-vehicle"><svg class="ui-icon" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="15" rx="3"></rect><path d="M7 7h10M7 12h.01M17 12h.01M7 21v-3M17 21v-3"></path></svg></span></div>
+        <div class="bus-ride-labels"><span id="bus-ride-from">Boarded</span><span id="bus-ride-to">Destination</span></div>
+        <div class="bus-ride-actions"><button id="bus-ride-alert" type="button" onclick="toggleBusGetOffAlert()">Set get-off alert</button><button id="bus-ride-end" type="button" onclick="finishTrackedBusRide()">End ride</button></div>
+    </section>
 
     <button id="guided-map-back" type="button" onclick="backFromGuidedJourney()" aria-label="Back to journey details">
         <svg class="ui-icon" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"></path></svg>
@@ -3148,12 +3182,29 @@
             document.getElementById('tracking-board-bus').textContent = trackedBusRideState === 'onboard' ? 'On board ✓' : 'Get on';
             document.getElementById('tracking-board-bus').disabled = trackedBusRideState === 'onboard';
             document.getElementById('tracking-get-off').disabled = trackedBusRideState !== 'onboard';
+            updateBusRideSheet(details, nextStop, confidence);
             if (details && moveMap) {
                 busMarkersDict[trackedBusId]?.setIcon(liveBus3dMarkerIcon(details.bearing, details.routeColor));
                 busMarkersDict[trackedBusId]?.setZIndexOffset?.(2400);
                 map.native.panTo({ lat:details.latitude, lng:details.longitude });
                 if ((map.native.getZoom() || 0) < 16) map.native.setZoom(16);
             }
+        }
+
+        function updateBusRideSheet(details, nextStop, confidence) {
+            if (!details || trackedBusRideState !== 'onboard') return;
+            const destination = journeySelection.to?.place?.name || details.destinationName || 'your destination';
+            const totalStops = Math.max(1, trackedBusRouteStops.length - 1);
+            const remaining = nextStop?.stopsRemaining ?? 0;
+            const percent = Math.max(4, Math.min(96, ((totalStops - remaining) / totalStops) * 100));
+            document.getElementById('bus-ride-route').textContent = `${details.routeShortName || 'Bus'} · on board`;
+            document.getElementById('bus-ride-status').textContent = confidence.tone === 'live' ? 'LIVE' : 'ESTIMATED';
+            document.getElementById('bus-ride-headsign').textContent = details.destinationName ? `Towards ${details.destinationName}` : 'Following your service';
+            document.getElementById('bus-ride-next').textContent = nextStop ? `Next: ${nextStop.name}` : 'Finding next stop…';
+            document.getElementById('bus-ride-meta').textContent = nextStop ? `${nextStop.stopsRemaining} stop${nextStop.stopsRemaining === 1 ? '' : 's'} remaining · ${confidence.label}` : confidence.label;
+            document.getElementById('bus-ride-fill').style.width = `${percent}%`;
+            document.getElementById('bus-ride-vehicle').style.left = `${percent}%`;
+            document.getElementById('bus-ride-to').textContent = destination;
         }
 
         function trackedBusNextStop(details) {
@@ -3197,8 +3248,17 @@
         function markTrackedBusBoarded() {
             if (!trackedBusId) return;
             trackedBusRideState = 'onboard';
+            document.body.classList.add('bus-ride-mode');
             refreshTrackedBus({ moveMap:false });
             showMenuNotice('You are on board. Get-off tracking is ready.');
+        }
+
+        function toggleBusGetOffAlert() {
+            const button = document.getElementById('bus-ride-alert');
+            const armed = !button.classList.contains('armed');
+            button.classList.toggle('armed', armed);
+            button.textContent = armed ? 'Get-off alert set' : 'Set get-off alert';
+            showMenuNotice(armed ? 'Get-off alert armed for this ride' : 'Get-off alert cancelled');
         }
 
         function finishTrackedBusRide() {
@@ -3235,6 +3295,7 @@
             if (!busLiveDataDict[vehicleId]) return showMenuNotice('This bus is no longer in the latest live update');
             trackedBusId = vehicleId;
             trackedBusRideState = 'approaching';
+            document.body.classList.remove('bus-ride-mode');
             refreshTrackedBus();
             drawTrackedBusRoute(busLiveDataDict[vehicleId]);
             window.__mariBusInfoWindow?.close();
@@ -3246,6 +3307,10 @@
             trackedBusId = null;
             trackedBusRouteStops = [];
             trackedBusRideState = 'approaching';
+            document.body.classList.remove('bus-ride-mode');
+            const rideAlert = document.getElementById('bus-ride-alert');
+            rideAlert?.classList.remove('armed');
+            if (rideAlert) rideAlert.textContent = 'Set get-off alert';
             const marker = previousBus ? busMarkersDict[previousBus] : null;
             const details = previousBus ? busLiveDataDict[previousBus] : null;
             if (marker && details) {
