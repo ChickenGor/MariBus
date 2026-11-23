@@ -180,7 +180,9 @@
                 this.point=target; this.native?.setPosition(target); return this;
             }
             if (this.animationFrame) cancelAnimationFrame(this.animationFrame);
-            const from={lat:start.lat(),lng:start.lng()},started=performance.now(),duration=650;
+            const requestedDuration=Number(options.animationDuration ?? this.options.animationDuration ?? 650);
+            const duration=Math.max(250,Math.min(1800,Number.isFinite(requestedDuration) ? requestedDuration : 650));
+            const from={lat:start.lat(),lng:start.lng()},started=performance.now();
             const tick=now=>{
                 const progress=Math.min(1,(now-started)/duration),eased=1-Math.pow(1-progress,3);
                 this.point={lat:from.lat+(target.lat-from.lat)*eased,lng:from.lng+(target.lng-from.lng)*eased};

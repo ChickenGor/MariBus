@@ -3029,7 +3029,7 @@
                         const iconSignature = `${routeShortName}:${pillClass}:${Math.round(Number(bearing) || 0)}`;
                         let marker = previousMarkers.get(markerKey);
                         if (marker) {
-                            marker.setLatLng([vehicle.position.latitude, vehicle.position.longitude], { animate:true });
+                            marker.setLatLng([vehicle.position.latitude, vehicle.position.longitude], { animate:true, animationDuration:850 });
                             if (marker._iconSignature !== iconSignature) marker.setIcon(dynamicIcon);
                             marker.bindPopup(popupHtml);
                         } else {
@@ -4047,12 +4047,12 @@
                 vehicles.forEach(item => {
                     const existing = routeBrowseVehicleMarkers.get(item.vehicleId);
                     if (existing) {
-                        existing.setLatLng([item.point.lat, item.point.lng]);
+                        existing.setLatLng([item.point.lat, item.point.lng], { animate:true, animationDuration:1100 });
                         existing.setIcon(routeLiveMarkerIcon(item.vehicleId === selectedRouteBrowseVehicleId, item.bearing, markerColor));
                         existing.setZIndexOffset?.(item.vehicleId === selectedRouteBrowseVehicleId ? 2200 : 1500);
                         return;
                     }
-                    const marker = L.marker([item.point.lat, item.point.lng], { icon:routeLiveMarkerIcon(item.vehicleId === selectedRouteBrowseVehicleId, item.bearing, markerColor), title:`Live ${publicCode} bus`, zIndexOffset:1500, smoothMove:true });
+                    const marker = L.marker([item.point.lat, item.point.lng], { icon:routeLiveMarkerIcon(item.vehicleId === selectedRouteBrowseVehicleId, item.bearing, markerColor), title:`Live ${publicCode} bus`, zIndexOffset:1500, smoothMove:true, animationDuration:1100 });
                     marker.on('click', () => selectRouteBrowseVehicle(item.vehicleId, { center:false, scroll:true }));
                     marker.addTo(journeyLiveVehicleLayer);
                     routeBrowseVehicleMarkers.set(item.vehicleId, marker);
