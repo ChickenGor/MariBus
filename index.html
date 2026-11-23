@@ -195,6 +195,7 @@
             flex-direction:column; align-items:center; align-content:initial; justify-content:flex-start;
             width:100vw; height:100dvh !important; padding:max(18px, env(safe-area-inset-top)) 18px 24px !important;
             box-sizing:border-box; background:var(--sheet-bg); pointer-events:auto !important;
+            overflow-y:auto;
         }
         body.destination-search-open #menu-button,
         body.destination-search-open #journey-menu-button,
@@ -1971,7 +1972,18 @@
         body.destination-search-open .recent-search-item small { color:#626466; font-weight:600; }
         /* The planner is compact in Leave now mode, so results should start
            directly below it rather than retaining the old tall-form offset. */
-        body.destination-search-open .place-suggestions { top:232px !important; max-height:calc(100dvh - 252px) !important; }
+        /* Suggestions are part of the search-screen flow. This avoids relying
+           on an absolute pixel offset that differs between browsers/WebViews. */
+        body.destination-search-open .place-suggestions {
+            position:static !important;
+            flex:0 0 auto;
+            width:calc(100vw - 36px) !important;
+            max-width:620px !important;
+            max-height:none !important;
+            margin:8px auto 0 !important;
+            overflow:visible !important;
+            transform:none !important;
+        }
         .journey-time-controls.time-now { grid-template-columns:1fr !important; }
         .journey-time-controls.time-now #journey-date-input,
         .journey-time-controls.time-now #journey-time-input { display:none; }
@@ -4589,8 +4601,9 @@
                 const suggestionList = document.createElement('div');
                 suggestionList.className = 'place-suggestions';
                 suggestionList.hidden = true;
-                input.parentElement.style.position = 'relative';
-                input.parentElement.appendChild(suggestionList);
+                const suggestionHost = input.parentElement;
+                suggestionHost.style.position = 'relative';
+                suggestionHost.appendChild(suggestionList);
                 const chooseSuggestion = async prediction => {
                     const place = prediction.toPlace();
                     await place.fetchFields({ fields:['displayName', 'formattedAddress', 'location', 'id'] });
@@ -4658,25 +4671,15 @@
                         button.addEventListener('click', () => void chooseSuggestion(prediction));
                         return [button];
                     }));
-                    if (document.body.classList.contains('destination-search-open')) {
-                        // The keyboard and planner can change height between
-                        // phones. Anchor results to the rendered planner rather
-                        // than a hard-coded top offset, avoiding a dead gap.
-                        // The outer planner retains layout space for its expanded
-                        // state on some devices. Its bounds therefore cannot be
-                        // trusted here; the visible submit button is the actual
-                        // bottom edge of the compact form.
-                        const plannerBounds = document.querySelector('#header-journey-search .journey-search-submit')?.getBoundingClientRect();
-                        const viewportHeight = window.visualViewport?.height || window.innerHeight;
-                        if (plannerBounds) {
-                            const top = Math.round(plannerBounds.bottom + 8);
-                            suggestionList.style.setProperty('top', `${top}px`, 'important');
-                            suggestionList.style.setProperty('max-height', `${Math.max(120, Math.floor(viewportHeight - top - 12))}px`, 'important');
-                        }
-                    }
+                    const isDestinationSearch = document.body.classList.contains('destination-search-open');
+                    // On the full-screen planner, keep results in normal layout
+                    // flow directly below the form. Fixed offsets are unreliable
+                    // across Chrome, WebViews and the on-screen keyboard.
+                    const resultsHost = isDestinationSearch ? topBar : suggestionHost;
+                    if (suggestionList.parentElement !== resultsHost) resultsHost.appendChild(suggestionList);
                     suggestionList.replaceChildren(...items);
                     suggestionList.hidden = !items.length;
-                    if (document.body.classList.contains('destination-search-open')) {
+                    if (isDestinationSearch) {
                         const recents = document.getElementById('destination-search-recents');
                         if (recents) recents.hidden = items.length > 0;
                     }
