@@ -1275,6 +1275,8 @@
         .route-live-bus.selected { border-color:var(--route-live-color); box-shadow:0 0 0 3px color-mix(in srgb,var(--route-live-color) 13%,transparent); }
         .route-live-source { color:#16803c; font-size:10px; font-weight:900; letter-spacing:.5px; }
         body.dark-mode .route-live-source { color:#4ade80; }
+        .route-live-source.estimated { color:#b45309; }
+        body.dark-mode .route-live-source.estimated { color:#fbbf24; }
         .route-live-primary { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
         .route-live-next { min-width:0; }
         .route-live-next small,.route-live-next strong { display:block; }
@@ -3019,6 +3021,7 @@
                             speedHtml = `<div class="info-row"><span>Speed</span><strong>${speedKmh} km/h</strong></div>`;
                         }
                         const occupancyHtml = occupancyBadgeHtml(vehicle.occupancyStatus);
+                        const vehicleConfidence = liveVehicleConfidence(vehicle.timestamp || vehicle.source_feed_timestamp);
                         
                         // 2. Build the new popup layout
                         const popupHtml = `
@@ -3032,6 +3035,7 @@
                                     <div class="info-row"><span>Vehicle ID</span><strong>${safeVehicleId}</strong></div>
                                     ${destinationName ? `<div class="info-row"><span>Destination</span><strong>${escapeHtml(destinationName)}</strong></div>` : ''}
                                     <div class="info-row"><span>Trip ID</span><strong>${escapeHtml(vehicle.trip?.tripId || 'N/A')}</strong></div>
+                                    <div class="info-row"><span>Location</span><strong>${escapeHtml(vehicleConfidence.label)}</strong></div>
                                     ${speedHtml}
                                     ${occupancyHtml}
                                     <button class="route-action track-bus-action" onclick="startBusTracking(decodeURIComponent('${encodeURIComponent(vehicleId).replace(/'/g, '%27')}'))">Track this bus</button>
@@ -3111,8 +3115,9 @@
             document.getElementById('tracked-bus-title').textContent = details
                 ? `${details.routeShortName} · ${details.vehicleId}`
                 : `Tracking ${trackedBusId}`;
+            const confidence = liveVehicleConfidence(details?.timestamp);
             document.getElementById('tracked-bus-status').textContent = details
-                ? [details.destinationName ? `Towards ${details.destinationName}` : 'Live vehicle', details.speedKmh ? `${details.speedKmh} km/h` : 'Position updated'].join(' · ')
+                ? [confidence.label, details.destinationName ? `Towards ${details.destinationName}` : 'Live vehicle', details.speedKmh ? `${details.speedKmh} km/h` : 'Position updated'].join(' · ')
                 : 'Waiting for its next live position…';
             if (details && moveMap) {
                 busMarkersDict[trackedBusId]?.setIcon(liveBus3dMarkerIcon(details.bearing, details.routeColor));
@@ -3915,6 +3920,12 @@
             return { text:'Location may be outdated', stale:true };
         }
 
+        function liveVehicleConfidence(timestamp) {
+            const freshness = routeFreshnessText(timestamp);
+            if (freshness.stale) return { label:'ESTIMATED · location may be outdated', tone:'estimated', freshness };
+            return { label:`LIVE · ${freshness.text.replace(/^Updated\s*/i, '').toLowerCase()}`, tone:'live', freshness };
+        }
+
         function updateRouteFreshnessLabels() {
             document.querySelectorAll('[data-live-timestamp]').forEach(element => {
                 const freshness = routeFreshnessText(element.dataset.liveTimestamp);
@@ -3969,14 +3980,15 @@
             const vehicleName = item.vehicleId;
             const previousName = readableStopName(item.stops[item.nearestIndex]?.stop_name || 'Previous stop');
             const nextName = readableStopName(item.nextStop?.stop_name || 'End of route');
-            const freshness = routeFreshnessText(item.timestamp);
+            const confidence = liveVehicleConfidence(item.timestamp);
+            const freshness = confidence.freshness;
             const direction = readableStopName(item.vehicle?.route_info?.headsign || item.vehicle?.route_info?.destination || '');
             const distanceText = Number.isFinite(item.distanceToNextMetres)
                 ? `${item.distanceToNextMetres < 1000 ? `${Math.round(item.distanceToNextMetres)} m` : `${(item.distanceToNextMetres / 1000).toFixed(1)} km`} away`
                 : '';
             return `<article class="route-live-bus${selectedRouteBrowseVehicleId === vehicleName ? ' selected' : ''}" data-vehicle-id="${escapeHtml(vehicleName)}" tabindex="0" role="button" style="--route-live-color:${markerColor}">
                 <div class="route-live-primary"><div class="route-live-next"><small>Next stop</small><strong>${escapeHtml(nextName)}</strong></div><span class="route-live-eta">~${item.etaMinutes} min</span></div>
-                <div class="route-live-meta"><span class="route-live-source">● LIVE</span> · Bus <strong>${escapeHtml(vehicleName)}</strong>${direction ? ` · toward ${escapeHtml(direction)}` : ''}<br>Currently near ${escapeHtml(previousName)}${distanceText ? ` · ${escapeHtml(distanceText)}` : ''}</div>
+                <div class="route-live-meta"><span class="route-live-source ${confidence.tone}">● ${escapeHtml(confidence.label)}</span> · Bus <strong>${escapeHtml(vehicleName)}</strong>${direction ? ` · toward ${escapeHtml(direction)}` : ''}<br>Currently near ${escapeHtml(previousName)}${distanceText ? ` · ${escapeHtml(distanceText)}` : ''}</div>
                 ${occupancyBadgeHtml(item.vehicle?.occupancyStatus)}
                 <div class="route-live-freshness${freshness.stale ? ' stale' : ''}" data-live-timestamp="${escapeHtml(item.timestamp || '')}">${freshness.text}</div>
                 <div class="route-live-bus-track" aria-label="Bus progress from ${escapeHtml(previousName)} to ${escapeHtml(nextName)}">
