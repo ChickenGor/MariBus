@@ -965,7 +965,7 @@
         .route-action { width:100%; border:0; border-radius:10px; padding:9px 12px; margin-top:10px; background:#2563eb; color:white; font-weight:700; cursor:pointer; transition:transform .14s ease, filter .14s ease, box-shadow .14s ease; }
         .route-action:active { transform:scale(.975); filter:brightness(.94); }
         .track-bus-action { background:#f93999; }
-        #bus-tracking-banner { position:absolute; z-index:1200; top:92px; left:50%; display:flex; align-items:center; gap:9px; width:min(350px,calc(100vw - 32px)); min-height:68px; padding:8px 9px 8px 11px; border:1px solid color-mix(in srgb,#f93999 34%,var(--border-color)); border-radius:15px; background:color-mix(in srgb,var(--sheet-bg) 94%,transparent); box-shadow:0 8px 28px var(--shadow-color); box-sizing:border-box; transform:translateX(-50%); backdrop-filter:blur(14px); }
+        #bus-tracking-banner { position:absolute; z-index:1200; top:92px; left:50%; display:grid; grid-template-columns:38px minmax(0,1fr) auto; align-items:center; gap:7px 9px; width:min(350px,calc(100vw - 32px)); min-height:68px; padding:8px 9px 8px 11px; border:1px solid color-mix(in srgb,#f93999 34%,var(--border-color)); border-radius:15px; background:color-mix(in srgb,var(--sheet-bg) 94%,transparent); box-shadow:0 8px 28px var(--shadow-color); box-sizing:border-box; transform:translateX(-50%); backdrop-filter:blur(14px); }
         #bus-tracking-banner[hidden] { display:none; }
         .tracking-bus-icon { width:38px; height:38px; display:grid; place-items:center; flex:0 0 auto; border:2px solid #fff; border-radius:12px; background:#d81b76; color:#fff; box-shadow:0 2px 7px rgba(15,23,42,.24); overflow:hidden; }
         .tracking-bus-icon svg { width:19px; height:19px; fill:none; stroke:currentColor; stroke-width:2; }
@@ -974,7 +974,12 @@
         .tracking-bus-copy strong,.tracking-bus-copy small { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
         .tracking-bus-copy strong { font-size:13px; }
         .tracking-bus-copy small { margin-top:2px; color:var(--text-muted); font-size:10px; }
-        #stop-bus-tracking { flex:0 0 auto; border:0; border-radius:10px; padding:8px 9px; background:var(--input-bg); color:var(--text-main); font:800 10px/1 Manrope,sans-serif; cursor:pointer; }
+        #tracked-bus-progress { grid-column:1 / -1; display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; padding:5px 8px; border-radius:8px; background:color-mix(in srgb,var(--input-bg) 82%,transparent); color:var(--text-muted); font-size:10px; font-weight:700; }
+        .tracking-bus-actions { grid-column:1 / -1; display:grid; grid-template-columns:1fr 1fr auto; gap:6px; }
+        .tracking-bus-actions button { min-height:29px; border:0; border-radius:8px; padding:0 9px; font:800 10px/1 Manrope,sans-serif; cursor:pointer; }
+        #tracking-board-bus { background:#f93999; color:#fff; }
+        #tracking-get-off { background:var(--input-bg); color:var(--text-main); }
+        #stop-bus-tracking { border:0; border-radius:8px; padding:0 9px; background:var(--input-bg); color:var(--text-main); font:800 10px/1 Manrope,sans-serif; cursor:pointer; }
         .stop-marker { box-sizing:border-box; width:14px; height:14px; border-radius:50%; background:#fff; border:3px solid #2563eb; box-shadow:0 1px 5px rgba(15,23,42,.28); transition:width .18s,height .18s,border-width .18s,opacity .18s; }
         .stop-marker.route-stop-subtle { width:7px; height:7px; border-width:1px; box-shadow:0 0 0 1px rgba(15,23,42,.28); opacity:.84; }
         .stop-marker.route-stop-major { width:11px; height:11px; border-width:2px; }
@@ -2033,7 +2038,8 @@
     <div id="bus-tracking-banner" role="status" aria-live="polite" hidden>
         <span class="tracking-bus-icon"><svg viewBox="0 0 24 24"><path d="M5 16V6c0-2 2-3 7-3s7 1 7 3v10M5 11h14M8 19h8M7 16h.01M17 16h.01M7 19v2M17 19v2"></path></svg></span>
         <span class="tracking-bus-copy"><strong id="tracked-bus-title">Tracking bus</strong><small id="tracked-bus-status">Waiting for its next live position…</small></span>
-        <button id="stop-bus-tracking" type="button" onclick="stopBusTracking()">Stop</button>
+        <span id="tracked-bus-progress">Finding the next stop…</span>
+        <span class="tracking-bus-actions"><button id="tracking-board-bus" type="button" onclick="markTrackedBusBoarded()">Get on</button><button id="tracking-get-off" type="button" onclick="finishTrackedBusRide()" disabled>Get off</button><button id="stop-bus-tracking" type="button" onclick="stopBusTracking()">Stop</button></span>
     </div>
 
     <button id="guided-map-back" type="button" onclick="backFromGuidedJourney()" aria-label="Back to journey details">
@@ -2320,8 +2326,8 @@
             homeRailLines.forEach(line => {
                 if (!Array.isArray(line.points) || line.points.length < 2) return;
                 const color = safeRouteColor(line.color, 'rapid-rail-kl');
-                L.polyline(line.points, { color:darkenRouteColor(color, .58), weight:6, opacity:.78 }).addTo(homeRailLayer);
-                L.polyline(line.points, { color, weight:3, opacity:.96 }).addTo(homeRailLayer);
+                L.polyline(line.points, { color:darkenRouteColor(color, .66), weight:4, opacity:.42 }).addTo(homeRailLayer);
+                L.polyline(line.points, { color, weight:2.25, opacity:.68 }).addTo(homeRailLayer);
             });
         };
         const restoreCachedHomeRailLines = () => {
@@ -2553,6 +2559,7 @@
         let visibleBusRefreshTimer = null;
         let trackedBusId = null;
         let trackedBusRouteStops = [];
+        let trackedBusRideState = 'approaching';
         let routeMarkersDict = {};
         let stopMarkersLayer = L.layerGroup().addTo(map);
         let activeRouteLayer = L.layerGroup().addTo(map);
@@ -3118,9 +3125,20 @@
                 : `Tracking ${trackedBusId}`;
             const confidence = liveVehicleConfidence(details?.timestamp);
             const nextStop = trackedBusNextStop(details);
+            const boarding = trackedBusBoardingEta(details, nextStop);
             document.getElementById('tracked-bus-status').textContent = details
-                ? [confidence.label, nextStop ? `Next: ${nextStop.name}` : (details.destinationName ? `Towards ${details.destinationName}` : 'Live vehicle'), nextStop ? `${nextStop.stopsRemaining} stop${nextStop.stopsRemaining === 1 ? '' : 's'} remaining` : (details.speedKmh ? `${details.speedKmh} km/h` : 'Position updated')].join(' · ')
+                ? [confidence.label, details.destinationName ? `towards ${details.destinationName}` : 'direction unavailable'].join(' · ')
                 : 'Waiting for its next live position…';
+            document.getElementById('tracked-bus-progress').textContent = details
+                ? (trackedBusRideState === 'onboard'
+                    ? `${nextStop ? `Next stop: ${nextStop.name} · ` : ''}${nextStop ? `${nextStop.stopsRemaining} stop${nextStop.stopsRemaining === 1 ? '' : 's'} remaining` : 'Following this service'}`
+                    : (boarding
+                        ? `Next: ${nextStop?.name || 'stop'} · reaches ${boarding.name} in ~${boarding.minutes} min`
+                        : `${nextStop ? `Next: ${nextStop.name} · ${nextStop.stopsRemaining} stop${nextStop.stopsRemaining === 1 ? '' : 's'} remaining` : 'Finding route progress…'}`))
+                : 'Waiting for its next live position…';
+            document.getElementById('tracking-board-bus').textContent = trackedBusRideState === 'onboard' ? 'On board' : 'Get on';
+            document.getElementById('tracking-board-bus').disabled = trackedBusRideState === 'onboard';
+            document.getElementById('tracking-get-off').disabled = trackedBusRideState !== 'onboard';
             if (details && moveMap) {
                 busMarkersDict[trackedBusId]?.setIcon(liveBus3dMarkerIcon(details.bearing, details.routeColor));
                 busMarkersDict[trackedBusId]?.setZIndexOffset?.(2400);
@@ -3140,7 +3158,44 @@
             return {
                 name:readableStopName(trackedBusRouteStops[nextIndex]?.stop_name || 'End of route'),
                 stopsRemaining:Math.max(0, trackedBusRouteStops.length - 1 - closestIndex),
+                nextIndex,
             };
+        }
+
+        function trackedBusBoardingEta(details, nextStop) {
+            const origin = journeySelection.from;
+            if (!details || !nextStop || !origin?.place || !trackedBusRouteStops.length) return null;
+            const requestedStopId = String(origin.stop_id || '');
+            let boardingIndex = trackedBusRouteStops.findIndex(stop => String(stop.stop_id || '') === requestedStopId);
+            if (boardingIndex < 0) {
+                let nearestDistance = Infinity;
+                trackedBusRouteStops.forEach((stop, index) => {
+                    const distance = distanceMetres(origin.place, stop);
+                    if (distance < nearestDistance) { nearestDistance = distance; boardingIndex = index; }
+                });
+                if (nearestDistance > 650) return null;
+            }
+            if (boardingIndex < nextStop.nextIndex) return null;
+            let metres = distanceMetres({ lat:details.latitude, lng:details.longitude }, trackedBusRouteStops[nextStop.nextIndex]);
+            for (let index = nextStop.nextIndex; index < boardingIndex; index++) metres += distanceMetres(trackedBusRouteStops[index], trackedBusRouteStops[index + 1]);
+            const speedMetresPerMinute = Math.max(180, Number(details.speedKmh || 18) * 1000 / 60);
+            return {
+                name:readableStopName(trackedBusRouteStops[boardingIndex]?.stop_name || 'your boarding stop'),
+                minutes:Math.max(1, Math.ceil((metres / speedMetresPerMinute) * 1.2)),
+            };
+        }
+
+        function markTrackedBusBoarded() {
+            if (!trackedBusId) return;
+            trackedBusRideState = 'onboard';
+            refreshTrackedBus({ moveMap:false });
+            showMenuNotice('On-board mode enabled');
+        }
+
+        function finishTrackedBusRide() {
+            if (!trackedBusId || trackedBusRideState !== 'onboard') return;
+            stopBusTracking(false);
+            showMenuNotice('Ride completed');
         }
 
         async function drawTrackedBusRoute(details) {
@@ -3170,6 +3225,7 @@
         function startBusTracking(vehicleId) {
             if (!busLiveDataDict[vehicleId]) return showMenuNotice('This bus is no longer in the latest live update');
             trackedBusId = vehicleId;
+            trackedBusRideState = 'approaching';
             refreshTrackedBus();
             drawTrackedBusRoute(busLiveDataDict[vehicleId]);
             window.__mariBusInfoWindow?.close();
@@ -3180,6 +3236,7 @@
             const previousBus = trackedBusId;
             trackedBusId = null;
             trackedBusRouteStops = [];
+            trackedBusRideState = 'approaching';
             const marker = previousBus ? busMarkersDict[previousBus] : null;
             const details = previousBus ? busLiveDataDict[previousBus] : null;
             if (marker && details) {
@@ -3654,9 +3711,11 @@
             return legs.map(leg => compactRouteLabel(leg?.route_id, leg?.route_short_name));
         }
 
-        function createStopMarker(stop, color = null) {
+        function createStopMarker(stop, color = null, emphasis = 'major') {
             const markerColor = color || safeRouteColor('');
-            const icon = L.divIcon({ html: `<div class="stop-marker" style="border-color:${markerColor}"></div>`, className: '', iconSize:[14,14], iconAnchor:[7,7] });
+            const className = emphasis === 'subtle' ? 'route-stop-subtle' : (emphasis === 'clear' ? 'route-stop-clear' : 'route-stop-major');
+            const size = emphasis === 'subtle' ? 7 : (emphasis === 'clear' ? 16 : 11);
+            const icon = L.divIcon({ html: `<div class="stop-marker ${className}" style="border-color:${markerColor}"></div>`, className: '', iconSize:[size,size], iconAnchor:[size / 2,size / 2] });
             const marker = L.marker([Number(stop.stop_lat), Number(stop.stop_lon)], { icon })
                 .bindTooltip(escapeHtml(stop.stop_name), { direction:'top' });
             marker.on('click', () => showStopArrivals(stop));
@@ -5150,7 +5209,7 @@
         }
 
         function drawOutlinedRoute(coordinates, color) {
-            L.polyline(coordinates, { color:'#7a163f', weight:10, opacity:.95 }).addTo(activeRouteLayer);
+            L.polyline(coordinates, { color:darkenRouteColor(color, .52), weight:10, opacity:.95 }).addTo(activeRouteLayer);
             return L.polyline(coordinates, { color, weight:6.5, opacity:1 }).addTo(activeRouteLayer);
         }
 
@@ -5979,8 +6038,8 @@
                     // Only show boarding and alighting stops on the map. A marker
                     // for every stop makes a trip look like a crowded "zombie"
                     // route; all intermediate stops remain available in details.
-                    [segmentStops[0], segmentStops[segmentStops.length - 1]].filter(Boolean).forEach(stop => {
-                        createStopMarker(stop, safeRouteColor(leg.route_color)).addTo(activeRouteLayer);
+                    [segmentStops[0], segmentStops[segmentStops.length - 1]].filter(Boolean).forEach((stop, stopIndex) => {
+                        createStopMarker(stop, safeRouteColor(leg.route_color), index > 0 && stopIndex === 0 ? 'clear' : 'major').addTo(activeRouteLayer);
                     });
                     allCoordinates.push(...coordinates);
                 }
