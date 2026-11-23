@@ -177,10 +177,11 @@
         #journey-swap-button { display:none; width:34px; height:34px; flex:0 0 34px; border:0; border-radius:50%; background:transparent; color:var(--text-main); font-size:20px; cursor:pointer; }
         #header-journey-search.expanded #journey-swap-button { display:block; }
         .journey-search-submit { display:none; width:100%; min-height:42px; margin:7px 0 4px; border:0; border-radius:12px; background:#16181b; color:#fff; font:inherit; font-size:14px; font-weight:850; cursor:pointer; }
+        .journey-planner-header { display:none; align-items:center; justify-content:space-between; gap:10px; }
+        .journey-timing-mode { min-height:34px; max-width:144px; border:1px solid var(--border-color); border-radius:999px; padding:0 30px 0 12px; background:var(--input-bg); color:var(--text-main); font:800 11px Manrope,sans-serif; cursor:pointer; }
         .journey-time-controls { display:none; width:100%; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:8px; padding:8px 0 1px; }
         #header-journey-search.expanded .journey-time-controls { display:grid; }
         .journey-time-controls select,.journey-time-controls input { min-width:0; width:100%; height:38px; box-sizing:border-box; border:1px solid var(--border-color); border-radius:10px; padding:0 9px; background:var(--input-bg); color:var(--text-main); font:inherit; font-size:13px; font-weight:700; line-height:38px; }
-        .journey-time-controls select { grid-column:1 / -1; padding-right:25px; }
         #destination-search-close { display:none; position:absolute; top:18px; left:18px; width:42px; height:42px; place-items:center; border:0; border-radius:50%; background:var(--input-bg); color:var(--text-main); font-size:30px; line-height:1; cursor:pointer; }
 
         /* Destination search is its own screen, not a variation of the map header.
@@ -205,6 +206,7 @@
             padding:0 15px; border:1px solid var(--border-color); border-radius:999px;
             background:var(--input-bg); font-size:14px; font-weight:800;
         }
+        body.destination-search-open .journey-planner-header { display:flex; width:100%; }
         body.destination-search-open #header-journey-search,
         body.destination-search-open #header-journey-search.expanded {
             position:static !important; display:flex; width:calc(100vw - 36px) !important; max-width:620px !important;
@@ -2007,7 +2009,7 @@
             <svg class="ui-icon" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"></path></svg>
         </button>
         <span class="desktop-brand">MARIBUS</span>
-        <button id="destination-search-close" type="button" onclick="return closeDestinationSearch(event)" aria-label="Back to map" hidden>&larr;&nbsp; Back</button>
+            <div class="journey-planner-header"><button id="destination-search-close" type="button" onclick="return closeDestinationSearch(event)" aria-label="Back to map" hidden>&larr;&nbsp; Back</button><select id="journey-time-mode" class="journey-timing-mode" aria-label="Travel time preference"><option value="leave_now">Leave now</option><option value="depart_at">Leave at</option><option value="arrive_by">Arrive by</option></select></div>
         <div id="header-journey-search">
             <div id="journey-origin-row" class="journey-input-row">
                 <span class="point-label origin-point-icon" aria-hidden="true"><svg class="ui-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"></circle><circle cx="12" cy="12" r="2.5"></circle></svg></span>
@@ -2021,11 +2023,6 @@
                 <button id="journey-swap-button" type="button" onclick="swapJourneyPoints()" title="Swap starting point and destination" aria-label="Swap starting point and destination"><svg class="ui-icon" viewBox="0 0 24 24"><path d="M4 7h13m0 0-3-3m3 3-3 3M20 17H7m0 0 3-3m-3 3 3 3"></path></svg></button>
             </div>
             <div class="journey-time-controls" aria-label="Travel time preference">
-                <select id="journey-time-mode" aria-label="Travel time preference">
-                    <option value="leave_now">Leave now</option>
-                    <option value="depart_at">Leave at</option>
-                    <option value="arrive_by">Arrive by</option>
-                </select>
                 <input id="journey-date-input" type="date" aria-label="Travel date">
                 <input id="journey-time-input" type="time" aria-label="Travel time">
             </div>
