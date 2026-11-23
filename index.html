@@ -6066,6 +6066,28 @@
             return summary;
         }
 
+        // Route providers often split a continuous walk into tiny instruction
+        // fragments. Guidance needs one walk stage, not “walk 3 min > walk 2
+        // min > walk 5 min”, while retaining a continuous map path.
+        function mergeGuidedWalkingSteps(steps) {
+            return (steps || []).reduce((merged, step) => {
+                const previous = merged[merged.length - 1];
+                if (step?.travel_mode === google.maps.TravelMode.WALKING
+                    && previous?.travel_mode === google.maps.TravelMode.WALKING) {
+                    const seconds = Number(previous.duration?.value || 0) + Number(step.duration?.value || 0);
+                    const metres = Number(previous.distance?.value || 0) + Number(step.distance?.value || 0);
+                    previous.duration = { value:seconds, text:formatJourneyDuration(seconds / 60) };
+                    previous.distance = { value:metres, text:metres >= 1000 ? `${(metres / 1000).toFixed(1)} km` : `${Math.round(metres)} m` };
+                    previous.path = [...(previous.path || []), ...(step.path || []).slice(1)];
+                    previous.end_location = step.end_location || previous.end_location;
+                    previous.mergedWalk = true;
+                    return merged;
+                }
+                merged.push({ ...step, path:[...(step?.path || [])] });
+                return merged;
+            }, []);
+        }
+
         function googleTransitVehicleMode(vehicle = {}) {
             const type = String(vehicle.type || '').toUpperCase();
             const suppliedName = String(vehicle.name || '').trim();
@@ -6514,6 +6536,7 @@
         function renderGuidedJourney() {
             if (!guidedJourney) return;
             syncGuidedJourneyState();
+            if (guidedJourneyMarker) guidedJourneyMarker.setIcon(guidedJourneyBusMarkerIcon());
             const details = guidedStageDetails();
             if (!details) {
                 document.getElementById('panel-title').textContent = "You've arrived";
@@ -6616,7 +6639,7 @@
                     transitOptions:{ departureTime:new Date() },
                 }, (result, status) => status === google.maps.DirectionsStatus.OK ? resolve(result) : reject(new Error(status))));
                 const route = response.routes?.[0];
-                const steps = route?.legs?.[0]?.steps || [];
+                const steps = mergeGuidedWalkingSteps(route?.legs?.[0]?.steps || []);
                 if (!steps.length || !guidedJourney) return;
                 window.__mariBusGoogleTransitResponse = response;
                 guidedJourney.routeIndex = 0;
@@ -6639,6 +6662,11 @@
         }
 
         function guidedJourneyBusMarkerIcon() {
+            const walking = guidedJourney?.steps?.[guidedJourney.stageIndex]?.travel_mode === google.maps.TravelMode.WALKING;
+            if (walking) {
+                const walkingSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="42" height="42" viewBox="0 0 42 42"><circle cx="21" cy="21" r="17" fill="#2563eb" fill-opacity=".16"/><circle cx="21" cy="21" r="10" fill="#2563eb" stroke="#fff" stroke-width="3"/><circle cx="21" cy="21" r="3" fill="#fff"/></svg>`;
+                return { url:`data:image/svg+xml;charset=UTF-8,${encodeURIComponent(walkingSvg)}`, scaledSize:new google.maps.Size(42,42), anchor:new google.maps.Point(21,21) };
+            }
             const currentOrNextTransit = guidedJourney?.steps?.slice(guidedJourney.stageIndex || 0)
                 .find(step => step.travel_mode === google.maps.TravelMode.TRANSIT);
             const color = googleTransitLineColor(currentOrNextTransit) || '#2563eb';
@@ -6689,7 +6717,7 @@
         function startGuidedJourney(routeIndex) {
             const response = window.__mariBusGoogleTransitResponse;
             const route = response?.routes?.[Number(routeIndex)];
-            const steps = route?.legs?.[0]?.steps || [];
+            const steps = mergeGuidedWalkingSteps(route?.legs?.[0]?.steps || []);
             if (!steps.length) {
                 showMenuNotice('Guided journey is unavailable for this route');
                 return;
