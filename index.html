@@ -2566,6 +2566,7 @@
         let currentJourneyOptions = [];
         let journeyRankingPreference = localStorage.getItem('maribus-journey-ranking') || 'fastest';
         let journeyDetailBackAction = null;
+        let journeyReturnInFlight = false;
         let countdownValue = 30;
         let countdownInterval;
         let liveRefreshFailed = false;
@@ -3531,11 +3532,20 @@
         // Detail views live inside the same bottom sheet as the route list. Keep
         // their return action in the content itself, rather than repurposing the
         // sheet close button (which should always close the sheet).
-        function returnToJourneyOptions() {
+        async function returnToJourneyOptions() {
+            if (journeyReturnInFlight) return;
             const goBack = journeyDetailBackAction;
             journeyDetailBackAction = null;
             if (typeof goBack === 'function') {
-                goBack();
+                journeyReturnInFlight = true;
+                try {
+                    await goBack();
+                } catch (error) {
+                    console.error('Could not return to route options', error);
+                    openTransitPanel('Journey options', '', panelStateHtml('Could not reload route options', 'Please try again.', 'Retry', 'planJourney()'));
+                } finally {
+                    journeyReturnInFlight = false;
+                }
                 return;
             }
             closeTransitPanel(true);
@@ -5962,7 +5972,10 @@
                     sections.push({ leg, stops:result.data.stops, fromStop, toStop });
                 }
                 openRouteTransitPanel('Route details', `${journey.from_stop.stop_name} → ${journey.to_stop.stop_name}`, localJourneyFlowHtml(journey, sections));
-                journeyDetailBackAction = () => tryNearbyStopJourneys();
+                // Return through the complete planner. A local timetable can
+                // deliberately defer to Google Transit, so calling only the
+                // nearby-stop request could otherwise leave this action stuck.
+                journeyDetailBackAction = () => planJourney();
                 if (currentJourneyOptions.length) updateLiveJourneyTracking(currentJourneyOptions);
             } catch (error) {
                 openTransitPanel('Route unavailable', '', '<p class="panel-message">The stop list could not be loaded.</p>');
@@ -6940,7 +6953,7 @@
             const leg = route.legs?.[0];
             const timeRange = googleRouteTimeRange(route);
             openRouteTransitPanel('Journey details', timeRange.text || `${leg?.duration?.text || ''}`, googleJourneyFlowHtml(route, routeIndex));
-            journeyDetailBackAction = () => tryGoogleTransitJourney(true);
+            journeyDetailBackAction = () => planJourney();
         }
 
         function googleTransitLineColor(step) {
