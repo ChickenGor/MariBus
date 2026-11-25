@@ -1169,7 +1169,7 @@
         .journey-card.modern .journey-comparison,
         .journey-card.modern .save-route-action { display:none; }
         .journey-card.modern .journey-actions:has(.save-route-action) { grid-template-columns:1fr; }
-        .journey-card.modern .journey-actions:has([data-hybrid-google-details]) { grid-template-columns:1fr; }
+        .journey-card.unified-candidate .journey-actions { grid-template-columns:1fr; }
         .journey-card.modern .journey-option-head { align-items:flex-start; }
         .journey-card.modern .journey-main-time { max-width:60%; font-size:12px; color:var(--text-main); }
         .journey-quick-meta { display:flex; flex-wrap:wrap; gap:4px 7px; margin-top:7px; color:var(--text-muted); font-size:10px; font-weight:700; line-height:1.35; }
@@ -3349,7 +3349,6 @@
                 trackedBusRouteStops = Array.isArray(data.stops) ? data.stops : [];
                 trackedBusRouteProgressState = trackedBusRouteStops.length > 1 ? 'ready' : 'unavailable';
                 const color = safeRouteColor(data.route?.route_color, details.sourceAgency);
-                L.polyline(coordinates, { color:darkenRouteColor(color, .52), weight:10, opacity:.95 }).addTo(trackedBusRouteLayer);
                 L.polyline(coordinates, { color, weight:6.5, opacity:1 }).addTo(trackedBusRouteLayer);
                 refreshTrackedBus({ moveMap:false });
             } catch (error) {
@@ -5767,7 +5766,7 @@
                     <article class="journey-card">
                         <div class="journey-summary">
                             <span class="journey-route" title="${escapeHtml(journey.route_short_name)}" style="background:${safeRouteColor(journey.route_color)}">${escapeHtml(compactRouteLabel(journey.route_id, journey.route_short_name))}</span>
-                            <span class="journey-time">${escapeHtml(journey.departure_time)} → ${escapeHtml(journey.arrival_time)}</span>
+                            <span class="journey-time">${escapeHtml(formatScheduleTime(journey.departure_time))} → ${escapeHtml(formatScheduleTime(journey.arrival_time))}</span>
                         </div>
                         <div class="journey-meta">${journey.duration_minutes} min · ${journey.stop_count} stops · departs in ${journey.wait_minutes} min<br>${escapeHtml(journey.headsign)}</div>
                         <button class="route-action" data-journey-index="${index}">Show route</button>
@@ -5861,7 +5860,7 @@
                         : `${journey.route_id}:${journey.direction_id || ''}`;
                     const signature = `${service}:${journey.from_stop?.stop_id || ''}:${journey.to_stop?.stop_id || ''}`;
                     if (!groupedJourneys.has(signature)) groupedJourneys.set(signature, { journey, index, departures:[] });
-                    groupedJourneys.get(signature).departures.push({ departure:journey.departure_time, arrival:journey.arrival_time, index });
+                    groupedJourneys.get(signature).departures.push({ departure:formatScheduleTime(journey.departure_time), arrival:formatScheduleTime(journey.arrival_time), index });
                 });
                 const displayedJourneys = [...groupedJourneys.values()].slice(0, 8);
                 const mariBusCards = displayedJourneys.map(({ journey, index, departures }, displayIndex) => {
@@ -5874,9 +5873,9 @@
                     return { totalMinutes:Number(journey.total_minutes || Infinity), source:'maribus', index, html:`<article class="journey-card modern unified-candidate" style="--entry-delay:${Math.min(displayIndex, 6) * 38}ms" data-nearby-index="${index}" role="button" tabindex="0" aria-pressed="false" aria-label="MariBus scheduled journey, ${escapeHtml(formatJourneyDuration(journey.total_minutes))}">
                         <div class="journey-option-top">
                             <span class="journey-rank-label">MariBus schedule</span>
-                            <div class="journey-option-head"><div class="journey-total">${escapeHtml(formatJourneyDuration(journey.total_minutes))}</div><div class="journey-main-time">Board ${escapeHtml(journey.departure_time)} &rarr; arrive ${escapeHtml(journey.arrival_time)}</div></div>
-                            <div class="journey-steps"><span class="journey-walk-step">${iconSvg('walk')} Walk ${walkMinutes} min</span><span>&rsaquo;</span>${routeBadges(journey)}</div>
-                            <div class="journey-quick-meta"><span>${waitMinutes ? `Wait ${waitMinutes} min` : `Leave ${escapeHtml(journey.departure_time)}`}</span><span>Ride ~${rideMinutes} min</span><span class="fare">${escapeHtml(compactFareLabel(journey.fare))}</span></div>
+                            <div class="journey-option-head"><div class="journey-total">${escapeHtml(formatJourneyDuration(journey.total_minutes))}</div><div class="journey-main-time">Board ${escapeHtml(formatScheduleTime(journey.departure_time))} &rarr; arrive ${escapeHtml(formatScheduleTime(journey.arrival_time))}</div></div>
+                            <div class="journey-steps">${walkMinutes ? `${journeyWalkLabel(`${walkMinutes} min`)}<span>&rsaquo;</span>` : ''}${routeBadges(journey)}</div>
+                            <div class="journey-quick-meta"><span>${waitMinutes ? `Wait ${waitMinutes} min` : `Board ${escapeHtml(formatScheduleTime(journey.departure_time))}`}</span><span>Ride ~${rideMinutes} min</span><span class="fare">${escapeHtml(compactFareLabel(journey.fare))}</span></div>
                             <div class="journey-board">${journey.wait_minutes ? `Leave now · wait about ${journey.wait_minutes} min<br>` : ''}Board at <strong>${escapeHtml(journey.from_stop.stop_name)}</strong><br>Exit at ${escapeHtml(journey.to_stop.stop_name)}</div>
                             ${peakTravelAdvisoryHtml(agency !== 'rapid-rail-kl' && agency !== 'ktmb')}
                             ${localJourneyFareHtml(journey.fare)}
@@ -5948,7 +5947,7 @@
                         card.dataset.nearbyIndex = String(journeyIndex);
                         card.setAttribute('aria-label', `Journey option, ${formatJourneyDuration(journey.total_minutes)}`);
                         const time = card.querySelector('.journey-main-time');
-                        if (time) time.textContent = `Board ${journey.departure_time} → arrive ${journey.arrival_time}`;
+                        if (time) time.textContent = `Board ${formatScheduleTime(journey.departure_time)} → arrive ${formatScheduleTime(journey.arrival_time)}`;
                         const total = card.querySelector('.journey-total');
                         if (total) total.textContent = formatJourneyDuration(journey.total_minutes);
                         const detailButton = card.querySelector('[data-show-route]');
@@ -6255,6 +6254,8 @@
         }
 
         function localJourneyFlowHtml(journey, sections) {
+            const boardTime = formatScheduleTime(journey.departure_time);
+            const arrivalTime = formatScheduleTime(journey.arrival_time);
             const totalMinutes = Math.max(1, Number(journey.total_minutes || journey.duration_minutes || 0));
             const walkMinutes = Math.max(0, Number(journey.walk_minutes || 0));
             const transfers = Math.max(0, Number(journey.transfers || 0));
@@ -6263,7 +6264,7 @@
                 return `<span class="journey-route" style="background:${safeRouteColor(leg.route_color)}">${escapeHtml(label)}</span>`;
             }).join('<span aria-hidden="true">&rsaquo;</span>');
             const summary = `<section class="journey-preview" aria-label="Journey summary">
-                <div class="journey-preview-top"><div><strong>${escapeHtml(formatJourneyDuration(totalMinutes))}</strong><small>${escapeHtml(journey.departure_time && journey.arrival_time ? `Board ${journey.departure_time} → arrive ${journey.arrival_time}` : journey.arrival_time ? `Arrive ${journey.arrival_time}` : 'Scheduled arrival')}</small></div></div>
+                <div class="journey-preview-top"><div><strong>${escapeHtml(formatJourneyDuration(totalMinutes))}</strong><small>${escapeHtml(boardTime && arrivalTime ? `Board ${boardTime} → arrive ${arrivalTime}` : arrivalTime ? `Arrive ${arrivalTime}` : 'Scheduled arrival')}</small></div></div>
                 <div class="journey-steps">${walkMinutes ? `<span>${walkMinutes} min walking total</span>` : ''}${routeBadges}</div>
             </section>`;
             const openingWalk = walkMinutes ? `<div class="google-flow-step"><span class="google-flow-icon">${iconSvg('walk')}</span><div class="google-flow-copy"><strong>Walk about ${walkMinutes} min</strong><span>To ${escapeHtml(journey.from_stop?.stop_name || 'your boarding stop')}</span></div></div>` : '';
@@ -6281,6 +6282,14 @@
             return `${summary}<details class="journey-preview-details"><summary>Trip details</summary><button class="journey-details-back" type="button" onclick="returnToJourneyOptions()">&larr; All route options</button><p class="panel-message">${transfers} ${transfers === 1 ? 'transfer' : 'transfers'}</p><div class="google-journey-flow">${openingWalk}${rides || '<p class="panel-message">Stop-by-stop details are unavailable for this scheduled trip.</p>'}${endingWalk}</div></details>`;
         }
 
+        function formatScheduleTime(value) {
+            const time = String(value ?? '').trim();
+            const match = /^(\d{1,3}):([0-5]\d)(?::[0-5]\d)?$/.exec(time);
+            if (!match) return time;
+            const hour = Number(match[1]) % 24;
+            return `${hour % 12 || 12}:${match[2]} ${hour < 12 ? 'am' : 'pm'}`;
+        }
+
         function malaysiaTime(timestamp) {
             return new Intl.DateTimeFormat('en-MY', { hour:'2-digit', minute:'2-digit', hour12:false, timeZone:'Asia/Kuala_Lumpur' }).format(new Date(timestamp));
         }
@@ -6293,9 +6302,13 @@
             return `<strong>Walk</strong> ${Math.round(leg.distance || 0)} m to ${escapeHtml(leg.to?.name)}`;
         }
 
+        function journeyWalkLabel(duration) {
+            return `${iconSvg('walk', 'inline-icon')} Walk ${escapeHtml(duration)}`;
+        }
+
         function googleTransitStepLabel(step) {
             if (step.travel_mode === google.maps.TravelMode.WALKING) {
-                return `${iconSvg('walk', 'inline-icon')} Walk ${escapeHtml(step.duration?.text || '')}`;
+                return journeyWalkLabel(step.duration?.text || '');
             }
             const transit = step.transit || {};
             const line = transit.line || {};
@@ -7406,7 +7419,7 @@
             const transitLegs = steps.filter(step => step.travel_mode === google.maps.TravelMode.TRANSIT);
             const transfers = Math.max(0, transitLegs.length - 1);
             const tripStrip = displaySteps.map(step => {
-                if (step.travel_mode === google.maps.TravelMode.WALKING) return `<span class="journey-walk-step">${iconSvg('walk')} Walk ${escapeHtml(step.duration?.text || '')}</span>`;
+                if (step.travel_mode === google.maps.TravelMode.WALKING) return journeyWalkLabel(step.duration?.text || '');
                 const line = step.transit?.line;
                 const stops = Number(step.transit?.num_stops || 0);
                 return `<span class="journey-route" style="background:${googleTransitLineColor(step)}">${escapeHtml(line?.short_name || line?.name || 'Transit')}${stops ? ` · ${stops} ${stops === 1 ? 'stop' : 'stops'}` : ''}</span>`;
