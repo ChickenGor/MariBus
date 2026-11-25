@@ -437,7 +437,6 @@
         body.walking-path-editing #bottom-sheet,
         body.walking-path-editing #map-view-toggle,
         body.walking-path-editing #bus-tracking-banner,
-        body.walking-path-editing #guided-map-back,
         body.walking-path-editing #guided-live-status,
         body.walking-path-editing #guided-camera-controls { display:none !important; }
         body.walking-path-editing #map { top:0 !important; height:100dvh !important; }
@@ -1285,8 +1284,6 @@
         #bottom-sheet.guided-mode.guided-ride-compact .guided-nav-current { padding:6px 3px 4px; }
         #bottom-sheet.guided-mode.guided-ride-compact .guided-station-rail { margin:5px 0; }
         #bottom-sheet.guided-mode.guided-ride-compact .guided-nav-footer { margin-top:6px; }
-        #guided-map-back { position:absolute; top:max(10px, env(safe-area-inset-top)); left:12px; z-index:2100; width:42px; height:42px; display:none; place-items:center; border:0; border-radius:50%; background:color-mix(in srgb, var(--sheet-bg) 94%, transparent); color:var(--text-main); box-shadow:0 3px 14px var(--shadow-color); cursor:pointer; }
-        #guided-map-back .ui-icon { width:21px; height:21px; }
         #guided-live-status { position:absolute; top:max(10px, env(safe-area-inset-top)); left:62px; right:12px; z-index:2090; min-height:58px; display:none; align-items:center; gap:11px; padding:9px 13px; box-sizing:border-box; overflow:hidden; border:1px solid rgba(255,255,255,.12); border-radius:16px; background:rgba(5,7,11,.94); color:#fff; box-shadow:0 5px 20px rgba(0,0,0,.34); backdrop-filter:blur(14px); }
         #guided-live-status.onboard { min-height:126px; align-items:flex-start; }
         .guided-live-icon { width:36px; height:36px; flex:0 0 36px; display:grid; place-items:center; border-radius:11px; background:#16a34a; color:#fff; }
@@ -1311,15 +1308,12 @@
         .guided-stop-labels span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
         .guided-stop-labels span:nth-child(2) { color:#fff; text-align:center; }
         .guided-stop-labels span:last-child { text-align:right; }
-        #guided-camera-controls { position:absolute; top:max(78px, calc(env(safe-area-inset-top) + 68px)); right:12px; z-index:2090; display:none; flex-direction:column; overflow:hidden; border:1px solid rgba(15,23,42,.1); border-radius:15px; background:color-mix(in srgb, var(--sheet-bg) 96%, transparent); box-shadow:0 4px 16px var(--shadow-color); }
-        .guided-camera-button { width:44px; height:44px; display:grid; place-items:center; border:0; border-bottom:1px solid var(--border-color); background:transparent; color:var(--text-main); cursor:pointer; }
-        .guided-camera-button:last-child { border-bottom:0; }
+        #guided-camera-controls { display:none; flex-direction:column; }
         .guided-camera-button.active { color:#2563eb; background:#dbeafe; }
         .guided-camera-button .ui-icon { width:20px; height:20px; }
-        body:has(#bottom-sheet.guided-mode) #guided-map-back { display:grid; }
-        body:has(#bottom-sheet.guided-mode) #guided-live-status { display:flex; }
+        body:has(#bottom-sheet.guided-mode) #guided-live-status { display:flex; left:12px; }
         body:has(#bottom-sheet.guided-mode) #guided-camera-controls { display:flex; }
-        body:has(#bottom-sheet.guided-mode) #guided-live-status.onboard + #guided-camera-controls { top:max(146px, calc(env(safe-area-inset-top) + 136px)); }
+        body:has(#bottom-sheet.guided-mode) #map-view-toggle > :is(#map-current-location, #curate-route-main, #map-live-vehicles, #map-save-route, .map-tool-divider) { display:none; }
         .journey-live-progress { margin-top:9px; padding:9px 10px 8px; border-radius:10px; background:var(--input-bg); }
         .journey-progress-track { position:relative; height:6px; margin:8px 7px 7px; border-radius:999px; background:#dbe2ea; }
         .journey-progress-fill { position:absolute; inset:0 auto 0 0; width:0; border-radius:inherit; background:#16a34a; transition:width .45s ease; }
@@ -2117,9 +2111,6 @@
         <div class="bus-ride-actions"><button id="bus-ride-alert" type="button" onclick="activateBusRideAction()">Get on</button><button id="bus-ride-end" type="button" onclick="finishTrackedBusRide()">Stop tracking</button></div>
     </section>
 
-    <button id="guided-map-back" type="button" onclick="backFromGuidedJourney()" aria-label="Back to journey details">
-        <svg class="ui-icon" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"></path></svg>
-    </button>
     <div id="guided-live-status" role="status" aria-live="polite">
         <span id="guided-live-icon" class="guided-live-icon"><svg class="ui-icon" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="15" rx="3"></rect><path d="M7 7h10M7 12h.01M17 12h.01M7 21v-3M17 21v-3"></path></svg></span>
         <div class="guided-live-body">
@@ -2134,19 +2125,19 @@
             </div>
         </div>
     </div>
+    <div id="map-view-toggle" role="group" aria-label="Map controls">
     <div id="guided-camera-controls" role="group" aria-label="Navigation camera">
-        <button id="guided-head-north" class="guided-camera-button active" type="button" onclick="headNorthGuidedJourney()" title="North-up map" aria-label="Keep north at the top" aria-pressed="true">
+        <button id="guided-head-north" class="map-view-button guided-camera-button active" type="button" onclick="headNorthGuidedJourney()" title="North-up map" aria-label="Keep north at the top" aria-pressed="true">
             <svg class="ui-icon" viewBox="0 0 24 24"><path d="m12 3 6 16-6-3-6 3z"></path><path d="M12 3v13"></path></svg>
         </button>
-        <button id="guided-compass" class="guided-camera-button" type="button" onclick="toggleCompassGuidedJourney()" title="Compass follow" aria-label="Follow the direction your phone faces" aria-pressed="false">
+        <button id="guided-compass" class="map-view-button guided-camera-button" type="button" onclick="toggleCompassGuidedJourney()" title="Compass follow" aria-label="Follow the direction your phone faces" aria-pressed="false">
             <svg class="ui-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"></circle><path d="m15.5 8.5-2.2 5.3-5.3 2.2 2.2-5.3 5.3-2.2Z"></path></svg>
         </button>
-        <button id="guided-recenter" class="guided-camera-button" type="button" onclick="recenterGuidedJourney()" title="Face along route" aria-label="Recenter and face along route" aria-pressed="false">
+        <button id="guided-recenter" class="map-view-button guided-camera-button" type="button" onclick="recenterGuidedJourney()" title="Face along route" aria-label="Recenter and face along route" aria-pressed="false">
             <svg class="ui-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M12 2v3M12 19v3M2 12h3M19 12h3"></path><circle cx="12" cy="12" r="7"></circle></svg>
         </button>
     </div>
 
-    <div id="map-view-toggle" role="group" aria-label="Map view">
         <button id="curate-route-main" class="map-tool-button" type="button" hidden title="Contribute walking path" aria-label="Contribute walking path" aria-expanded="false">
             <svg class="ui-icon" viewBox="0 0 24 24"><path d="M4 19 9 5l4 10 7-6"></path><circle cx="4" cy="19" r="1.5"></circle><circle cx="9" cy="5" r="1.5"></circle><circle cx="13" cy="15" r="1.5"></circle><circle cx="20" cy="9" r="1.5"></circle></svg>
         </button>
@@ -2519,7 +2510,7 @@
                 showMenuNotice('Add GOOGLE_MAPS_MAP_ID to enable Google 3D buildings');
                 return;
             }
-            document.querySelectorAll('.map-view-button').forEach(button => {
+            document.querySelectorAll('[data-map-view]').forEach(button => {
                 const selected = button.dataset.mapView === mode;
                 button.classList.toggle('active', selected);
                 button.setAttribute('aria-pressed', String(selected));
@@ -2532,7 +2523,7 @@
                 showMenuNotice('3D view works best when zoomed in');
             }
         }
-        document.querySelectorAll('.map-view-button').forEach(button => {
+        document.querySelectorAll('[data-map-view]').forEach(button => {
             button.addEventListener('click', () => setMapViewMode(button.dataset.mapView));
         });
 
@@ -6887,7 +6878,7 @@
             const rideStep = currentStep?.travel_mode === google.maps.TravelMode.TRANSIT ? currentStep : null;
             document.getElementById('bottom-sheet')?.classList.toggle('guided-ride-compact', Boolean(rideStep && guidedJourney.boardedStageIndex === guidedJourney.stageIndex));
             document.getElementById('panel-content').innerHTML = `<div class="guided-nav-card ${rideStep ? 'has-alert-control' : ''}">
-                <div class="guided-nav-route"><div class="guided-nav-route-steps" aria-label="Journey progress">${routeSteps}</div><button class="guided-nav-close" type="button" onclick="confirmEndGuidedJourney()" aria-label="End navigation">&times;</button></div>
+                <div class="guided-nav-route"><div class="guided-nav-route-steps" aria-label="Journey progress">${routeSteps}</div><button class="guided-nav-close" type="button" onclick="backFromGuidedJourney()" aria-label="Back to journey details">&times;</button></div>
                 <div class="guided-nav-current"><strong>${escapeHtml(details.title)}</strong><small>${escapeHtml(details.meta)}</small></div>
                 ${rideStep ? guidedAlertControlHtml(alertPreference) : ''}
                 ${details.advice ? `<div class="leave-now-advice ${escapeHtml(details.advice.tone)}"><strong>${escapeHtml(details.advice.title)}</strong><span>${escapeHtml(details.advice.detail)}</span><small>${escapeHtml(details.advice.meta)}</small></div>` : ''}
@@ -7860,7 +7851,7 @@
             closeTransitPanel, resumeTransitPanel, showRoute, toggleJourneyPlanner, showMapSearch, planJourney,
             planJourneyFromSearch, swapJourneyPoints, useCurrentLocationForJourney, toggleSidebar, showMenuNotice, shareMariBus,
             startBusTracking, stopBusTracking, backTransitPanel, toggleDetailSheetSize,
-            startGuidedJourney, advanceGuidedJourney, recenterGuidedJourney, endGuidedJourney,
+            startGuidedJourney, advanceGuidedJourney, recenterGuidedJourney, endGuidedJourney, confirmEndGuidedJourney,
             selectSidebarRegion, toggleLiveVehicles, recenterMapPosition, backFromGuidedJourney,
             headNorthGuidedJourney, toggleCompassGuidedJourney, setGetOffAlertPreference, toggleGetOffAlertMenu, fetchBuses, retrySmartStop,
             openMobileJourneyPlanner, closeDestinationSearch, toggleMobileLiveVehicles, openNearbyDepartures
