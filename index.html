@@ -5884,7 +5884,8 @@
                         : `${journey.route_id}:${journey.direction_id || ''}`;
                     const signature = `${service}:${journey.from_stop?.stop_id || ''}:${journey.to_stop?.stop_id || ''}`;
                     if (!groupedJourneys.has(signature)) groupedJourneys.set(signature, { journey, index, departures:[] });
-                    groupedJourneys.get(signature).departures.push({ departure:formatScheduleTime(journey.departure_time), arrival:formatScheduleTime(journey.arrival_time), index });
+                    const [hours, minutes] = String(journey.departure_time || '').split(':').map(Number);
+                    groupedJourneys.get(signature).departures.push({ departure:formatScheduleTime(journey.departure_time), arrival:formatScheduleTime(journey.arrival_time), seconds:hours * 3600 + minutes * 60, index });
                 });
                 const displayedJourneys = [...groupedJourneys.values()].slice(0, 8);
                 const mariBusCards = displayedJourneys.map(({ journey, index, departures }, displayIndex) => {
@@ -5894,15 +5895,16 @@
                     const waitMinutes = Math.max(0, Number(journey.wait_minutes || 0));
                     const walkMinutes = Math.max(0, Number(journey.walk_minutes || 0));
                     const rideMinutes = Math.max(0, Number(journey.total_minutes || 0) - waitMinutes - walkMinutes);
-                    return { totalMinutes:Number(journey.total_minutes || Infinity), source:'maribus', index, html:`<article class="journey-card modern unified-candidate" style="--entry-delay:${Math.min(displayIndex, 6) * 38}ms" data-nearby-index="${index}" role="button" tabindex="0" aria-pressed="false" aria-label="MariBus scheduled journey, ${escapeHtml(formatJourneyDuration(journey.total_minutes))}">
+                    const shuttle = isPavilionShuttle(journey.route_id, journey.route_short_name) && !journey.transfers;
+                    return { totalMinutes:Number(journey.total_minutes || Infinity), source:'maribus', index, shuttleKey:shuttle ? pavilionShuttleKey(journey.from_stop?.stop_name, journey.to_stop?.stop_name, journey.departure_time) : '', html:`<article class="journey-card modern unified-candidate" style="--entry-delay:${Math.min(displayIndex, 6) * 38}ms" data-nearby-index="${index}" role="button" tabindex="0" aria-pressed="false" aria-label="MariBus scheduled journey, ${escapeHtml(formatJourneyDuration(journey.total_minutes))}">
                         <div class="journey-option-top">
                             <span class="journey-rank-label">MariBus schedule</span>
                             <div class="journey-option-head"><div class="journey-total">${escapeHtml(formatJourneyDuration(journey.total_minutes))}</div><div class="journey-main-time">Board ${escapeHtml(formatScheduleTime(journey.departure_time))} &rarr; arrive ${escapeHtml(formatScheduleTime(journey.arrival_time))}</div></div>
                             <div class="journey-steps">${walkMinutes ? `${journeyWalkLabel(`${walkMinutes} min`)}<span>&rsaquo;</span>` : ''}${routeBadges(journey)}</div>
-                            <div class="journey-quick-meta"><span>${waitMinutes ? `Wait ${waitMinutes} min` : `Board ${escapeHtml(formatScheduleTime(journey.departure_time))}`}</span><span>Ride ~${rideMinutes} min</span><span class="fare">${escapeHtml(compactFareLabel(journey.fare))}</span></div>
+                            <div class="journey-quick-meta"><span>${waitMinutes ? `Wait ${waitMinutes} min` : `Board ${escapeHtml(formatScheduleTime(journey.departure_time))}`}</span><span>Ride ~${rideMinutes} min</span><span class="fare">${shuttle ? 'Free · Scheduled' : escapeHtml(compactFareLabel(journey.fare))}</span></div>
                             <div class="journey-board">${journey.wait_minutes ? `Leave now · wait about ${journey.wait_minutes} min<br>` : ''}Board at <strong>${escapeHtml(journey.from_stop.stop_name)}</strong><br>Exit at ${escapeHtml(journey.to_stop.stop_name)}</div>
                             ${peakTravelAdvisoryHtml(agency !== 'rapid-rail-kl' && agency !== 'ktmb')}
-                            ${localJourneyFareHtml(journey.fare)}
+                            ${shuttle ? '' : localJourneyFareHtml(journey.fare)}
                             <div class="journey-live-progress" id="journey-progress-${index}">
                                 <div class="journey-progress-labels"><span>A</span><span>B</span></div>
                                 <div class="journey-progress-track"><div class="journey-progress-fill"></div><span class="journey-progress-node a"></span><span class="journey-progress-node b"></span><span class="journey-progress-bus" title="Live bus">${iconSvg('bus')}</span></div>
@@ -5921,22 +5923,32 @@
                     const lines = (candidate.route.legs?.[0]?.steps || [])
                         .filter(step => step.travel_mode === google.maps.TravelMode.TRANSIT)
                         .map(step => step.transit?.line?.short_name || step.transit?.line?.name || 'Transit').join('|');
-                    const signature = `${lines}:${candidate.durationMinutes}`;
+                    const shuttleKey = googlePavilionShuttleKey(candidate.route);
+                    const signature = shuttleKey || `${lines}:${candidate.durationMinutes}`;
                     if (seenGoogleSignatures.has(signature)) return false;
                     seenGoogleSignatures.add(signature);
                     candidate.lines = lines || 'Transit';
+                    candidate.shuttleKey = shuttleKey;
                     return true;
                 }).slice(0, 4);
                 const googleCards = googleDisplayedCandidates.map(candidate => {
                     const timeRange = googleRouteTimeRange(candidate.route);
                     const routeSteps = compactTransitStepSequence(candidate.route.legs?.[0]?.steps || []);
-                    return { totalMinutes:candidate.durationMinutes, source:'google', routeIndex:candidate.routeIndex, html:`<article class="journey-card modern unified-candidate" data-hybrid-google-index="${candidate.routeIndex}" role="button" tabindex="0" aria-pressed="false" aria-label="Google Transit journey, ${escapeHtml(formatJourneyDuration(candidate.durationMinutes))}">
+                    const matchingGroup = candidate.shuttleKey && displayedJourneys.find(({ journey }) =>
+                        !journey.transfers && isPavilionShuttle(journey.route_id, journey.route_short_name)
+                        && pavilionShuttleKey(journey.from_stop?.stop_name, journey.to_stop?.stop_name, journey.departure_time) === candidate.shuttleKey);
+                    const laterDepartures = matchingGroup ? [...new Set(matchingGroup.departures
+                        .filter(item => item.seconds > matchingGroup.departures[0].seconds)
+                        .sort((a, b) => a.seconds - b.seconds)
+                        .map(item => item.departure))].slice(0, 4) : [];
+                    return { totalMinutes:candidate.durationMinutes, source:'google', routeIndex:candidate.routeIndex, shuttleKey:candidate.shuttleKey, html:`<article class="journey-card modern unified-candidate" data-hybrid-google-index="${candidate.routeIndex}" role="button" tabindex="0" aria-pressed="false" aria-label="Google Transit journey, ${escapeHtml(formatJourneyDuration(candidate.durationMinutes))}">
                         <div class="journey-option-top"><span class="journey-rank-label">Google Transit</span>
                             <div class="journey-option-head"><div class="journey-total">${escapeHtml(formatJourneyDuration(candidate.durationMinutes))}</div><div class="journey-main-time">${escapeHtml(timeRange.text || 'Scheduled times unavailable')}</div></div>
                             <div class="journey-steps">${routeSteps || escapeHtml(candidate.lines)}</div>
-                            <div class="journey-quick-meta"><span>${candidate.walkingMinutes} min walking</span><span>${candidate.transfers} transfer${candidate.transfers === 1 ? '' : 's'}</span><span class="fare">${escapeHtml(compactFareLabel(candidate.route?.fare))}</span></div>
+                            <div class="journey-quick-meta"><span>${candidate.walkingMinutes} min walking</span><span>${candidate.transfers} transfer${candidate.transfers === 1 ? '' : 's'}</span><span class="fare">${candidate.shuttleKey ? 'Free · Scheduled' : escapeHtml(compactFareLabel(candidate.route?.fare))}</span></div>
                             ${peakTravelAdvisoryHtml(googleTransitHasBus(candidate.route.legs?.[0]?.steps?.filter(step => step.travel_mode === google.maps.TravelMode.TRANSIT)))}
-                            ${googleTransitFareHtml(candidate.route)}
+                            ${candidate.shuttleKey ? '' : googleTransitFareHtml(candidate.route)}
+                            ${laterDepartures.length ? `<div class="journey-quick-meta"><span>Later departures · ${escapeHtml(laterDepartures.join(', '))}</span></div>` : ''}
                         </div><div class="journey-actions"><button class="route-action" data-hybrid-google-details="${candidate.routeIndex}">View details</button></div>
                     </article>` };
                 });
@@ -5947,7 +5959,8 @@
                     to:{ name:toPlace.name, lat:toPlace.lat, lng:toPlace.lng },
                     agency,
                 };
-                const combinedTransitCandidates = [...mariBusCards, ...googleCards]
+                const googleShuttleKeys = new Set(googleCards.map(card => card.shuttleKey).filter(Boolean));
+                const combinedTransitCandidates = [...mariBusCards.filter(card => !googleShuttleKeys.has(card.shuttleKey)), ...googleCards]
                     .sort((a, b) => a.totalMinutes - b.totalMinutes);
                 const bestTransitCandidate = combinedTransitCandidates[0] || null;
                 const combinedTransitCards = combinedTransitCandidates
@@ -6347,6 +6360,33 @@
             if (!match) return time;
             const hour = Number(match[1]) % 24;
             return `${hour % 12 || 12}:${match[2]} ${hour < 12 ? 'am' : 'pm'}`;
+        }
+
+        function isPavilionShuttle(...labels) {
+            return labels.some(label => /^(?:S6060|PAVBJ|PAVILION BUKIT JALIL(?: \(PAVBJ\))?)$/i.test(String(label || '').trim()));
+        }
+
+        function pavilionShuttleKey(board, exit, departure) {
+            const stop = name => String(name || '').trim().toUpperCase().replace(/\s+/g, ' ')
+                .replace(/^(?:KL2324 |STESEN )?LRT AWAN BESAR$/, 'AWAN BESAR');
+            const from = stop(board);
+            const to = stop(exit);
+            if (!((from === 'AWAN BESAR' && to === 'PAVILION BUKIT JALIL')
+                || (from === 'PAVILION BUKIT JALIL' && to === 'AWAN BESAR'))) return '';
+            const time = formatScheduleTime(departure);
+            return /^\d{1,2}:\d{2} [ap]m$/i.test(time) ? `${from}:${time.toLowerCase()}` : '';
+        }
+
+        function googlePavilionShuttleKey(route) {
+            const rides = (route.legs?.[0]?.steps || []).filter(step => step.travel_mode === google.maps.TravelMode.TRANSIT);
+            if (rides.length !== 1) return '';
+            const transit = rides[0].transit;
+            if (!isPavilionShuttle(transit?.line?.short_name, transit?.line?.name)) return '';
+            const departure = transit.departure_time?.value;
+            const malaysiaDeparture = departure instanceof Date && Number.isFinite(departure.getTime())
+                ? new Intl.DateTimeFormat('en-GB', { timeZone:'Asia/Kuala_Lumpur', hour:'2-digit', minute:'2-digit', hourCycle:'h23' }).format(departure)
+                : '';
+            return pavilionShuttleKey(transit.departure_stop?.name, transit.arrival_stop?.name, malaysiaDeparture);
         }
 
         function malaysiaTime(timestamp) {
