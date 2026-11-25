@@ -6844,6 +6844,15 @@
                 }
                 segment.outline.setMap(map.native);
                 segment.routeLine.setMap(map.native);
+                if (segment.stepIndex > guidedJourney.stageIndex
+                    && guidedJourney.steps[segment.stepIndex]?.travel_mode === google.maps.TravelMode.WALKING) {
+                    // A later walk belongs after a ride or transfer. Showing it
+                    // during the current walk makes the map look like a web of
+                    // dashed lines, so reveal it only when that stage begins.
+                    segment.outline.setMap(null);
+                    segment.routeLine.setMap(null);
+                    return;
+                }
                 if (segment.stepIndex !== guidedJourney.stageIndex) {
                     segment.outline.setPath(segment.path);
                     segment.routeLine.setPath(segment.path);
@@ -7289,7 +7298,13 @@
                     path.forEach(point => bounds.extend(point));
                 });
             }
-            const steps = (route.legs || []).flatMap(leg => leg.steps || []);
+            const rawSteps = (route.legs || []).flatMap(leg => leg.steps || []);
+            // Guidance merges provider micro-walk instructions into one stage.
+            // Draw those same stages to keep map segments aligned with the
+            // progress chips and prevent duplicate walking geometry.
+            const steps = showAlternatives && guidedJourney?.steps?.length
+                ? guidedJourney.steps
+                : rawSteps;
             steps.forEach((step, stepIndex) => {
                 const path = Array.from(step.path || []);
                 if (path.length < 2) return;
