@@ -1169,6 +1169,7 @@
         .journey-card.modern .journey-comparison,
         .journey-card.modern .save-route-action { display:none; }
         .journey-card.modern .journey-actions:has(.save-route-action) { grid-template-columns:1fr; }
+        .journey-card.modern .journey-actions:has([data-hybrid-google-details]) { grid-template-columns:1fr; }
         .journey-card.modern .journey-option-head { align-items:flex-start; }
         .journey-card.modern .journey-main-time { max-width:60%; font-size:12px; color:var(--text-main); }
         .journey-quick-meta { display:flex; flex-wrap:wrap; gap:4px 7px; margin-top:7px; color:var(--text-muted); font-size:10px; font-weight:700; line-height:1.35; }
@@ -2370,6 +2371,7 @@
         const map = L.map('map', { zoomControl: false }).setView([3.1390, 101.6869], 12);
         window.__mariBusMap = map;
         let journeyMapFocused = false;
+        let journeyRouteRevision = 0;
         // Google TransitLayer renders route lines and every stop together. It
         // cannot be configured as "lines only", so do not put it on the idle
         // home map: a city-wide field of stop icons is harder to read than a
@@ -3696,6 +3698,7 @@
                 return;
             }
             journeyDetailBackAction = null;
+            journeyRouteRevision++;
             const panel = document.getElementById('transit-panel');
             panel.classList.remove('open');
             const sheet = document.getElementById('bottom-sheet');
@@ -4806,6 +4809,7 @@
         }
 
         async function showJourneySegment(journey, preservePanel = false) {
+            const revision = ++journeyRouteRevision;
             focusJourneyMap();
             const agency = document.getElementById('agency-select').value;
             const params = new URLSearchParams({
@@ -4817,6 +4821,7 @@
             try {
                 const response = await fetch(`${API_BASE}/api/routes/${encodeURIComponent(journey.route_id)}?${params}`);
                 const result = await response.json();
+                if (revision !== journeyRouteRevision) return;
                 if (!result.success) throw new Error(result.error);
                 activeRouteLayer.clearLayers();
                 routeDirectionsRenderers.forEach(renderer => renderer.setMap(null));
@@ -4824,7 +4829,8 @@
                 const fullStops = result.data.stops;
                 const stops = sliceStopsBetween(fullStops, journey.from_stop, journey.to_stop);
                 const brandColor = safeRouteColor(journey.route_color, agency);
-                const transitRouteDrawn = await drawGoogleTransitRoute(journey, stops, brandColor);
+                const transitRouteDrawn = await drawGoogleTransitRoute(journey, stops, brandColor, revision);
+                if (revision !== journeyRouteRevision) return;
                 if (!transitRouteDrawn && stops.length) {
                     const gtfsSegment = sliceShapeThroughStops(result.data.shape, stops);
                     const coordinates = gtfsSegment.length ? gtfsSegment : stops.map(stop => [Number(stop.stop_lat), Number(stop.stop_lon)]);
@@ -4987,7 +4993,7 @@
             </article>`;
         }
 
-        async function drawGoogleTransitRoute(journey, stops, color) {
+        async function drawGoogleTransitRoute(journey, stops, color, revision) {
             if (stops.length < 2) return false;
             const departure = new Date();
             const [hours, minutes] = String(journey.departure_time || '').split(':').map(Number);
@@ -5019,17 +5025,18 @@
                         });
                         const boardDistance = distanceMetres(coordinate(matchingStep.transit?.departure_stop?.location), stops[0]);
                         const exitDistance = distanceMetres(coordinate(matchingStep.transit?.arrival_stop?.location), stops.at(-1));
-                        return { route, boardDistance, exitDistance, score:boardDistance + exitDistance };
+                        return { path:matchingStep.path, boardDistance, exitDistance, score:boardDistance + exitDistance };
                     })
                     .filter(Boolean)
                     .sort((a, b) => a.score - b.score)[0];
                 // A route number alone is not enough: the same route can have
                 // loop, short-turn, and opposite-direction variants.
                 if (!matchingRoute || matchingRoute.boardDistance > 350 || matchingRoute.exitDistance > 350) return false;
-                const path = matchingRoute.route.overview_path;
-                const outline = new google.maps.Polyline({ map:map.native, path, strokeColor:'#7a163f', strokeWeight:10, strokeOpacity:.95, zIndex:4 });
+                if (revision !== journeyRouteRevision) return false;
+                const path = matchingRoute.path;
+                if (!path?.length) return false;
                 const routeLine = new google.maps.Polyline({ map:map.native, path, strokeColor:color, strokeWeight:6.5, strokeOpacity:1, zIndex:5 });
-                routeDirectionsRenderers.push(outline, routeLine);
+                routeDirectionsRenderers.push(routeLine);
                 const bounds = new google.maps.LatLngBounds();
                 path.forEach(point => bounds.extend(point));
                 if (!bounds.isEmpty()) fitJourneyBounds(bounds, 45);
@@ -5079,15 +5086,11 @@
                             roadPath = chunk.map(point => new google.maps.LatLng(point.lat, point.lng));
                         }
                     }
-                    const outlineLine = new google.maps.Polyline({
-                        map:map.native, path:roadPath, strokeColor:'#7a163f',
-                        strokeWeight:10, strokeOpacity:.95, zIndex:4,
-                    });
                     const colorLine = new google.maps.Polyline({
                         map:map.native, path:roadPath, strokeColor:color,
                         strokeWeight:6.5, strokeOpacity:1, zIndex:5,
                     });
-                    routeDirectionsRenderers.push(outlineLine, colorLine);
+                    routeDirectionsRenderers.push(colorLine);
                     roadPath.forEach(point => bounds.extend(point));
                 }
                 if (fitViewport && !bounds.isEmpty()) fitJourneyBounds(bounds, 45);
@@ -5131,13 +5134,10 @@
                 } catch (error) {
                     console.warn('Verified route chunk could not be road matched', error);
                 }
-                const outline = new google.maps.Polyline({
-                    map:map.native, path, strokeColor:'#7a163f', strokeWeight:10, strokeOpacity:.95, zIndex:4,
-                });
                 const routeLine = new google.maps.Polyline({
                     map:map.native, path, strokeColor:color, strokeWeight:6.5, strokeOpacity:1, zIndex:5,
                 });
-                routeDirectionsRenderers.push(outline, routeLine);
+                routeDirectionsRenderers.push(routeLine);
                 path.forEach(point => bounds.extend(point));
                 renderedSegments++;
             }
@@ -5888,7 +5888,7 @@
                             ${alternatives.length ? `<div class="journey-alternatives">Later departures<div class="departure-choice-list">${alternatives.map(item => `<button class="departure-choice" type="button" data-nearby-departure="${item.index}" aria-label="Choose departure at ${escapeHtml(item.departure)}, arriving ${escapeHtml(item.arrival)}">${escapeHtml(item.departure)} → ${escapeHtml(item.arrival)}</button>`).join('')}</div></div>` : ''}
                         </div>
                         <div class="journey-actions">
-                            <button class="route-action" data-show-route="${index}" style="background:${safeRouteColor(journey.route_color)}">View details</button>
+                            <button class="route-action" data-show-route="${index}">View details</button>
                             <button class="route-action save-route-action icon-only" data-save-route="${index}" title="Save route" aria-label="Save route">${iconSvg('bookmark')}</button>
                         </div>
                     </article>` };
@@ -6175,6 +6175,7 @@
         }
 
         async function showJourneyRoutes(journey) {
+            const revision = ++journeyRouteRevision;
             focusJourneyMap();
             const agency = document.getElementById('agency-select').value;
             activeRouteLayer.clearLayers();
@@ -6189,6 +6190,7 @@
                     const params = new URLSearchParams({ agency, trip_id:leg.trip_id, direction_id:leg.direction_id ?? '' });
                     const response = await fetch(`${API_BASE}/api/routes/${encodeURIComponent(leg.route_id)}?${params}`);
                     const result = await response.json();
+                    if (revision !== journeyRouteRevision) return;
                     if (!result.success) continue;
                     const data = result.data;
                     const segmentStops = sliceStopsBetween(data.stops, fromStop, toStop);
@@ -7495,6 +7497,7 @@
         }
 
         function renderGoogleTransitRoute(response, routeIndex, showAlternatives = false) {
+            journeyRouteRevision++;
             if (walkingDirectionsRenderer) walkingDirectionsRenderer.setMap(null);
             routeDirectionsRenderers.forEach(renderer => renderer.setMap(null));
             routeDirectionsRenderers = [];
