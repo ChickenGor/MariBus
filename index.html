@@ -2679,6 +2679,7 @@
         let guidedJourneyLastPosition = null;
         let guidedJourneyLastFixAt = 0;
         let guidedJourneyMarker = null;
+        let guidedJourneyMarkerFrame = null;
         let guidedJourneyFollowMode = true;
         let guidedJourneyHeadingMode = 'north';
         let guidedCompassHeading = null;
@@ -6874,7 +6875,7 @@
 
             // Precise fixes move promptly; weaker fixes blend in to remove the
             // cross-road jitter common around stations and elevated roads.
-            const weight = accuracy <= 10 ? .78 : accuracy <= 20 ? .58 : .34;
+            const weight = accuracy <= 10 ? .9 : accuracy <= 20 ? .76 : .56;
             let next = {
                 lat:previous.lat + (raw.lat - previous.lat) * weight,
                 lng:previous.lng + (raw.lng - previous.lng) * weight,
@@ -6887,8 +6888,8 @@
                 // Soft-map-match only when the fix is already near the active
                 // path. Far-away readings stay visible so genuine detours work.
                 if (snapped && snapped.distance <= Math.min(42, Math.max(18, accuracy * 1.25))) {
-                    next.lat += (snapped.lat - next.lat) * .32;
-                    next.lng += (snapped.lng - next.lng) * .32;
+                    next.lat += (snapped.lat - next.lat) * .2;
+                    next.lng += (snapped.lng - next.lng) * .2;
                 }
             }
             return next;
@@ -6987,6 +6988,39 @@
             };
         }
 
+        function markerPositionPoint(marker) {
+            const position = marker?.getPosition?.();
+            return position ? googleStepPoint(position) : null;
+        }
+
+        function moveGuidedJourneyMarker(target, heading, intervalMs = 0) {
+            if (!guidedJourneyMarker) return;
+            const start = markerPositionPoint(guidedJourneyMarker);
+            if (!start) {
+                guidedJourneyMarker.setPosition(target);
+                if (guidedJourneyFollowMode) centerGuidedJourneyCamera(target, heading);
+                return;
+            }
+            if (guidedJourneyMarkerFrame) cancelAnimationFrame(guidedJourneyMarkerFrame);
+            const duration = Math.max(280, Math.min(900, intervalMs ? intervalMs * .45 : 520));
+            const startedAt = performance.now();
+            const frame = now => {
+                const progress = Math.min(1, (now - startedAt) / duration);
+                // Smooth ease-out retains a responsive feel while each genuine
+                // GPS measurement remains the source of truth.
+                const eased = 1 - Math.pow(1 - progress, 3);
+                const point = {
+                    lat:start.lat + (target.lat - start.lat) * eased,
+                    lng:start.lng + (target.lng - start.lng) * eased,
+                };
+                guidedJourneyMarker.setPosition(point);
+                if (guidedJourneyFollowMode) centerGuidedJourneyCamera(point, heading);
+                if (progress < 1) guidedJourneyMarkerFrame = requestAnimationFrame(frame);
+                else guidedJourneyMarkerFrame = null;
+            };
+            guidedJourneyMarkerFrame = requestAnimationFrame(frame);
+        }
+
         function updateGuidedJourneyPosition(position) {
             if (!guidedJourney) return;
             const next = stabiliseGuidedPosition(position);
@@ -7004,19 +7038,19 @@
             } else if (!guidedJourneyLastPosition) {
                 heading = guidedRouteHeading(next);
             }
+            const fixInterval = guidedJourneyLastFixAt ? Math.max(0, next.timestamp - guidedJourneyLastFixAt) : 0;
             guidedJourneyLastPosition = next;
             guidedJourneyLastFixAt = next.timestamp;
             if (!guidedJourneyMarker) {
                 guidedJourneyMarker = new google.maps.Marker({ map:map.native, zIndex:3000, title:'Your journey position' });
             }
-            guidedJourneyMarker.setPosition(next);
+            moveGuidedJourneyMarker(next, heading, fixInterval);
             guidedJourneyMarker.setIcon(guidedJourneyBusMarkerIcon());
             const routeDistance = trimCompletedGuidedRoute(next);
             if (guidedJourney.steps[guidedJourney.stageIndex]?.travel_mode === google.maps.TravelMode.WALKING) {
                 guidedJourney.offRouteSamples = routeDistance > 120 ? Number(guidedJourney.offRouteSamples || 0) + 1 : 0;
                 if (guidedJourney.offRouteSamples >= 3) rerouteGuidedJourney(next);
             }
-            if (guidedJourneyFollowMode) centerGuidedJourneyCamera(next, heading);
             const step = guidedJourney.steps[guidedJourney.stageIndex];
             if (step?.travel_mode === google.maps.TravelMode.WALKING && guidedDistanceMetres(next, googleStepPoint(step.end_location)) < 45) {
                 guidedJourney.stageIndex += 1;
@@ -7216,6 +7250,7 @@
 
         function stopGuidedJourney(resetCamera = true) {
             if (guidedJourneyWatchId !== null) navigator.geolocation?.clearWatch?.(guidedJourneyWatchId);
+            if (guidedJourneyMarkerFrame) cancelAnimationFrame(guidedJourneyMarkerFrame);
             if (guidedCompassListener) {
                 window.removeEventListener('deviceorientation', guidedCompassListener, true);
             }
@@ -7223,6 +7258,7 @@
             guidedJourney = null;
             guidedJourneyLastPosition = null;
             guidedJourneyLastFixAt = 0;
+            guidedJourneyMarkerFrame = null;
             guidedJourneyFollowMode = true;
             guidedJourneyHeadingMode = 'north';
             guidedCompassHeading = null;
