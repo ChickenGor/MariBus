@@ -4663,14 +4663,27 @@
                 };
                 const fetchStopSuggestions = async query => {
                     const agencies = agenciesForSelection();
-                    const results = await Promise.all(agencies.map(async agency => {
+                    const railSearch = agencies.includes('rapid-bus-kl') || agencies.includes('rapid-rail-kl');
+                    const queryAgencies = [...new Set(railSearch ? [...agencies, 'rapid-rail-kl'] : agencies)];
+                    const stationQuery = query.replace(/\b(?:lrt|mrt|station|stesen)\b/gi, '').trim().replace(/\s+/g, ' ');
+                    const stationAlias = /^ioi mall(?: puchong)?$/i.test(stationQuery) ? 'IOI PUCHONG JAYA' : '';
+                    const results = await Promise.all(queryAgencies.map(async agency => {
+                        const term = agency === 'rapid-rail-kl' ? stationAlias || stationQuery : query;
+                        if (term.length < 3) return [];
                         try {
-                            const response = await fetch(`${API_BASE}/api/stops?agency=${encodeURIComponent(agency)}&q=${encodeURIComponent(query)}&limit=8`);
+                            const response = await fetch(`${API_BASE}/api/stops?agency=${encodeURIComponent(agency)}&q=${encodeURIComponent(term)}&limit=8`);
                             const result = await response.json();
                             return result.success ? result.data.map(stop => ({ ...stop, source_agency:agency })) : [];
                         } catch (_) { return []; }
                     }));
-                    return [...new Map(results.flat().map(stop => [`${stop.source_agency}:${stop.stop_id}`, stop])).values()].slice(0, 4);
+                    const stops = [...new Map(results.flat().map(stop => [`${stop.source_agency}:${stop.stop_id}`, stop])).values()];
+                    const stations = stops.filter(stop => stop.source_agency === 'rapid-rail-kl');
+                    const others = stops.filter(stop => stop.source_agency !== 'rapid-rail-kl');
+                    if (stationAlias || stationQuery !== query || agencies[0] === 'rapid-rail-kl') {
+                        return [...stations, ...others].slice(0, 4);
+                    }
+                    const reserved = stations.slice(0, 2);
+                    return [...others.slice(0, 4 - reserved.length), ...reserved];
                 };
                 const renderSuggestions = () => {
                     const items = [];
@@ -4687,8 +4700,15 @@
                     }
                     items.push(...stopSuggestions.map(stop => {
                         const isRail = stop.source_agency === 'rapid-rail-kl' || stop.source_agency === 'ktmb';
+                        const stationCode = stop.source_agency === 'rapid-rail-kl' ? stop.stop_id : '';
+                        const transitLabel = /^(?:SP|AG|KJ)\d/i.test(stationCode) ? 'LRT station'
+                            : /^(?:KG|PY)\d/i.test(stationCode) ? 'MRT station'
+                            : /^MR\d/i.test(stationCode) ? 'Monorail station'
+                            : /^BRT\d/i.test(stationCode) ? 'BRT station'
+                            : isRail ? 'Rail station' : 'Bus stop';
+                        const code = stop.stop_code || stationCode;
                         const button = document.createElement('button'); button.type = 'button';
-                        button.innerHTML = `<span class="search-result-row"><span class="search-result-icon transit">${iconSvg(isRail ? 'train' : 'bus')}</span><span class="search-result-copy"><strong>${escapeHtml(stop.stop_name)}</strong><small>${isRail ? 'Rail station' : 'Bus stop'}${stop.stop_code ? ` · ${escapeHtml(stop.stop_code)}` : ''}</small></span></span>`;
+                        button.innerHTML = `<span class="search-result-row"><span class="search-result-icon transit">${iconSvg(isRail && transitLabel !== 'BRT station' ? 'train' : 'bus')}</span><span class="search-result-copy"><strong>${escapeHtml(stop.stop_name)}</strong><small>${transitLabel}${code ? ` · ${escapeHtml(code)}` : ''}</small></span></span>`;
                         button.addEventListener('click', () => void chooseStopSuggestion(stop));
                         return button;
                     }));
@@ -4732,7 +4752,9 @@
                     } catch {
                         if (currentRequest === requestId) {
                             suggestions = [];
-                            stopSuggestions = await fetchStopSuggestions(query);
+                            const stops = await fetchStopSuggestions(query);
+                            if (currentRequest !== requestId) return;
+                            stopSuggestions = stops;
                             renderSuggestions();
                         }
                     }
