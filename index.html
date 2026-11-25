@@ -920,6 +920,7 @@
         #bottom-sheet.detail-mode > .sheet-header,
         #bottom-sheet.detail-mode > .custom-select { display:none; }
         .panel-heading { display:flex; position:sticky; top:0; z-index:4; min-height:28px; justify-content:space-between; gap:12px; align-items:flex-start; background:var(--sheet-bg); }
+        .panel-heading.journey-options-hidden { display:none !important; }
         .panel-heading:has(#panel-title:empty) > div { display:none; }
         .panel-heading h3 { margin:0; font-size:17px; }
         .panel-subtitle { margin:4px 0 12px; color:var(--text-muted); font-size:12px; }
@@ -3508,6 +3509,7 @@
         function openTransitPanel(title, subtitle, html, preserveSheetState = false) {
             document.getElementById('panel-title').textContent = title;
             document.getElementById('panel-subtitle').textContent = subtitle || '';
+            document.querySelector('#transit-panel .panel-heading')?.classList.toggle('journey-options-hidden', title === 'Journey options');
             document.getElementById('panel-content').innerHTML = html;
             document.getElementById('transit-panel').classList.add('open');
             const sheet = document.getElementById('bottom-sheet');
@@ -5922,12 +5924,11 @@
                     to:{ name:toPlace.name, lat:toPlace.lat, lng:toPlace.lng },
                     agency,
                 };
-                const scheduleCount = `<p class="journey-alternatives">Showing ${displayedJourneys.length} route option${displayedJourneys.length === 1 ? '' : 's'} and ${journeys.length} upcoming scheduled departure${journeys.length === 1 ? '' : 's'}.</p>`;
-                const mariBusPanel = `<section class="journey-source-panel" data-journey-source-panel="maribus">${scheduleCount}<h4 class="journey-section-title">${walkingPreferred ? 'Public transport' : 'MariBus schedule'}</h4>${html}</section>`;
-                const googlePanel = googleCards ? `<section class="journey-source-panel" data-journey-source-panel="google" hidden><h4 class="journey-section-title">Google Transit alternatives</h4>${googleCards}</section>` : '';
+                const mariBusPanel = `<section class="journey-source-panel" data-journey-source-panel="maribus">${html}</section>`;
+                const googlePanel = googleCards ? `<section class="journey-source-panel" data-journey-source-panel="google" hidden>${googleCards}</section>` : '';
                 const transitOptionsHtml = `${journeyPriorityControlsHtml()}${journeySourceTabsHtml(displayedJourneys.length, googleDisplayedCandidates.length)}${mariBusPanel}${googlePanel}`;
-                const walkingOptionHtml = `<h4 class="journey-section-title">${walkingPreferred ? 'Best option' : 'Walking'}</h4>${walkingCard || '<p class="panel-message">Walking directions are unavailable for this journey.</p>'}`;
-                openTransitPanel('Journey options', result.notice || '', walkingPreferred ? `${walkingOptionHtml}${transitOptionsHtml}` : transitOptionsHtml);
+                const walkingOptionHtml = walkingCard || '<p class="panel-message">Walking directions are unavailable for this journey.</p>';
+                openTransitPanel('Journey options', '', walkingPreferred ? `${walkingOptionHtml}${transitOptionsHtml}` : transitOptionsHtml);
                 bindJourneyPriorityControls();
                 bindJourneySourceTabs();
                 const selectNearbyJourney = (journeyIndex, sourceCard = null) => {
@@ -7631,8 +7632,8 @@
                     activeTrackedJourneyIndex = rankedRoutes[0].routeIndex;
                     setActiveJourneyRoutes(googleTransitRouteNames(response.routes[activeTrackedJourneyIndex]));
                 }
-                const transitOptionsHtml = `${journeyPriorityControlsHtml()}<h4 class="journey-section-title">${walkingPreferred ? 'Public transport' : 'Best option'}</h4>${cards}`;
-                const walkingOptionHtml = `<h4 class="journey-section-title">${walkingPreferred ? 'Best option' : 'Walking'}</h4>${walkingCard || '<p class="panel-message">Walking directions are unavailable for this journey.</p>'}`;
+                const transitOptionsHtml = `${journeyPriorityControlsHtml()}${cards}`;
+                const walkingOptionHtml = walkingCard || '<p class="panel-message">Walking directions are unavailable for this journey.</p>';
                 openTransitPanel('Journey options', '', walkingPreferred ? `${walkingOptionHtml}${transitOptionsHtml}` : `${transitOptionsHtml}${walkingOptionHtml}`, preserveSheetState);
                 bindJourneyPriorityControls();
                 document.getElementById('adjust-transit-modes')?.addEventListener('click', event => {
