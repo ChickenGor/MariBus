@@ -1263,6 +1263,12 @@
         .guided-progress-step.current { color:#fff; background:#2563eb; }
         .guided-progress-step.complete { color:#16734a; background:#dcfce7; }
         .guided-progress-step.future { opacity:.62; }
+        /* On board, the map is the primary surface. Keep a compact but fully
+           actionable status card instead of covering most of the route. */
+        #bottom-sheet.guided-mode.guided-ride-compact { max-height:min(35dvh,280px); padding:6px 16px max(12px,env(safe-area-inset-bottom)); }
+        #bottom-sheet.guided-mode.guided-ride-compact .guided-nav-current { padding:6px 3px 4px; }
+        #bottom-sheet.guided-mode.guided-ride-compact .guided-ride-progress { margin:6px 0; }
+        #bottom-sheet.guided-mode.guided-ride-compact .guided-nav-footer { margin-top:6px; }
         #guided-map-back { position:absolute; top:max(10px, env(safe-area-inset-top)); left:12px; z-index:2100; width:42px; height:42px; display:none; place-items:center; border:0; border-radius:50%; background:color-mix(in srgb, var(--sheet-bg) 94%, transparent); color:var(--text-main); box-shadow:0 3px 14px var(--shadow-color); cursor:pointer; }
         #guided-map-back .ui-icon { width:21px; height:21px; }
         #guided-live-status { position:absolute; top:max(10px, env(safe-area-inset-top)); left:62px; right:12px; z-index:2090; min-height:58px; display:none; align-items:center; gap:11px; padding:9px 13px; box-sizing:border-box; overflow:hidden; border:1px solid rgba(255,255,255,.12); border-radius:16px; background:rgba(5,7,11,.94); color:#fff; box-shadow:0 5px 20px rgba(0,0,0,.34); backdrop-filter:blur(14px); }
@@ -6539,8 +6545,53 @@
             const exit = transit.arrival_stop?.name || 'Get off';
             const stops = Math.max(0, Number(transit.num_stops || 0));
             const onBoard = guidedJourney?.boardedStageIndex === guidedJourney?.stageIndex;
-            const state = onBoard ? `On board · ${stops || '—'} stop${stops === 1 ? '' : 's'} to go` : `Ready to board ${routeName}`;
-            return `<section class="guided-ride-progress" aria-label="Bus stop progress"><div class="guided-ride-progress-head"><span>Stop progress</span><strong id="guided-ride-progress-state">${escapeHtml(state)}</strong></div><div class="guided-ride-progress-track"><div id="guided-ride-progress-fill" class="guided-ride-progress-fill" style="width:${onBoard ? '8' : '0'}%"></div></div><div class="guided-ride-progress-labels"><span id="guided-ride-progress-from">${escapeHtml(board)}</span><span id="guided-ride-progress-to">${escapeHtml(exit)}</span></div></section>`;
+            const deviceProgress = guidedJourney?.deviceRideProgress;
+            const stopsToExit = Number.isFinite(deviceProgress?.stopsToExit) ? deviceProgress.stopsToExit : stops;
+            const state = onBoard ? `On board · ${stopsToExit || '—'} stop${stopsToExit === 1 ? '' : 's'} to go` : `Ready to board ${routeName}`;
+            const fill = onBoard ? Math.max(8, Number(deviceProgress?.progress || 8)) : 0;
+            return `<section class="guided-ride-progress" aria-label="Stop progress"><div class="guided-ride-progress-head"><span>Stop progress</span><strong id="guided-ride-progress-state">${escapeHtml(state)}</strong></div><div class="guided-ride-progress-track"><div id="guided-ride-progress-fill" class="guided-ride-progress-fill" style="width:${fill}%"></div></div><div class="guided-ride-progress-labels"><span id="guided-ride-progress-from">${escapeHtml(board)}</span><span id="guided-ride-progress-to">${escapeHtml(exit)}</span></div></section>`;
+        }
+
+        function guidedDeviceStopProgress(position, step) {
+            const path = Array.from(step?.path || []).map(googleStepPoint).filter(Boolean);
+            if (path.length < 2) return null;
+            let totalLength = 0, completedLength = 0, nearestDistance = Number.POSITIVE_INFINITY;
+            for (let index = 1; index < path.length; index += 1) {
+                const start = path[index - 1], end = path[index];
+                const segmentLength = guidedDistanceMetres(start, end);
+                if (!segmentLength) continue;
+                const latitudeScale = 111320;
+                const longitudeScale = latitudeScale * Math.cos(position.lat * Math.PI / 180);
+                const dx = (end.lng - start.lng) * longitudeScale, dy = (end.lat - start.lat) * latitudeScale;
+                const lengthSquared = dx * dx + dy * dy;
+                const px = (position.lng - start.lng) * longitudeScale, py = (position.lat - start.lat) * latitudeScale;
+                const factor = lengthSquared ? Math.max(0, Math.min(1, (px * dx + py * dy) / lengthSquared)) : 0;
+                const projected = { lat:start.lat + (end.lat - start.lat) * factor, lng:start.lng + (end.lng - start.lng) * factor };
+                const distance = guidedDistanceMetres(position, projected);
+                if (distance < nearestDistance) {
+                    nearestDistance = distance;
+                    completedLength = totalLength + segmentLength * factor;
+                }
+                totalLength += segmentLength;
+            }
+            const exit = googleStepPoint(step?.transit?.arrival_stop?.location);
+            const atExit = exit && guidedDistanceMetres(position, exit) <= Math.max(55, Number(position.accuracy || 0));
+            if (!atExit && nearestDistance > Math.max(90, Number(position.accuracy || 0) * 1.6)) return null;
+            const progress = totalLength ? Math.max(0, Math.min(100, completedLength / totalLength * 100)) : 0;
+            const stops = Math.max(0, Number(step?.transit?.num_stops || 0));
+            return { progress:atExit ? 100 : progress, stopsToExit:atExit ? 0 : Math.max(1, Math.ceil(stops * (1 - progress / 100))) };
+        }
+
+        function applyGuidedDeviceStopProgress(progress) {
+            if (!guidedJourney || !progress) return;
+            guidedJourney.deviceRideProgress = progress;
+            if (progress.stopsToExit === 0) setGuidedJourneyState(GUIDED_JOURNEY_STATE.GET_OFF_NOW);
+            else if (progress.stopsToExit === 1) setGuidedJourneyState(GUIDED_JOURNEY_STATE.APPROACHING_DESTINATION);
+            const fill = document.getElementById('guided-ride-progress-fill');
+            const state = document.getElementById('guided-ride-progress-state');
+            if (fill) fill.style.width = `${Math.max(8, progress.progress)}%`;
+            if (state) state.textContent = progress.stopsToExit === 0 ? 'Get off now' : `${progress.stopsToExit} stop${progress.stopsToExit === 1 ? '' : 's'} to go`;
+            if (progress.stopsToExit <= 1) renderGuidedJourney();
         }
 
         function shouldSendGetOffAlert(progress) {
@@ -6799,6 +6850,7 @@
             const alertPreference = getOffAlertPreference();
             const currentStep = guidedJourney.steps[guidedJourney.stageIndex];
             const rideStep = currentStep?.travel_mode === google.maps.TravelMode.TRANSIT ? currentStep : null;
+            document.getElementById('bottom-sheet')?.classList.toggle('guided-ride-compact', Boolean(rideStep && guidedJourney.boardedStageIndex === guidedJourney.stageIndex));
             document.getElementById('panel-content').innerHTML = `<div class="guided-nav-card ${rideStep ? 'has-alert-control' : ''}">
                 <div class="guided-nav-route"><div class="guided-nav-route-steps" aria-label="Journey progress">${routeSteps}</div><button class="guided-nav-close" type="button" onclick="confirmEndGuidedJourney()" aria-label="End navigation">&times;</button></div>
                 <div class="guided-nav-current"><strong>${escapeHtml(details.title)}</strong><small>${escapeHtml(details.meta)}</small></div>
@@ -6960,6 +7012,7 @@
                 guidedJourney.offRouteSamples = 0;
                 guidedJourney.liveStopKey = '';
                 guidedJourney.liveStops = [];
+                guidedJourney.deviceRideProgress = null;
                 renderGoogleTransitRoute(response, 0, true);
                 renderGuidedJourney();
                 showMenuNotice(response.routes.length > 1 ? `Rerouted · ${response.routes.length} options found` : 'Route updated');
@@ -7047,6 +7100,11 @@
             moveGuidedJourneyMarker(next, heading, fixInterval);
             guidedJourneyMarker.setIcon(guidedJourneyBusMarkerIcon());
             const routeDistance = trimCompletedGuidedRoute(next);
+            const activeStep = guidedJourney.steps[guidedJourney.stageIndex];
+            if (activeStep?.travel_mode === google.maps.TravelMode.TRANSIT
+                && guidedJourney.boardedStageIndex === guidedJourney.stageIndex) {
+                applyGuidedDeviceStopProgress(guidedDeviceStopProgress(next, activeStep));
+            }
             if (guidedJourney.steps[guidedJourney.stageIndex]?.travel_mode === google.maps.TravelMode.WALKING) {
                 guidedJourney.offRouteSamples = routeDistance > 120 ? Number(guidedJourney.offRouteSamples || 0) + 1 : 0;
                 if (guidedJourney.offRouteSamples >= 3) rerouteGuidedJourney(next);
@@ -7069,7 +7127,7 @@
             stopGuidedJourney(false);
             const destinationPlace = journeySelection.to?.place;
             const destinationLocation = destinationPlace ? googleDirectionsLocation(destinationPlace) : googleStepPoint(route.legs?.[0]?.end_location);
-            guidedJourney = { routeIndex:Number(routeIndex), leg:route.legs?.[0] || null, steps, stageIndex:0, state:null, stateChangedAt:Date.now(), boardedStageIndex:null, alerted:new Set(), destinationName:destinationPlace?.name || 'your destination', destinationLocation, liveStopKey:'', liveStops:[], offRouteSamples:0, lastRerouteAt:0, approachInitialMinutes:null };
+            guidedJourney = { routeIndex:Number(routeIndex), leg:route.legs?.[0] || null, steps, stageIndex:0, state:null, stateChangedAt:Date.now(), boardedStageIndex:null, alerted:new Set(), destinationName:destinationPlace?.name || 'your destination', destinationLocation, liveStopKey:'', liveStops:[], deviceRideProgress:null, offRouteSamples:0, lastRerouteAt:0, approachInitialMinutes:null };
             guidedJourneyFollowMode = true;
             guidedJourneyHeadingMode = 'north';
             guidedLiveStopRequest = null;
@@ -7106,6 +7164,7 @@
             } else {
                 guidedJourney.stageIndex += 1;
                 guidedJourney.boardedStageIndex = null;
+                guidedJourney.deviceRideProgress = null;
                 syncGuidedJourneyState();
             }
             renderGuidedJourney();
