@@ -3509,7 +3509,8 @@
             document.getElementById('panel-title').textContent = title;
             document.getElementById('panel-subtitle').textContent = subtitle || '';
             document.querySelector('#transit-panel .panel-heading')?.classList.toggle('journey-options-hidden', title === 'Journey options');
-            document.getElementById('panel-content').innerHTML = html;
+            const showShuttle = ['Journey options', 'Door-to-door options', 'Walking is the best option'].includes(title);
+            document.getElementById('panel-content').innerHTML = html + (showShuttle ? aeonMidtownShuttleOptionHtml() : '');
             document.getElementById('transit-panel').classList.add('open');
             const sheet = document.getElementById('bottom-sheet');
             sheet.classList.remove('route-browse-mode');
@@ -5727,6 +5728,23 @@
                 const vehicle = String(step?.transit?.line?.vehicle?.type || '').toUpperCase();
                 return vehicle === 'BUS' || vehicle === 'INTERCITY_BUS' || vehicle === 'TROLLEYBUS';
             });
+        }
+
+        function aeonMidtownShuttleOptionHtml() {
+            const { from, to } = journeySelection;
+            if (!from || !to) return '';
+            const isMall = endpoint => /\baeon(?:\s+mall)?\s+kl\s+midtown\b/i.test(endpoint.place?.name || endpoint.stop_name || '');
+            const fromMall = isMall(from);
+            const toMall = isMall(to);
+            if (fromMall === toMall) return '';
+            const direction = fromMall
+                ? 'AEON Mall KL Midtown → Sentul Barat MRT (Entrance C)'
+                : 'Sentul Barat MRT (Entrance C) → AEON Mall KL Midtown';
+            return `<article class="journey-card">
+                <div class="journey-summary"><strong>mobi Connect East shuttle</strong></div>
+                <div class="journey-meta">${direction}<br>Every 60–70 min (published) · RM4 regular fare<br>Check exact departure, pickup point and seat availability in mobi Connect.</div>
+                <a class="route-action" href="https://willers.com.sg/mobiconnect-aeonmallklmidtown" target="_blank" rel="noopener noreferrer">Check times &amp; book</a>
+            </article>`;
         }
 
         async function planJourney() {
