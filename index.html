@@ -7156,13 +7156,15 @@
             const destinationLocation = destinationPlace ? googleDirectionsLocation(destinationPlace) : googleStepPoint(route.legs?.[0]?.end_location);
             guidedJourney = { routeIndex:Number(routeIndex), leg:route.legs?.[0] || null, steps, stageIndex:0, state:null, stateChangedAt:Date.now(), boardedStageIndex:null, alerted:new Set(), destinationName:destinationPlace?.name || 'your destination', destinationLocation, liveStopKey:'', liveStops:[], deviceRideProgress:null, offRouteSamples:0, lastRerouteAt:0, approachInitialMinutes:null };
             guidedJourneyFollowMode = true;
-            guidedJourneyHeadingMode = 'north';
+            // Follow the rider's travel direction immediately; when the phone
+            // exposes a compass this is upgraded to its facing direction below.
+            guidedJourneyHeadingMode = 'route';
             guidedLiveStopRequest = null;
-            // Guidance should open as a conventional upright map. The rider can
-            // still choose route-facing view with the recenter control.
+            // Start upright while waiting for the first GPS/compass reading.
             map.native.setHeading(0);
             map.native.setTilt(0);
             updateGuidedCameraControls();
+            void enableCompassGuidedJourney(true);
             renderGoogleTransitRoute(response, Number(routeIndex), true);
             openTransitPanel('Journey guidance', '', '');
             document.getElementById('bottom-sheet').classList.add('guided-mode');
@@ -7240,16 +7242,16 @@
             }
         }
 
-        async function enableCompassGuidedJourney() {
+        async function enableCompassGuidedJourney(silent = false) {
             if (!guidedJourney || !window.DeviceOrientationEvent) {
-                showMenuNotice('Compass guidance is not available on this device');
+                if (!silent) showMenuNotice('Compass guidance is not available on this device');
                 return false;
             }
             try {
                 if (typeof window.DeviceOrientationEvent.requestPermission === 'function') {
                     const permission = await window.DeviceOrientationEvent.requestPermission();
                     if (permission !== 'granted') {
-                        showMenuNotice('Compass permission was not granted');
+                        if (!silent) showMenuNotice('Compass permission was not granted');
                         return false;
                     }
                 }
@@ -7261,11 +7263,11 @@
                 guidedJourneyHeadingMode = 'compass';
                 centerGuidedJourneyCamera(guidedJourneyLastPosition, guidedCompassHeading ?? 0);
                 updateGuidedCameraControls();
-                showMenuNotice('Compass follow is on');
+                if (!silent) showMenuNotice('Compass follow is on');
                 return true;
             } catch (error) {
                 console.warn('Compass permission unavailable', error);
-                showMenuNotice('Could not enable compass follow');
+                if (!silent) showMenuNotice('Could not enable compass follow');
                 return false;
             }
         }
