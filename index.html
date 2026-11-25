@@ -2677,6 +2677,7 @@
         };
         let guidedJourneyWatchId = null;
         let guidedJourneyLastPosition = null;
+        let guidedJourneyLastFixAt = 0;
         let guidedJourneyMarker = null;
         let guidedJourneyFollowMode = true;
         let guidedJourneyHeadingMode = 'north';
@@ -6833,6 +6834,66 @@
             return { index:nearestIndex, distance:nearestDistance };
         }
 
+        function nearestGuidedPathPoint(position, path) {
+            const points = (path || []).map(googleStepPoint).filter(Boolean);
+            if (points.length < 2) return null;
+            const latitudeScale = 111320;
+            const longitudeScale = latitudeScale * Math.cos(position.lat * Math.PI / 180);
+            let nearest = null;
+            for (let index = 1; index < points.length; index += 1) {
+                const start = points[index - 1], end = points[index];
+                const dx = (end.lng - start.lng) * longitudeScale;
+                const dy = (end.lat - start.lat) * latitudeScale;
+                const lengthSquared = dx * dx + dy * dy;
+                if (!lengthSquared) continue;
+                const pointX = (position.lng - start.lng) * longitudeScale;
+                const pointY = (position.lat - start.lat) * latitudeScale;
+                const factor = Math.max(0, Math.min(1, (pointX * dx + pointY * dy) / lengthSquared));
+                const candidate = { lat:start.lat + (end.lat - start.lat) * factor, lng:start.lng + (end.lng - start.lng) * factor };
+                const distance = guidedDistanceMetres(position, candidate);
+                if (!nearest || distance < nearest.distance) nearest = { ...candidate, distance };
+            }
+            return nearest;
+        }
+
+        function stabiliseGuidedPosition(position) {
+            const raw = { lat:Number(position.coords.latitude), lng:Number(position.coords.longitude) };
+            if (!Number.isFinite(raw.lat) || !Number.isFinite(raw.lng)) return null;
+            const accuracy = Math.max(0, Number(position.coords.accuracy) || 0);
+            const timestamp = Number(position.timestamp) || Date.now();
+            const previous = guidedJourneyLastPosition;
+            if (!previous) return { ...raw, accuracy, timestamp };
+
+            // An 80m accuracy radius can easily put a pedestrian on the other
+            // side of a main road. Keep the last stable point until GPS improves.
+            if (accuracy > 80) return null;
+            const elapsedSeconds = Math.max(1, (timestamp - guidedJourneyLastFixAt) / 1000);
+            const movement = guidedDistanceMetres(previous, raw);
+            const plausibleDistance = Math.max(28, elapsedSeconds * 3 + Math.max(accuracy, Number(previous.accuracy || 0)));
+            if (movement > plausibleDistance && accuracy > 18) return null;
+
+            // Precise fixes move promptly; weaker fixes blend in to remove the
+            // cross-road jitter common around stations and elevated roads.
+            const weight = accuracy <= 10 ? .78 : accuracy <= 20 ? .58 : .34;
+            let next = {
+                lat:previous.lat + (raw.lat - previous.lat) * weight,
+                lng:previous.lng + (raw.lng - previous.lng) * weight,
+                accuracy,
+                timestamp,
+            };
+            const activeStep = guidedJourney?.steps?.[guidedJourney.stageIndex];
+            if (activeStep?.travel_mode === google.maps.TravelMode.WALKING && accuracy >= 14) {
+                const snapped = nearestGuidedPathPoint(next, activeStep.path);
+                // Soft-map-match only when the fix is already near the active
+                // path. Far-away readings stay visible so genuine detours work.
+                if (snapped && snapped.distance <= Math.min(42, Math.max(18, accuracy * 1.25))) {
+                    next.lat += (snapped.lat - next.lat) * .32;
+                    next.lng += (snapped.lng - next.lng) * .32;
+                }
+            }
+            return next;
+        }
+
         function trimCompletedGuidedRoute(position) {
             if (!guidedJourney || !guidedRouteSegments.length) return Number.POSITIVE_INFINITY;
             let activeDistance = Number.POSITIVE_INFINITY;
@@ -6928,8 +6989,8 @@
 
         function updateGuidedJourneyPosition(position) {
             if (!guidedJourney) return;
-            const next = { lat:Number(position.coords.latitude), lng:Number(position.coords.longitude) };
-            if (!Number.isFinite(next.lat) || !Number.isFinite(next.lng)) return;
+            const next = stabiliseGuidedPosition(position);
+            if (!next) return;
             const liveHeading = Number(position.coords.heading);
             const movingWithReliableHeading = Number.isFinite(liveHeading) && Number(position.coords.speed) >= 1;
             let heading = map.native.getHeading?.() || 0;
@@ -6944,6 +7005,7 @@
                 heading = guidedRouteHeading(next);
             }
             guidedJourneyLastPosition = next;
+            guidedJourneyLastFixAt = next.timestamp;
             if (!guidedJourneyMarker) {
                 guidedJourneyMarker = new google.maps.Marker({ map:map.native, zIndex:3000, title:'Your journey position' });
             }
@@ -7160,6 +7222,7 @@
             guidedJourneyWatchId = null;
             guidedJourney = null;
             guidedJourneyLastPosition = null;
+            guidedJourneyLastFixAt = 0;
             guidedJourneyFollowMode = true;
             guidedJourneyHeadingMode = 'north';
             guidedCompassHeading = null;
