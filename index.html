@@ -4828,18 +4828,21 @@
                 const fullStops = result.data.stops;
                 const stops = sliceStopsBetween(fullStops, journey.from_stop, journey.to_stop);
                 const brandColor = safeRouteColor(journey.route_color, agency);
-                const transitRouteDrawn = await drawGoogleTransitRoute(journey, stops, brandColor, revision);
+                const bounds = new google.maps.LatLngBounds();
+                const transitRouteDrawn = await drawGoogleTransitRoute(journey, stops, brandColor, revision, bounds);
                 if (revision !== journeyRouteRevision) return;
                 if (!transitRouteDrawn && stops.length) {
                     const gtfsSegment = sliceShapeThroughStops(result.data.shape, stops);
                     const coordinates = gtfsSegment.length ? gtfsSegment : stops.map(stop => [Number(stop.stop_lat), Number(stop.stop_lon)]);
-                    const line = drawOutlinedRoute(coordinates, brandColor);
-                    map.fitBounds(line.getBounds(), { padding:[45,45] });
+                    drawOutlinedRoute(coordinates, brandColor);
+                    coordinates.forEach(([lat, lng]) => bounds.extend({ lat, lng }));
                 }
                 [stops[0], stops[stops.length - 1]].filter(Boolean).forEach(stop => {
                     createStopMarker(stop, brandColor).addTo(activeRouteLayer);
                 });
-                updateJourneyPlaceMarkers();
+                updateJourneyPlaceMarkers(false);
+                await drawScheduledJourneyWalks(journey, [], revision, bounds);
+                if (revision !== journeyRouteRevision) return;
                 if (!preservePanel) {
                     openTransitPanel('', '', transitStyleRouteHero(journey, stops));
                     const sheet = document.getElementById('bottom-sheet');
@@ -4992,7 +4995,7 @@
             </article>`;
         }
 
-        async function drawGoogleTransitRoute(journey, stops, color, revision) {
+        async function drawGoogleTransitRoute(journey, stops, color, revision, bounds) {
             if (stops.length < 2) return false;
             const departure = new Date();
             const [hours, minutes] = String(journey.departure_time || '').split(':').map(Number);
@@ -5036,9 +5039,7 @@
                 if (!path?.length) return false;
                 const routeLine = new google.maps.Polyline({ map:map.native, path, strokeColor:color, strokeWeight:6.5, strokeOpacity:1, zIndex:5 });
                 routeDirectionsRenderers.push(routeLine);
-                const bounds = new google.maps.LatLngBounds();
                 path.forEach(point => bounds.extend(point));
-                if (!bounds.isEmpty()) fitJourneyBounds(bounds, 45);
                 return true;
             } catch (error) {
                 console.warn('Matching Google transit geometry unavailable; using GTFS geometry', error);
@@ -5257,7 +5258,7 @@
             }, 2500);
         }
 
-        function updateJourneyPlaceMarkers() {
+        function updateJourneyPlaceMarkers(fitViewport = true) {
             journeyPlaceLayer.clearLayers();
             const selected = [
                 { item:journeySelection.from, label:'A', title:'Starting point', color:'#2563eb' },
@@ -5270,6 +5271,7 @@
                     .bindPopup(`<div class="custom-popup"><strong>${entry.title}</strong><div>${escapeHtml(place.name)}</div></div>`)
                     .addTo(journeyPlaceLayer);
             });
+            if (!fitViewport) return;
             if (markers.length === 1) {
                 map.flyTo([selected[0].item.place.lat, selected[0].item.place.lng], 15);
             } else if (markers.length > 1) {
@@ -5929,7 +5931,7 @@
                 const combinedTransitCards = combinedTransitCandidates
                     .slice(0, 6)
                     .map((candidate, displayIndex) => candidate.html
-                        .replace('unified-candidate', displayIndex === 0 && !walkingPreferred ? 'selected' : '')
+                        .replace('unified-candidate', displayIndex === 0 && !walkingPreferred ? 'unified-candidate selected' : 'unified-candidate')
                         .replace('aria-pressed="false"', `aria-pressed="${displayIndex === 0 && !walkingPreferred}"`))
                     .join('');
                 const transitOptionsHtml = `${journeyPriorityControlsHtml()}${combinedTransitCards}`;
@@ -6181,6 +6183,7 @@
             routeDirectionsRenderers.forEach(renderer => renderer.setMap(null));
             routeDirectionsRenderers = [];
             const allCoordinates = [];
+            const rideEndpoints = [];
             try {
                 for (let index = 0; index < journey.legs.length; index++) {
                     const leg = journey.legs[index];
@@ -6193,6 +6196,7 @@
                     if (!result.success) continue;
                     const data = result.data;
                     const segmentStops = sliceStopsBetween(data.stops, fromStop, toStop);
+                    rideEndpoints[index] = { board:segmentStops[0], exit:segmentStops.at(-1) };
                     const stopCoordinates = segmentStops.map(stop => [Number(stop.stop_lat), Number(stop.stop_lon)]);
                     const shapeCoordinates = sliceShapeThroughStops(data.shape, segmentStops);
                     const coordinates = shapeCoordinates.length ? shapeCoordinates : stopCoordinates;
@@ -6205,11 +6209,44 @@
                     });
                     allCoordinates.push(...coordinates);
                 }
-                if (allCoordinates.length) map.fitBounds(L.latLngBounds(allCoordinates), { padding:[50,50], maxZoom:15 });
-                updateJourneyPlaceMarkers();
+                const bounds = new google.maps.LatLngBounds();
+                allCoordinates.forEach(([lat, lng]) => bounds.extend({ lat, lng }));
+                updateJourneyPlaceMarkers(false);
+                await drawScheduledJourneyWalks(journey, rideEndpoints, revision, bounds);
             } catch (error) {
                 console.error('Could not draw transfer journey', error);
             }
+        }
+
+        async function drawScheduledJourneyWalks(journey, rideEndpoints, revision, bounds) {
+            const stopPoint = stop => {
+                if (stop?.stop_lat == null || stop.stop_lon == null) return null;
+                const lat = Number(stop.stop_lat);
+                const lng = Number(stop.stop_lon);
+                return Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
+            };
+            const board = stopPoint(journey.from_stop);
+            const exit = stopPoint(journey.to_stop);
+            const legs = [
+                [journeySelection.from?.place, board],
+                [stopPoint(rideEndpoints[0]?.exit), stopPoint(rideEndpoints[1]?.board)],
+                [exit, journeySelection.to?.place],
+            ];
+            for (const stop of [board, exit]) if (stop) bounds.extend(stop);
+            fitJourneyBounds(bounds, 64, true);
+            const walks = await Promise.all(legs.map(([from, to]) =>
+                from && to && distanceMetres(from, to) >= 10 ? requestGoogleWalkingJourney(from, to) : null));
+            if (revision !== journeyRouteRevision) return;
+            for (const walk of walks) {
+                if (!walk) continue;
+                const steps = walk.legs?.[0]?.steps?.filter(step => step.path?.length > 1) || [];
+                for (const step of steps.length ? steps : [{ path:walk.overview_path }]) {
+                    if (!step.path?.length) continue;
+                    step.path.forEach(point => bounds.extend(point));
+                    routeDirectionsRenderers.push(...drawJourneyWalkStroke(step.path, step.contributedPath ? '#0f766e' : '#94a3b8'));
+                }
+            }
+            if (walks.some(Boolean)) fitJourneyBounds(bounds, 64, true);
         }
 
         async function showJourneyRouteList(journey) {
@@ -6267,7 +6304,7 @@
                 <div class="journey-preview-top"><div><strong>${escapeHtml(formatJourneyDuration(totalMinutes))}</strong><small>${escapeHtml(boardTime && arrivalTime ? `Board ${boardTime} → arrive ${arrivalTime}` : arrivalTime ? `Arrive ${arrivalTime}` : 'Scheduled arrival')}</small></div></div>
                 <div class="journey-steps">${walkMinutes ? `<span>${walkMinutes} min walking total</span>` : ''}${routeBadges}</div>
             </section>`;
-            const openingWalk = walkMinutes ? `<div class="google-flow-step"><span class="google-flow-icon">${iconSvg('walk')}</span><div class="google-flow-copy"><strong>Walk about ${walkMinutes} min</strong><span>To ${escapeHtml(journey.from_stop?.stop_name || 'your boarding stop')}</span></div></div>` : '';
+            const openingWalk = walkMinutes ? `<div class="google-flow-step"><span class="google-flow-icon">${iconSvg('walk')}</span><div class="google-flow-copy"><strong>Walk to your boarding stop</strong><span>${escapeHtml(journey.from_stop?.stop_name || '')}</span></div></div>` : '';
             const rides = sections.map((section, index) => {
                 const { leg, stops, fromStop, toStop } = section;
                 const color = safeRouteColor(leg.route_color);
@@ -7509,6 +7546,15 @@
             map.native.fitBounds(bounds, { top:62, right:78, bottom, left:42 });
         }
 
+        function drawJourneyWalkStroke(path, color) {
+            const base = { map:map.native, path, clickable:false };
+            return [
+                new google.maps.Polyline({ ...base, strokeColor:darkenRouteColor(color, .45), strokeOpacity:.95, strokeWeight:6, zIndex:20 }),
+                new google.maps.Polyline({ ...base, strokeOpacity:0, strokeWeight:3.5, zIndex:21,
+                    icons:[{ icon:{ path:'M 0,-1 0,1', strokeColor:color, strokeOpacity:1, strokeWeight:3, scale:2 }, offset:'0', repeat:'12px' }] }),
+            ];
+        }
+
         function renderGoogleTransitRoute(response, routeIndex, showAlternatives = false) {
             journeyRouteRevision++;
             if (walkingDirectionsRenderer) walkingDirectionsRenderer.setMap(null);
@@ -7546,21 +7592,14 @@
                 path.forEach(point => bounds.extend(point));
                 const isTransit = step.travel_mode === google.maps.TravelMode.TRANSIT;
                 const color = isTransit ? googleTransitLineColor(step) : step.contributedPath ? '#0f766e' : '#94a3b8';
-                const outline = new google.maps.Polyline({
+                const [outline, routeLine] = isTransit ? [new google.maps.Polyline({
                     map:map.native, path, clickable:false,
-                    strokeColor:darkenRouteColor(color, .45), strokeOpacity:isTransit ? 0 : .95,
-                    strokeWeight:isTransit ? 8.5 : 6, zIndex:20,
-                });
-                const lineOptions = {
+                    strokeOpacity:0, strokeWeight:8.5, zIndex:20,
+                }), new google.maps.Polyline({
                     map:map.native, path, clickable:false,
                     strokeColor:color, strokeOpacity:1,
-                    strokeWeight:isTransit ? 5 : 3.5, zIndex:21,
-                };
-                if (!isTransit) {
-                    lineOptions.strokeOpacity = 0;
-                    lineOptions.icons = [{ icon:{ path:'M 0,-1 0,1', strokeColor:color, strokeOpacity:1, strokeWeight:3, scale:2 }, offset:'0', repeat:'12px' }];
-                }
-                const routeLine = new google.maps.Polyline(lineOptions);
+                    strokeWeight:6.5, zIndex:21,
+                })] : drawJourneyWalkStroke(path, color);
                 routeDirectionsRenderers.push(outline, routeLine);
                 journeyStepSegments.push({ stepIndex, path, outline, routeLine, isTransit });
                 if (showAlternatives) guidedRouteSegments.push({ stepIndex, path, outline, routeLine });
