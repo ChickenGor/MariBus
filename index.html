@@ -1448,6 +1448,7 @@
             #bottom-sheet.detail-mode.sheet-half #transit-panel.open,
             #bottom-sheet.detail-mode.sheet-expanded #transit-panel.open { flex:1 1 auto; }
             #bottom-sheet.detail-mode.sheet-dragging { transition:none; user-select:none; will-change:height; }
+            #bottom-sheet.detail-mode:has(.journey-preview):not(.sheet-half):not(.sheet-expanded):not(.sheet-custom-size) { transition:none; }
             /* Keep the visible grip small, but give it a full finger-sized
                target.  A four-pixel line cannot reliably receive a mobile
                drag gesture. */
@@ -3558,7 +3559,7 @@
             const sheet = document.getElementById('bottom-sheet');
             const button = document.getElementById('sheet-size-toggle');
             if (!sheet || !button) return;
-            const expanded = sheet.classList.contains('sheet-half') || sheet.classList.contains('sheet-expanded');
+            const expanded = sheet.matches('.sheet-half, .sheet-expanded, .sheet-expanded-content');
             const previewDetails = sheet.querySelector('.journey-preview-details');
             if (previewDetails && window.innerWidth < 768) previewDetails.open = expanded;
             button.textContent = expanded ? 'Less' : 'More';
@@ -3569,8 +3570,8 @@
         function toggleDetailSheetSize() {
             const sheet = document.getElementById('bottom-sheet');
             if (!sheet.classList.contains('detail-mode') || window.innerWidth >= 768) return;
-            const expanded = sheet.classList.contains('sheet-half') || sheet.classList.contains('sheet-expanded');
-            sheet.classList.remove('sheet-half', 'sheet-expanded', 'sheet-custom-size');
+            const expanded = sheet.matches('.sheet-half, .sheet-expanded, .sheet-expanded-content');
+            sheet.classList.remove('sheet-half', 'sheet-expanded', 'sheet-custom-size', 'sheet-expanded-content');
             if (!expanded) sheet.classList.add('sheet-expanded');
             sheet.style.height = '';
             updateDetailSheetToggle();
@@ -3606,6 +3607,7 @@
             let activeTarget = null;
             const updateDragDetailDensity = height => {
                 sheet.classList.toggle('sheet-expanded-content', height >= window.innerHeight * .56);
+                if (sheet.querySelector('.journey-preview-details')) updateDetailSheetToggle();
             };
 
             const startDrag = event => {
@@ -6233,6 +6235,13 @@
                     sections.push({ leg, stops:result.data.stops, fromStop, toStop });
                 }
                 openTransitPanel('Route details', '', localJourneyFlowHtml(journey, sections));
+                const bounds = new google.maps.LatLngBounds();
+                for (const stop of [journey.from_stop, journey.to_stop, journey.transfer_stop]) {
+                    const lat = Number(stop?.stop_lat);
+                    const lng = Number(stop?.stop_lon);
+                    if (Number.isFinite(lat) && Number.isFinite(lng)) bounds.extend({ lat, lng });
+                }
+                fitJourneyBounds(bounds, 64, true);
                 // Return through the complete planner. A local timetable can
                 // deliberately defer to Google Transit, so calling only the
                 // nearby-stop request could otherwise leave this action stuck.
@@ -7466,7 +7475,15 @@
             return `#${channel(match[1])}${channel(match[2])}${channel(match[3])}`;
         }
 
-        function fitJourneyBounds(bounds, desktopPadding = 64) {
+        function fitJourneyBounds(bounds, desktopPadding = 64, includeEndpoints = false) {
+            if (includeEndpoints && bounds) {
+                for (const selection of [journeySelection.from, journeySelection.to]) {
+                    const place = selection?.place;
+                    if (Number.isFinite(place?.lat) && Number.isFinite(place?.lng)) {
+                        bounds.extend({ lat:place.lat, lng:place.lng });
+                    }
+                }
+            }
             if (!map?.native || !bounds || bounds.isEmpty?.()) return;
             if (window.innerWidth >= 768 || !document.body.classList.contains('route-results-open')) {
                 map.native.fitBounds(bounds, desktopPadding);
@@ -7474,7 +7491,7 @@
             }
             const sheetTop = document.getElementById('bottom-sheet')?.getBoundingClientRect?.().top;
             const bottom = Number.isFinite(sheetTop) ? Math.max(32, window.innerHeight - sheetTop + 18) : Math.round(window.innerHeight * .62);
-            map.native.fitBounds(bounds, { top:42, right:78, bottom, left:34 });
+            map.native.fitBounds(bounds, { top:62, right:78, bottom, left:42 });
         }
 
         function renderGoogleTransitRoute(response, routeIndex, showAlternatives = false) {
@@ -7532,7 +7549,7 @@
                 journeyStepSegments.push({ stepIndex, path, outline, routeLine, isTransit });
                 if (showAlternatives) guidedRouteSegments.push({ stepIndex, path, outline, routeLine });
             });
-            if (!bounds.isEmpty()) fitJourneyBounds(bounds, 64);
+            fitJourneyBounds(bounds, 64, !showAlternatives);
         }
 
         // Keep Google candidate retrieval independent from rendering so the
