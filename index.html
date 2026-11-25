@@ -1187,6 +1187,12 @@
         .journey-step-button:active { transform:scale(.99); }
         .google-flow-step:not(:last-child)::after { content:""; position:absolute; top:37px; bottom:-8px; left:16px; width:2px; background:var(--border-color); }
         .journey-detail-summary { display:grid; grid-template-columns:1.35fr 1fr; gap:8px; margin:0 0 14px; }
+        .journey-preview { padding:12px; margin-bottom:8px; border:1px solid var(--border-color); border-radius:14px; background:var(--input-bg); }
+        .journey-preview-top { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px; }
+        .journey-preview-top strong { display:block; font-size:20px; }
+        .journey-preview-top small { color:var(--text-muted); }
+        .journey-preview .start-guidance-button { width:auto; margin:0; padding:10px 14px; }
+        .journey-preview-details > summary { padding:8px 0; cursor:pointer; font-weight:700; }
         .journey-detail-summary-main,.journey-detail-summary-stat { padding:12px; border:1px solid var(--border-color); border-radius:14px; background:var(--input-bg); }
         .journey-detail-summary-main strong { display:block; color:var(--text-main); font-size:27px; line-height:1; letter-spacing:-.8px; }
         .journey-detail-summary-main span,.journey-detail-summary-stat span { display:block; margin-top:5px; color:var(--text-muted); font-size:10px; font-weight:750; }
@@ -3553,6 +3559,8 @@
             const button = document.getElementById('sheet-size-toggle');
             if (!sheet || !button) return;
             const expanded = sheet.classList.contains('sheet-half') || sheet.classList.contains('sheet-expanded');
+            const previewDetails = sheet.querySelector('.journey-preview-details');
+            if (previewDetails && window.innerWidth < 768) previewDetails.open = expanded;
             button.textContent = expanded ? 'Less' : 'More';
             button.setAttribute('aria-label', expanded ? 'Show fewer journey details' : 'Show more journey details');
             button.setAttribute('aria-expanded', String(expanded));
@@ -3810,10 +3818,10 @@
             const segment = journeyStepSegments.find(item => item.stepIndex === Number(stepIndex));
             if (!segment || !map?.native) return;
             journeyStepSegments.forEach(item => {
-                item.outline.setOptions({ strokeWeight:item.isTransit ? 8.5 : 6, strokeOpacity:.9 });
+                item.outline.setOptions({ strokeWeight:item.isTransit ? 8.5 : 6, strokeOpacity:item.isTransit ? 0 : .9 });
                 item.routeLine.setOptions({ strokeWeight:item.isTransit ? 5 : 3.5, strokeOpacity:item.isTransit ? 1 : 0 });
             });
-            segment.outline.setOptions({ strokeWeight:segment.isTransit ? 12 : 8.5, strokeOpacity:1 });
+            segment.outline.setOptions({ strokeWeight:segment.isTransit ? 12 : 8.5, strokeOpacity:segment.isTransit ? 0 : 1 });
             segment.routeLine.setOptions({ strokeWeight:segment.isTransit ? 7 : 4.5, strokeOpacity:1 });
             const bounds = new google.maps.LatLngBounds();
             segment.path.forEach(point => bounds.extend(point));
@@ -5355,7 +5363,6 @@
         }
 
         function drawOutlinedRoute(coordinates, color) {
-            L.polyline(coordinates, { color:darkenRouteColor(color, .52), weight:10, opacity:.95 }).addTo(activeRouteLayer);
             return L.polyline(coordinates, { color, weight:6.5, opacity:1 }).addTo(activeRouteLayer);
         }
 
@@ -6225,7 +6232,7 @@
                     if (!result.success) continue;
                     sections.push({ leg, stops:result.data.stops, fromStop, toStop });
                 }
-                openRouteTransitPanel('Route details', `${journey.from_stop.stop_name} → ${journey.to_stop.stop_name}`, localJourneyFlowHtml(journey, sections));
+                openTransitPanel('Route details', '', localJourneyFlowHtml(journey, sections));
                 // Return through the complete planner. A local timetable can
                 // deliberately defer to Google Transit, so calling only the
                 // nearby-stop request could otherwise leave this action stuck.
@@ -6240,9 +6247,13 @@
             const totalMinutes = Math.max(1, Number(journey.total_minutes || journey.duration_minutes || 0));
             const walkMinutes = Math.max(0, Number(journey.walk_minutes || 0));
             const transfers = Math.max(0, Number(journey.transfers || 0));
-            const summary = `<section class="journey-detail-summary" aria-label="Journey summary">
-                <div class="journey-detail-summary-main"><strong>${escapeHtml(formatJourneyDuration(totalMinutes))}</strong><span>${escapeHtml(journey.departure_time && journey.arrival_time ? `Leave ${journey.departure_time} → arrive ${journey.arrival_time}` : journey.arrival_time ? `Arrive ${journey.arrival_time}` : 'Scheduled arrival')}</span></div>
-                <div class="journey-detail-summary-stat"><div><strong>${walkMinutes} min</strong><span>walking</span></div><div><strong>${transfers}</strong><span>${transfers === 1 ? 'transfer' : 'transfers'}</span></div></div>
+            const routeBadges = sections.map(({ leg }) => {
+                const label = compactRouteLabel(leg.route_id, leg.route_short_name);
+                return `<span class="journey-route" style="background:${safeRouteColor(leg.route_color)}">${escapeHtml(label)}</span>`;
+            }).join('<span aria-hidden="true">&rsaquo;</span>');
+            const summary = `<section class="journey-preview" aria-label="Journey summary">
+                <div class="journey-preview-top"><div><strong>${escapeHtml(formatJourneyDuration(totalMinutes))}</strong><small>${escapeHtml(journey.departure_time && journey.arrival_time ? `Board ${journey.departure_time} → arrive ${journey.arrival_time}` : journey.arrival_time ? `Arrive ${journey.arrival_time}` : 'Scheduled arrival')}</small></div></div>
+                <div class="journey-steps">${walkMinutes ? `<span>${walkMinutes} min walking total</span>` : ''}${routeBadges}</div>
             </section>`;
             const openingWalk = walkMinutes ? `<div class="google-flow-step"><span class="google-flow-icon">${iconSvg('walk')}</span><div class="google-flow-copy"><strong>Walk about ${walkMinutes} min</strong><span>To ${escapeHtml(journey.from_stop?.stop_name || 'your boarding stop')}</span></div></div>` : '';
             const rides = sections.map((section, index) => {
@@ -6256,7 +6267,7 @@
                 return `<div class="google-flow-step"><span class="google-flow-icon" style="color:${color}">${iconSvg('bus')}</span><div class="google-flow-copy"><strong>Take <span class="journey-route" style="background:${color}">${escapeHtml(label)}</span></strong><span>Board at ${escapeHtml(board)}${rideStopCount ? ` · ${rideStopCount} stops` : ''}<br>Get off at ${escapeHtml(exit)}${leg.headsign ? ` · towards ${escapeHtml(leg.headsign)}` : ''}</span></div></div><details class="extra-stops"><summary>Show stops on this service</summary>${renderJourneyStopList(stops, fromStop, toStop)}</details>${transfer}`;
             }).join('');
             const endingWalk = walkMinutes ? `<div class="google-flow-step"><span class="google-flow-icon">${iconSvg('walk')}</span><div class="google-flow-copy"><strong>Finish on foot</strong><span>Walk to your destination</span></div></div>` : '';
-            return `<button class="journey-details-back" type="button" onclick="returnToJourneyOptions()">&larr; All route options</button>${summary}<div class="google-journey-flow">${openingWalk}${rides || '<p class="panel-message">Stop-by-stop details are unavailable for this scheduled trip.</p>'}${endingWalk}</div>`;
+            return `${summary}<details class="journey-preview-details"><summary>Trip details</summary><button class="journey-details-back" type="button" onclick="returnToJourneyOptions()">&larr; All route options</button><p class="panel-message">${transfers} ${transfers === 1 ? 'transfer' : 'transfers'}</p><div class="google-journey-flow">${openingWalk}${rides || '<p class="panel-message">Stop-by-stop details are unavailable for this scheduled trip.</p>'}${endingWalk}</div></details>`;
         }
 
         function malaysiaTime(timestamp) {
@@ -7383,11 +7394,18 @@
             const walkingMinutes = Math.max(0, Math.ceil(googleRouteWalkingSeconds(route) / 60));
             const transitLegs = steps.filter(step => step.travel_mode === google.maps.TravelMode.TRANSIT);
             const transfers = Math.max(0, transitLegs.length - 1);
-            const summary = `<section class="journey-detail-summary" aria-label="Journey summary">
-                <div class="journey-detail-summary-main"><strong>${escapeHtml(leg.duration?.text || 'Journey')}</strong><span>${escapeHtml(timeRange.text || 'Scheduled times unavailable')}</span></div>
-                <div class="journey-detail-summary-stat"><div><strong>${walkingMinutes} min</strong><span>walking</span></div><div><strong>${transfers}</strong><span>${transfers === 1 ? 'transfer' : 'transfers'}</span></div></div>
+            const tripStrip = displaySteps.map(step => {
+                if (step.travel_mode === google.maps.TravelMode.WALKING) return `<span class="journey-walk-step">${iconSvg('walk')} Walk ${escapeHtml(step.duration?.text || '')}</span>`;
+                const line = step.transit?.line;
+                const stops = Number(step.transit?.num_stops || 0);
+                return `<span class="journey-route" style="background:${googleTransitLineColor(step)}">${escapeHtml(line?.short_name || line?.name || 'Transit')}${stops ? ` · ${stops} ${stops === 1 ? 'stop' : 'stops'}` : ''}</span>`;
+            }).join('<span aria-hidden="true">&rsaquo;</span>');
+            const preview = `<section class="journey-preview" aria-label="Journey summary">
+                <div class="journey-preview-top"><div><strong>${escapeHtml(leg.duration?.text || 'Journey')}</strong><small>${escapeHtml(timeRange.text || 'Scheduled times unavailable')}</small></div>
+                <button class="start-guidance-button" type="button" onclick="startGuidedJourney(${Number(routeIndex)})">Start guidance</button></div>
+                <div class="journey-steps">${tripStrip}</div>
             </section>`;
-            return `<button class="journey-details-back" type="button" onclick="returnToJourneyOptions()">&larr; All route options</button>${summary}<button class="start-guidance-button" type="button" onclick="startGuidedJourney(${Number(routeIndex)})">Start guidance</button><p class="journey-map-hint">${iconSvg('navigation')}Tap a step to focus it on the map</p><div class="google-journey-flow">${displaySteps.map((step, displayIndex) => {
+            return `${preview}<details class="journey-preview-details"><summary>Trip details</summary><button class="journey-details-back" type="button" onclick="returnToJourneyOptions()">&larr; All route options</button><p class="panel-message">${walkingMinutes} min walking · ${transfers} ${transfers === 1 ? 'transfer' : 'transfers'}</p><div class="google-journey-flow">${displaySteps.map((step, displayIndex) => {
                 const stepIndex = Number(step.sourceStepIndex ?? displayIndex);
                 if (step.travel_mode === google.maps.TravelMode.WALKING) {
                     const nextRide = displaySteps.slice(displayIndex + 1).find(candidate => candidate.travel_mode === google.maps.TravelMode.TRANSIT);
@@ -7405,16 +7423,14 @@
                 const arrive = transit.arrival_time?.text || '';
                 const schedule = depart && arrive ? `Depart ${depart} · arrive ${arrive}` : depart ? `Departs ${depart}` : arrive ? `Arrives ${arrive}` : '';
                 return `<button class="google-flow-step journey-step-button" type="button" data-route-step="${stepIndex}" aria-pressed="false" onclick="focusJourneyRouteStep(${stepIndex})"><span class="google-flow-icon">${iconSvg(mode.icon)}</span><span class="google-flow-copy"><strong>Ride ${escapeHtml(mode.label)} ${escapeHtml(routeName)}</strong><span>Board at ${escapeHtml(from)}${stopCount ? ` · ${stopCount} stop${stopCount === 1 ? '' : 's'}` : ''}<br>Get off at ${escapeHtml(to)}${transit.headsign ? ` · towards ${escapeHtml(transit.headsign)}` : ''}</span>${schedule ? `<span class="google-flow-time">${escapeHtml(schedule)}</span>` : ''}</span></button>`;
-            }).join('')}</div>`;
+            }).join('')}</div></details>`;
         }
 
         function showGoogleTransitJourneyDetails(response, routeIndex) {
             const route = response.routes?.[routeIndex];
             if (!route) return;
+            openTransitPanel('Journey details', '', googleJourneyFlowHtml(route, routeIndex));
             renderGoogleTransitRoute(response, routeIndex);
-            const leg = route.legs?.[0];
-            const timeRange = googleRouteTimeRange(route);
-            openRouteTransitPanel('Journey details', timeRange.text || `${leg?.duration?.text || ''}`, googleJourneyFlowHtml(route, routeIndex));
             journeyDetailBackAction = () => planJourney();
         }
 
@@ -7499,7 +7515,7 @@
                 const color = isTransit ? googleTransitLineColor(step) : step.contributedPath ? '#0f766e' : '#94a3b8';
                 const outline = new google.maps.Polyline({
                     map:map.native, path, clickable:false,
-                    strokeColor:darkenRouteColor(color, isTransit ? .5 : .45), strokeOpacity:.95,
+                    strokeColor:darkenRouteColor(color, .45), strokeOpacity:isTransit ? 0 : .95,
                     strokeWeight:isTransit ? 8.5 : 6, zIndex:20,
                 });
                 const lineOptions = {
