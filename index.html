@@ -7345,19 +7345,26 @@
             if (!guidedJourney) return;
             const next = stabiliseGuidedPosition(position);
             if (!next) return;
-            const liveHeading = Number(position.coords.heading);
-            const movingWithReliableHeading = Number.isFinite(liveHeading) && Number(position.coords.speed) >= 1;
+            const liveHeading = position.coords.heading;
+            const movingWithReliableHeading = Number.isFinite(liveHeading) && liveHeading >= 0
+                && position.coords.speed >= 1 && next.accuracy <= 30;
+            const courseFix = { lat:position.coords.latitude, lng:position.coords.longitude, accuracy:next.accuracy };
+            const anchor = guidedJourney.headingAnchor;
             let heading = map.native.getHeading?.() || 0;
             const hasFreshCompassHeading = Number.isFinite(guidedCompassHeading) && Date.now() - guidedCompassLastUpdatedAt < 5000;
             if (guidedJourneyHeadingMode === 'compass' && hasFreshCompassHeading) {
                 heading = guidedCompassHeading;
             } else if (movingWithReliableHeading) {
                 heading = liveHeading;
-            } else if (guidedJourneyLastPosition && guidedDistanceMetres(guidedJourneyLastPosition, next) > 5) {
-                heading = guidedBearing(guidedJourneyLastPosition, next);
+                guidedJourney.headingAnchor = next.accuracy <= 30 ? courseFix : null;
+            } else if (anchor && next.accuracy <= 30
+                && guidedDistanceMetres(anchor, courseFix) >= Math.max(8, anchor.accuracy, next.accuracy)) {
+                heading = guidedBearing(anchor, courseFix);
+                guidedJourney.headingAnchor = courseFix;
             } else if (!guidedJourneyLastPosition) {
                 heading = guidedRouteHeading(next);
             }
+            if (!guidedJourney.headingAnchor && next.accuracy <= 30) guidedJourney.headingAnchor = courseFix;
             const fixInterval = guidedJourneyLastFixAt ? Math.max(0, next.timestamp - guidedJourneyLastFixAt) : 0;
             guidedJourneyLastPosition = next;
             guidedJourneyLastFixAt = next.timestamp;
@@ -7398,15 +7405,13 @@
             const destinationLocation = destinationPlace ? googleDirectionsLocation(destinationPlace) : googleStepPoint(route.legs?.[0]?.end_location);
             guidedJourney = { routeIndex:Number(routeIndex), leg:route.legs?.[0] || null, steps, stageIndex:0, state:null, stateChangedAt:Date.now(), boardedStageIndex:null, alerted:new Set(), destinationName:destinationPlace?.name || 'your destination', destinationLocation, liveStopKey:'', liveStops:[], deviceRideProgress:null, offRouteSamples:0, lastRerouteAt:0, approachInitialMinutes:null };
             guidedJourneyFollowMode = true;
-            // Follow the rider's travel direction immediately; when the phone
-            // exposes a compass this is upgraded to its facing direction below.
+            // Travel direction is the default. Phone-facing compass mode is explicit.
             guidedJourneyHeadingMode = 'route';
             guidedLiveStopRequest = null;
             // Start upright while waiting for the first GPS/compass reading.
             map.native.setHeading(0);
             map.native.setTilt(0);
             updateGuidedCameraControls();
-            void enableCompassGuidedJourney(true);
             renderGoogleTransitRoute(response, Number(routeIndex), true);
             openTransitPanel('Journey guidance', '', '');
             document.getElementById('bottom-sheet').classList.add('guided-mode');
@@ -7465,6 +7470,7 @@
         }
 
         function normaliseCompassHeading(value) {
+            if (value == null) return null;
             const heading = Number(value);
             if (!Number.isFinite(heading)) return null;
             return ((heading % 360) + 360) % 360;
@@ -7479,9 +7485,9 @@
         function updateGuidedCompass(event) {
             // iOS provides a calibrated compass value. Most Android browsers
             // provide alpha in the opposite direction around the vertical axis.
-            const raw = Number.isFinite(Number(event.webkitCompassHeading))
-                ? Number(event.webkitCompassHeading)
-                : Number.isFinite(Number(event.alpha)) ? 360 - Number(event.alpha) : null;
+            const raw = Number.isFinite(event.webkitCompassHeading) && event.webkitCompassHeading >= 0
+                ? event.webkitCompassHeading
+                : event.absolute && Number.isFinite(event.alpha) ? 360 - event.alpha : null;
             const next = normaliseCompassHeading(raw);
             if (next === null) return;
             guidedCompassHeading = smoothCompassHeading(guidedCompassHeading, next);
@@ -7507,10 +7513,11 @@
                 if (!guidedCompassListener) {
                     guidedCompassListener = updateGuidedCompass;
                     window.addEventListener('deviceorientation', guidedCompassListener, true);
+                    window.addEventListener('deviceorientationabsolute', guidedCompassListener, true);
                 }
                 guidedJourneyFollowMode = true;
                 guidedJourneyHeadingMode = 'compass';
-                centerGuidedJourneyCamera(guidedJourneyLastPosition, guidedCompassHeading ?? 0);
+                centerGuidedJourneyCamera(guidedJourneyLastPosition, guidedCompassHeading ?? map.native.getHeading?.() ?? 0);
                 updateGuidedCameraControls();
                 if (!silent) showMenuNotice('Compass follow is on');
                 return true;
@@ -7590,6 +7597,7 @@
             if (guidedJourneyMarkerFrame) cancelAnimationFrame(guidedJourneyMarkerFrame);
             if (guidedCompassListener) {
                 window.removeEventListener('deviceorientation', guidedCompassListener, true);
+                window.removeEventListener('deviceorientationabsolute', guidedCompassListener, true);
             }
             guidedJourneyWatchId = null;
             guidedJourney = null;
