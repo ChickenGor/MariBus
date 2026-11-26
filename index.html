@@ -6448,7 +6448,7 @@
             const mode = googleTransitVehicleMode(vehicle);
             const labelledRoute = new RegExp(`^${mode.label}\\b`, 'i').test(route) ? route : `${mode.label} ${route}`;
             const visibleRoute = line.short_name || route;
-            const color = /^#[0-9a-f]{6}$/i.test(line.color || '') ? line.color : '#2563eb';
+            const color = googleTransitLineColor(step);
             return `<span class="journey-route mode-labelled" style="background:${color}" title="${escapeHtml(labelledRoute)}" aria-label="${escapeHtml(labelledRoute)}">${iconSvg(mode.icon, 'inline-icon')}<span>${escapeHtml(visibleRoute)}</span></span>`;
         }
 
@@ -7620,6 +7620,9 @@
             let color = '';
             if (/^#[0-9a-f]{6}$/i.test(supplied)) color = supplied;
             else if (/^[0-9a-f]{6}$/i.test(supplied)) color = `#${supplied}`;
+            if (color && color.slice(1).match(/../g).every(channel => parseInt(channel, 16) >= 220)) {
+                color = '#475569';
+            }
             const routeName = String(line.short_name || line.name || '').trim().toUpperCase();
             if (!color && routeName === 'MRL') color = '#78b900';
             if (!color) color = safeRouteColor('');
