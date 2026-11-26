@@ -1260,6 +1260,14 @@
         .guided-station-copy strong { color:var(--text-main); font-size:11px; line-height:1.2; }
         .guided-station-copy small { margin-top:1px; color:var(--text-muted); font-size:9px; font-weight:700; }
         .guided-station-code { display:inline-block; margin-right:4px; padding:1px 4px; border-radius:4px; background:var(--ui-accent); color:#fff; font:850 8px/1.25 Manrope,sans-serif; vertical-align:1px; }
+        .guided-station-sign { display:grid; position:relative; gap:2px; }
+        .guided-station-sign::before { content:""; position:absolute; top:12px; bottom:12px; left:22px; width:4px; background:var(--station-line); }
+        .guided-station-sign-row { position:relative; display:grid; grid-template-columns:48px minmax(0,1fr); align-items:center; gap:9px; min-height:28px; }
+        .guided-station-sign-code { justify-self:center; min-width:36px; padding:2px 3px; border-radius:5px; background:var(--station-line); color:var(--station-line-text); font-size:10px; font-weight:850; text-align:center; }
+        .guided-station-sign-name { color:var(--text-main); font-size:12px; line-height:1.2; overflow-wrap:anywhere; }
+        .guided-station-sign-name small { display:block; color:var(--text-muted); margin-top:2px; font-size:9px; font-weight:750; }
+        .guided-station-sign-row.is-current { background:color-mix(in srgb,var(--station-line) 14%,transparent); border-radius:6px; }
+        .guided-station-sign-gap { position:relative; padding-left:57px; color:var(--text-muted); font-size:10px; }
         .leave-now-advice { margin:2px 2px 9px; padding:10px 11px; border:1px solid #bfdbfe; border-radius:12px; background:#eff6ff; color:#1e3a8a; }
         .leave-now-advice.likely,.leave-now-advice.plenty { border-color:#bbf7d0; background:#f0fdf4; color:#166534; }
         .leave-now-advice.miss { border-color:#fed7aa; background:#fff7ed; color:#9a3412; }
@@ -6727,6 +6735,29 @@
             const nextText = stopsToExit <= 1 ? exit : deviceProgress?.nextName ? `Next: ${deviceProgress.nextName} · GPS estimate` : 'Next station';
             const progressText = !onBoard ? 'Board when ready' : deviceProgress?.stopsToExit === 0
                 ? 'Get off now' : `${stopsToExit || '—'} stop${stopsToExit === 1 ? '' : 's'} to go`;
+            if (onBoard && step.railStops?.length) {
+                const stations = step.railStops;
+                const current = deviceProgress?.stationIndex ?? 0;
+                const last = stations.length - 1;
+                const visible = [...new Set([Math.max(0, current - 1), current, Math.min(last, current + 1), last])];
+                const color = step.railStationColor || googleTransitLineColor(step);
+                const rgb = color.slice(1).match(/../g).map(channel => parseInt(channel, 16) / 255);
+                const luminance = rgb.map(channel => channel <= .04045 ? channel / 12.92 : ((channel + .055) / 1.055) ** 2.4);
+                const ink = luminance[0] * .2126 + luminance[1] * .7152 + luminance[2] * .0722 > .179 ? '#111' : '#fff';
+                const rows = visible.map((index, offset) => {
+                    const station = stations[index];
+                    const skipped = offset > 0 ? index - visible[offset - 1] - 1 : 0;
+                    const label = index === current ? (index === last ? 'Get off now' : 'Current station')
+                        : index === last ? (index === current + 1 ? 'Next · Get off here' : 'Get off here')
+                        : index === current + 1 ? 'Next station' : '';
+                    return `${skipped ? `<div class="guided-station-sign-gap">${skipped} more ${skipped === 1 ? 'station' : 'stations'}</div>` : ''}
+                        <div class="guided-station-sign-row${index === current ? ' is-current' : ''}"${index === current ? ' aria-current="step"' : ''}>
+                            <span class="guided-station-sign-code">${escapeHtml(station.code)}</span>
+                            <strong class="guided-station-sign-name">${escapeHtml(station.name)}${label ? `<small>${label}</small>` : ''}</strong>
+                        </div>`;
+                }).join('');
+                return `<section class="guided-station-rail" aria-label="Station progress"><div class="guided-station-rail-head"><span>Station progress · GPS estimate</span><strong>${escapeHtml(progressText)}</strong></div><div class="guided-station-sign" style="--station-line:${color};--station-line-text:${ink}">${rows}</div></section>`;
+            }
             return `<section class="guided-station-rail" aria-label="Station progress"><div class="guided-station-rail-head"><span>Station progress</span><strong id="guided-ride-progress-state">${escapeHtml(progressText)}</strong></div><div class="guided-station-row complete"><span class="guided-station-node"></span><div class="guided-station-copy"><strong>${stationLabel(board)}</strong><small>Boarding station</small></div></div><div class="guided-station-row current" style="--ride-progress:${Math.max(8, Math.min(94, fill))}%"><span class="guided-station-node"></span><div class="guided-station-copy"><strong id="guided-station-current">${escapeHtml(currentText)}</strong><small id="guided-station-next">${escapeHtml(nextText)}</small></div></div><div class="guided-station-row destination"><span class="guided-station-node"></span><div class="guided-station-copy"><strong>${stationLabel(exit)}</strong><small>Get off here</small></div></div></section>`;
         }
 
@@ -6749,13 +6780,16 @@
                     const last = stops.findIndex((stop, index) => index > first && stationName(stop.stop_name) === exit);
                     if (first < 0 || last <= first || last - first !== Number(step.transit.num_stops)) continue;
                     const stations = stops.slice(first, last + 1).map(stop => ({
-                        lat:Number(stop.stop_lat), lng:Number(stop.stop_lon), name:stop.stop_name,
+                        lat:Number(stop.stop_lat), lng:Number(stop.stop_lon), name:readableStopName(stop.stop_name), code:stop.stop_code || stop.stop_id,
                     }));
                     if (!stations.every(stop => Number.isFinite(stop.lat) && Number.isFinite(stop.lng))) continue;
                     step.railStops = stations;
+                    if (result.data?.route?.route_color) step.railStationColor = safeRouteColor(result.data.route.route_color);
                     if (guidedJourney === session && session.steps[session.stageIndex] === step
                         && session.boardedStageIndex === session.stageIndex && guidedJourneyLastPosition) {
                         applyGuidedDeviceStopProgress(guidedDeviceStopProgress(guidedJourneyLastPosition, step));
+                    } else if (guidedJourney === session && session.steps[session.stageIndex] === step) {
+                        renderGuidedJourney();
                     }
                     return;
                 }
