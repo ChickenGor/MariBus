@@ -5582,14 +5582,71 @@
             });
         }
 
-        async function requestGoogleWalkingJourney(fromPlace, toPlace) {
-            await waitForWalkingPathNetwork();
+        function requestWalkingRoute(fromPlace, toPlace, useContributions = true) {
             const service = new RoutesApiService();
             return new Promise(resolve => service.route({
                 origin:googleDirectionsLocation(fromPlace),
                 destination:googleDirectionsLocation(toPlace),
                 travelMode:google.maps.TravelMode.WALKING,
+                useContributions,
             }, (response, status) => resolve(status === google.maps.DirectionsStatus.OK ? response?.routes?.[0] || null : null)));
+        }
+
+        async function requestGoogleWalkingJourney(fromPlace, toPlace, tryShortcutAccess = true) {
+            await waitForWalkingPathNetwork();
+            const direct = await requestWalkingRoute(fromPlace, toPlace);
+            if (!tryShortcutAccess || direct?.legs?.[0]?.steps?.some(step => step.contributedPath)) return direct;
+
+            const directDistance = direct?.legs?.[0]?.distance?.value ?? Infinity;
+            const directSeconds = direct?.legs?.[0]?.duration?.value ?? Infinity;
+            const candidates = availableWalkingPaths().flatMap(source => {
+                const points = (source.points || []).map(walkingPathPoint);
+                if (points.length < 2 || points.some(point => !Number.isFinite(point.lat) || !Number.isFinite(point.lng))) return [];
+                const metres = pathDistance(points);
+                return [points, points.slice().reverse()].map(path => {
+                    const first = walkingPathDistance(fromPlace, path[0]);
+                    const last = walkingPathDistance(path.at(-1), toPlace);
+                    return { path, metres, first, last, minimumDistance:first + metres + last, name:source.name || 'MariBus walking path' };
+                }).filter(candidate => Math.min(candidate.first, candidate.last) <= 150
+                    && Math.max(candidate.first, candidate.last) <= 2500
+                    && candidate.minimumDistance < directDistance * .85);
+            }).sort((a, b) => a.minimumDistance - b.minimumDistance);
+
+            async function accessWalk(from, to) {
+                if (walkingPathDistance(from, to) <= 2) return { path:[], seconds:0 };
+                const route = await requestWalkingRoute(from, to, false);
+                const path = route?.overview_path || [];
+                const seconds = route?.legs?.[0]?.duration?.value;
+                if (path.length < 2 || !Number.isFinite(seconds) || seconds <= 0) return null;
+                if (walkingPathDistance(from, googleStepPoint(path[0])) > 8
+                    || walkingPathDistance(to, googleStepPoint(path.at(-1))) > 8) return null;
+                return { path, seconds };
+            }
+
+            for (const candidate of candidates.slice(0, 2)) {
+                const [entry, exit] = await Promise.all([
+                    accessWalk(fromPlace, candidate.path[0]),
+                    accessWalk(candidate.path.at(-1), toPlace),
+                ]);
+                if (!entry || !exit) continue;
+                const seconds = entry.seconds + exit.seconds + Math.ceil(candidate.metres / 1.25);
+                if (seconds >= directSeconds * .85) continue;
+                const path = [
+                    new google.maps.LatLng(fromPlace.lat, fromPlace.lng),
+                    ...entry.path,
+                    ...candidate.path.map(point => new google.maps.LatLng(point.lat, point.lng)),
+                    ...exit.path,
+                    new google.maps.LatLng(toPlace.lat, toPlace.lng),
+                ];
+                const metres = pathDistance(path.map(googleStepPoint));
+                if (metres >= directDistance * .85) continue;
+                const distance = { value:metres, text:`${(metres / 1000).toFixed(1)} km` };
+                const duration = { value:seconds, text:formatJourneyDuration(seconds / 60) };
+                const step = { travel_mode:google.maps.TravelMode.WALKING, path, duration, distance,
+                    start_location:path[0], end_location:path.at(-1), contributedPath:candidate.name };
+                return { overview_path:path, legs:[{ distance, duration, steps:[step] }] };
+            }
+            return direct;
         }
 
         class RoutesApiService {
@@ -5639,7 +5696,7 @@
                             travel_mode:google.maps.TravelMode.WALKING, path, duration:{ value:seconds },
                             end_location:path.at(-1),
                         } : null;
-                        const shortcutSavedSeconds = applyContributedWalkingPaths(fullWalk ? [fullWalk] : steps);
+                        const shortcutSavedSeconds = request.useContributions === false ? 0 : applyContributedWalkingPaths(fullWalk ? [fullWalk] : steps);
                         const usesShortcut = Boolean(fullWalk?.contributedPath);
                         const displayPath = usesShortcut ? fullWalk.path : path;
                         const displaySteps = usesShortcut ? [fullWalk] : steps;
@@ -5655,24 +5712,14 @@
 
         async function showWalkingFallback(fromPlace, toPlace, transitNotice = '') {
             try {
-                const response = await fetch(`${API_BASE}/api/directions`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ origin:{lat:fromPlace.lat,lng:fromPlace.lng}, destination:{lat:toPlace.lat,lng:toPlace.lng}, travel_mode:'WALK' }) });
-                const result = await response.json();
-                const route = result.success && result.data?.[0];
-                if (!route?.polyline?.encodedPolyline) throw new Error(result.error || 'No walking route');
-                const path = google.maps.geometry.encoding.decodePath(route.polyline.encodedPolyline);
-                await waitForWalkingPathNetwork();
-                const walkingStep = {
-                    travel_mode:google.maps.TravelMode.WALKING,
-                    path,
-                    duration:{ value:Number(String(route.duration || '0s').replace('s','')) },
-                };
-                applyContributedWalkingPaths([walkingStep]);
+                const route = await requestGoogleWalkingJourney(fromPlace, toPlace);
+                const leg = route?.legs?.[0];
+                if (!route?.overview_path?.length || !leg) throw new Error('No walking route');
                 activeRouteLayer.clearLayers();
                 routeDirectionsRenderers.forEach(renderer => renderer.setMap(null));
-                routeDirectionsRenderers = drawJourneyWalkStroke(walkingStep.path);
-                const minutes = Math.max(1, Math.round(walkingStep.duration.value / 60));
-                const metres = walkingStep.contributedPath ? pathDistance(walkingStep.path.map(googleStepPoint)) : Number(route.distanceMeters || 0);
-                openTransitPanel('Walking is the best option', transitNotice, `<article class="journey-card"><div class="journey-summary"><span class="journey-route" style="background:#2563eb">WALK</span><span class="journey-time">About ${minutes} min</span></div><div class="journey-meta"><strong>About ${(metres / 1000).toFixed(1)} km</strong>${walkingStep.contributedPath ? '<br>Uses a MariBus walking path.' : ''}</div></article>`);
+                routeDirectionsRenderers = drawJourneyWalkStroke(route.overview_path);
+                const minutes = Math.max(1, Math.round(leg.duration.value / 60));
+                openTransitPanel('Walking is the best option', transitNotice, `<article class="journey-card"><div class="journey-summary"><span class="journey-route" style="background:#2563eb">WALK</span><span class="journey-time">About ${minutes} min</span></div><div class="journey-meta"><strong>About ${escapeHtml(leg.distance.text)}</strong>${leg.steps.some(step => step.contributedPath) ? '<br>Uses a MariBus walking path.' : ''}</div></article>`);
             } catch (error) {
                     const toRadians = value => value * Math.PI / 180;
                     const dLat = toRadians(toPlace.lat - fromPlace.lat);
@@ -6368,7 +6415,7 @@
             for (const stop of [board, exit]) if (stop) bounds.extend(stop);
             fitJourneyBounds(bounds, 64, true);
             const walks = await Promise.all(legs.map(([from, to]) =>
-                from && to && distanceMetres(from, to) >= 10 ? requestGoogleWalkingJourney(from, to) : null));
+                from && to && distanceMetres(from, to) >= 10 ? requestGoogleWalkingJourney(from, to, false) : null));
             if (revision !== journeyRouteRevision) return;
             for (const walk of walks) {
                 if (!walk) continue;
