@@ -6723,12 +6723,60 @@
                 const station = splitStationName(label);
                 return `${station.code ? `<span class="guided-station-code">${escapeHtml(station.code)}</span>` : ''}${escapeHtml(station.name)}`;
             };
-            const currentText = !onBoard ? 'Ready to board' : stopsToExit === 0 ? 'Arrived at your stop' : 'On board · GPS estimate';
-            const nextText = stopsToExit === 0 ? exit : stopsToExit === 1 ? exit : 'Next station';
-            return `<section class="guided-station-rail" aria-label="Station progress"><div class="guided-station-rail-head"><span>Station progress</span><strong id="guided-ride-progress-state">${escapeHtml(onBoard ? `${stopsToExit || '—'} stop${stopsToExit === 1 ? '' : 's'} to go` : 'Board when ready')}</strong></div><div class="guided-station-row complete"><span class="guided-station-node"></span><div class="guided-station-copy"><strong>${stationLabel(board)}</strong><small>Boarding station</small></div></div><div class="guided-station-row current" style="--ride-progress:${Math.max(8, Math.min(94, fill))}%"><span class="guided-station-node"></span><div class="guided-station-copy"><strong id="guided-station-current">${escapeHtml(currentText)}</strong><small id="guided-station-next">${escapeHtml(nextText)}</small></div></div><div class="guided-station-row destination"><span class="guided-station-node"></span><div class="guided-station-copy"><strong>${stationLabel(exit)}</strong><small>Get off here</small></div></div></section>`;
+            const currentText = !onBoard ? 'Ready to board' : stopsToExit === 0 ? 'Arrived at your stop' : deviceProgress?.currentName || 'On board · GPS estimate';
+            const nextText = stopsToExit <= 1 ? exit : deviceProgress?.nextName ? `Next: ${deviceProgress.nextName} · GPS estimate` : 'Next station';
+            const progressText = !onBoard ? 'Board when ready' : deviceProgress?.stopsToExit === 0
+                ? 'Get off now' : `${stopsToExit || '—'} stop${stopsToExit === 1 ? '' : 's'} to go`;
+            return `<section class="guided-station-rail" aria-label="Station progress"><div class="guided-station-rail-head"><span>Station progress</span><strong id="guided-ride-progress-state">${escapeHtml(progressText)}</strong></div><div class="guided-station-row complete"><span class="guided-station-node"></span><div class="guided-station-copy"><strong>${stationLabel(board)}</strong><small>Boarding station</small></div></div><div class="guided-station-row current" style="--ride-progress:${Math.max(8, Math.min(94, fill))}%"><span class="guided-station-node"></span><div class="guided-station-copy"><strong id="guided-station-current">${escapeHtml(currentText)}</strong><small id="guided-station-next">${escapeHtml(nextText)}</small></div></div><div class="guided-station-row destination"><span class="guided-station-node"></span><div class="guided-station-copy"><strong>${stationLabel(exit)}</strong><small>Get off here</small></div></div></section>`;
+        }
+
+        async function loadGuidedRailStops(step) {
+            const line = step?.transit?.line;
+            const code = String(line?.short_name || '').toUpperCase();
+            if (!['SPL', 'AGL', 'KJL', 'PYL', 'KGL', 'MRL', 'SAL'].includes(code) || step.railStopsRequested) return;
+            step.railStopsRequested = true;
+            const session = guidedJourney;
+            try {
+                const query = await cachedApiJson(`${API_BASE}/api/routes/search?agency=rapid-rail-kl&q=${code}`);
+                const matches = (query.data || []).filter(route => String(route.route_short_name).toUpperCase() === code);
+                const routes = await Promise.all(matches.map(route => cachedApiJson(`${API_BASE}/api/routes/${encodeURIComponent(route.route_id)}?agency=rapid-rail-kl&direction_id=${encodeURIComponent(route.direction_id ?? '')}`)));
+                const stationName = name => String(name || '').replace(/\s*\([A-Z]+\d+[A-Z]?\)\s*$/i, '').trim().toUpperCase();
+                const board = stationName(step.transit.departure_stop?.name);
+                const exit = stationName(step.transit.arrival_stop?.name);
+                for (const result of routes) {
+                    const stops = result.data?.stops || [];
+                    const first = stops.findIndex(stop => stationName(stop.stop_name) === board);
+                    const last = stops.findIndex((stop, index) => index > first && stationName(stop.stop_name) === exit);
+                    if (first < 0 || last <= first || last - first !== Number(step.transit.num_stops)) continue;
+                    const stations = stops.slice(first, last + 1).map(stop => ({
+                        lat:Number(stop.stop_lat), lng:Number(stop.stop_lon), name:stop.stop_name,
+                    }));
+                    if (!stations.every(stop => Number.isFinite(stop.lat) && Number.isFinite(stop.lng))) continue;
+                    step.railStops = stations;
+                    if (guidedJourney === session && session.steps[session.stageIndex] === step
+                        && session.boardedStageIndex === session.stageIndex && guidedJourneyLastPosition) {
+                        applyGuidedDeviceStopProgress(guidedDeviceStopProgress(guidedJourneyLastPosition, step));
+                    }
+                    return;
+                }
+            } catch (error) {
+                console.warn('Rail station sequence unavailable', error);
+            }
         }
 
         function guidedDeviceStopProgress(position, step) {
+            if (step?.railStops?.length) {
+                const stations = step.railStops;
+                const previous = guidedJourney.deviceRideProgress?.stationIndex ?? 0;
+                let stationIndex = previous;
+                let closest = Math.max(65, Math.min(110, Number(position.accuracy || 0) + 30));
+                for (let index = previous + 1; index < stations.length; index++) {
+                    const distance = guidedDistanceMetres(position, stations[index]);
+                    if (distance <= closest) { closest = distance; stationIndex = index; }
+                }
+                return { stationIndex, currentName:stations[stationIndex].name, nextName:stations[stationIndex + 1]?.name,
+                    progress:100 * stationIndex / (stations.length - 1), stopsToExit:stations.length - 1 - stationIndex };
+            }
             const path = Array.from(step?.path || []).map(googleStepPoint).filter(Boolean);
             if (path.length < 2) return null;
             let totalLength = 0, completedLength = 0, nearestDistance = Number.POSITIVE_INFINITY;
@@ -6760,6 +6808,8 @@
 
         function applyGuidedDeviceStopProgress(progress) {
             if (!guidedJourney || !progress) return;
+            const previous = guidedJourney.deviceRideProgress;
+            if (previous?.stopsToExit === 0) return;
             guidedJourney.deviceRideProgress = progress;
             if (progress.stopsToExit === 0) setGuidedJourneyState(GUIDED_JOURNEY_STATE.GET_OFF_NOW);
             else if (progress.stopsToExit === 1) setGuidedJourneyState(GUIDED_JOURNEY_STATE.APPROACHING_DESTINATION);
@@ -6769,9 +6819,9 @@
             const rail = document.querySelector('.guided-station-row.current');
             if (rail) rail.style.setProperty('--ride-progress', `${Math.max(8, Math.min(94, progress.progress))}%`);
             if (state) state.textContent = progress.stopsToExit === 0 ? 'Get off now' : `${progress.stopsToExit} stop${progress.stopsToExit === 1 ? '' : 's'} to go`;
-            if (current) current.textContent = progress.stopsToExit === 0 ? 'Arrived at your stop' : 'On board · GPS estimate';
-            if (next) next.textContent = progress.stopsToExit === 0 ? 'Get off now' : progress.stopsToExit === 1 ? (guidedJourney.steps[guidedJourney.stageIndex]?.transit?.arrival_stop?.name || 'Your stop') : 'Next station';
-            if (progress.stopsToExit <= 1) renderGuidedJourney();
+            if (current) current.textContent = progress.stopsToExit === 0 ? 'Arrived at your stop' : progress.currentName || 'On board · GPS estimate';
+            if (next) next.textContent = progress.stopsToExit === 0 ? 'Get off now' : progress.nextName ? `Next: ${progress.nextName} · GPS estimate` : progress.stopsToExit === 1 ? (guidedJourney.steps[guidedJourney.stageIndex]?.transit?.arrival_stop?.name || 'Your stop') : 'Next station';
+            if (progress.stopsToExit !== previous?.stopsToExit || progress.nextName !== previous?.nextName) renderGuidedJourney();
         }
 
         function shouldSendGetOffAlert(progress) {
@@ -6851,7 +6901,9 @@
             }
             const getOffNow = guidedJourney.state === GUIDED_JOURNEY_STATE.GET_OFF_NOW;
             const approachingExit = guidedJourney.state === GUIDED_JOURNEY_STATE.APPROACHING_DESTINATION;
-            return { kind:'ride', kicker:getOffNow ? 'Get off now' : approachingExit ? 'Your stop is next' : 'On board', title:getOffNow ? `${step.transit?.arrival_stop?.name || 'Destination stop'}` : `Next: ${step.transit?.arrival_stop?.name || 'exit station'}`, meta:`${routeName}${step.transit?.num_stops ? ` · ${step.transit.num_stops} stops` : ''}${step.transit?.arrival_time?.text ? ` · arrive ${step.transit.arrival_time.text}` : ''}`, action:getOffNow ? 'I got off' : 'Get off / Continue' };
+            const nextStation = guidedJourney.deviceRideProgress?.nextName;
+            const destination = step.transit?.arrival_stop?.name || 'Destination stop';
+            return { kind:'ride', kicker:getOffNow ? 'Get off now' : approachingExit ? 'Your stop is next' : 'On board', title:getOffNow ? destination : nextStation ? `Next: ${nextStation}` : `Get off at ${destination}`, meta:`${routeName}${step.transit?.num_stops ? ` · ${step.transit.num_stops} stops` : ''}${step.transit?.arrival_time?.text ? ` · arrive ${step.transit.arrival_time.text}` : ''}`, action:getOffNow ? 'I got off' : 'Get off / Continue' };
         }
 
         function guidedLiveBusEstimate() {
@@ -7102,7 +7154,8 @@
             if (accuracy > 80) return null;
             const elapsedSeconds = Math.max(1, (timestamp - guidedJourneyLastFixAt) / 1000);
             const movement = guidedDistanceMetres(previous, raw);
-            const plausibleDistance = Math.max(28, elapsedSeconds * 3 + Math.max(accuracy, Number(previous.accuracy || 0)));
+            const onBoard = guidedJourney?.boardedStageIndex === guidedJourney?.stageIndex;
+            const plausibleDistance = Math.max(28, elapsedSeconds * (onBoard ? 35 : 3) + Math.max(accuracy, Number(previous.accuracy || 0)));
             if (movement > plausibleDistance && accuracy > 18) return null;
 
             // Precise fixes move promptly; weaker fixes blend in to remove the
@@ -7283,7 +7336,9 @@
             const activeStep = guidedJourney.steps[guidedJourney.stageIndex];
             if (activeStep?.travel_mode === google.maps.TravelMode.TRANSIT
                 && guidedJourney.boardedStageIndex === guidedJourney.stageIndex) {
-                applyGuidedDeviceStopProgress(guidedDeviceStopProgress(next, activeStep));
+                const stationFix = next.accuracy <= 55
+                    ? { lat:position.coords.latitude, lng:position.coords.longitude, accuracy:next.accuracy } : null;
+                if (stationFix) applyGuidedDeviceStopProgress(guidedDeviceStopProgress(stationFix, activeStep));
             }
             if (guidedJourney.steps[guidedJourney.stageIndex]?.travel_mode === google.maps.TravelMode.WALKING) {
                 guidedJourney.offRouteSamples = routeDistance > 120 ? Number(guidedJourney.offRouteSamples || 0) + 1 : 0;
@@ -7343,6 +7398,7 @@
                 setGuidedJourneyState(GUIDED_JOURNEY_STATE.BOARDING);
                 guidedJourney.boardedStageIndex = guidedJourney.stageIndex;
                 setGuidedJourneyState(GUIDED_JOURNEY_STATE.ON_BUS);
+                void loadGuidedRailStops(step);
             } else {
                 guidedJourney.stageIndex += 1;
                 guidedJourney.boardedStageIndex = null;
@@ -7355,14 +7411,20 @@
         function centerGuidedJourneyCamera(position = guidedJourneyLastPosition, heading = map.native.getHeading?.() || 0) {
             if (!position) return false;
             const cameraHeading = guidedJourneyHeadingMode === 'north' ? 0 : (Number.isFinite(heading) ? heading : 0);
-            const distanceRadians = 65 / 6371000;
+            const mapRect = map.native.getDiv().getBoundingClientRect();
+            const sheetTop = document.getElementById('bottom-sheet').getBoundingClientRect().top;
+            const coveredHeight = Math.max(0, mapRect.bottom - sheetTop);
+            const zoom = Math.max(18, map.native.getZoom() || 0);
+            const metresPerPixel = 156543.03392 * Math.cos(position.lat * Math.PI / 180) / Math.pow(2, zoom);
+            const offsetMetres = coveredHeight > 0 ? -coveredHeight * .5 * metresPerPixel : 0;
+            const distanceRadians = offsetMetres / 6371000;
             const latitude = position.lat * Math.PI / 180;
             const longitude = position.lng * Math.PI / 180;
             const bearing = cameraHeading * Math.PI / 180;
             const cameraLatitude = Math.asin(Math.sin(latitude) * Math.cos(distanceRadians) + Math.cos(latitude) * Math.sin(distanceRadians) * Math.cos(bearing));
             const cameraLongitude = longitude + Math.atan2(Math.sin(bearing) * Math.sin(distanceRadians) * Math.cos(latitude), Math.cos(distanceRadians) - Math.sin(latitude) * Math.sin(cameraLatitude));
             map.native.setCenter({ lat:cameraLatitude * 180 / Math.PI, lng:cameraLongitude * 180 / Math.PI });
-            map.native.setZoom(Math.max(18, map.native.getZoom() || 0));
+            map.native.setZoom(zoom);
             map.native.setHeading(cameraHeading);
             map.native.setTilt(guidedJourneyHeadingMode === 'north' ? 0 : guidedJourneyHeadingMode === 'compass' ? 45 : 55);
             return true;
