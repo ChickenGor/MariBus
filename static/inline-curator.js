@@ -3,6 +3,7 @@ import { getFirestore, collection, deleteDoc, doc, getDocs, serverTimestamp, set
 
 const $ = selector => document.querySelector(selector);
 let map, db, drawing = false, points = [], line, referenceLine, markers = [], pathId;
+let previousMapType;
 const networkEndpoints = [];
 const networkSegments = [];
 const networkLayers = [];
@@ -160,13 +161,28 @@ async function showGoogleWalkingReference() {
     status('Google has no usable walking reference here. You can still draw the real path.');
   }
 }
+function setClearImagery(enabled) {
+  const nativeMap = map?.native;
+  if (!nativeMap) return;
+  nativeMap.setMapTypeId(enabled ? 'satellite' : previousMapType || 'roadmap');
+  $('#inline-curator-imagery').setAttribute('aria-pressed', String(enabled));
+}
+
 function setOpen(open) {
   if (open) {
     document.body.classList.remove('destination-search-open');
     $('#destination-search-close').hidden = true;
     $('#journey-to')?.blur();
   }
-  $('#inline-curator').hidden = !open;
+  const editor = $('#inline-curator');
+  if (open && editor.hidden) {
+    previousMapType = map?.native?.getMapTypeId?.();
+    if (previousMapType === 'hybrid') setClearImagery(true);
+  } else if (!open && !editor.hidden) {
+    setClearImagery(false);
+    previousMapType = undefined;
+  }
+  editor.hidden = !open;
   document.body.classList.toggle('walking-path-editing', open);
   $('#curate-route-main').setAttribute('aria-expanded', String(open));
   $('#curate-route-main').classList.toggle('active', open);
@@ -280,6 +296,9 @@ async function initialize() {
   $('#inline-curator-draw').addEventListener('click', startDrawing);
   $('#inline-curator-add-point').addEventListener('click', addPointAtMapCentre);
   $('#inline-curator-reference').addEventListener('click', showGoogleWalkingReference);
+  $('#inline-curator-imagery').addEventListener('click', event => {
+    setClearImagery(event.currentTarget.getAttribute('aria-pressed') !== 'true');
+  });
   $('#inline-curator-undo').addEventListener('click', () => {
     if (!points.length) return;
     points.pop(); redraw();
