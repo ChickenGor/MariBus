@@ -1455,6 +1455,8 @@
             #bottom-sheet.detail-mode #transit-panel.open { flex:0 1 auto; min-height:0; overflow-y:auto; overscroll-behavior:contain; }
             #bottom-sheet.detail-mode.sheet-half { height:60dvh; max-height:60dvh; }
             #bottom-sheet.detail-mode.sheet-expanded { height:90dvh; max-height:90dvh; }
+            #bottom-sheet.detail-mode.journey-itinerary.sheet-expanded { height:72dvh; max-height:72dvh; transition:none; }
+            body:has(#bottom-sheet.journey-itinerary.sheet-expanded) #map-view-toggle { visibility:hidden; }
             /* A manually dragged sheet must not inherit the compact 34dvh
                ceiling from detail-mode. Leave a small strip of map visible. */
             #bottom-sheet.detail-mode.sheet-custom-size { max-height:94dvh; }
@@ -2216,7 +2218,7 @@
         <div class="drag-handle"></div>
         <div class="sheet-swipe-hint" aria-hidden="true">Swipe up for more</div>
         <div class="sheet-detail-controls" aria-label="Journey panel controls">
-            <button class="sheet-control-button" type="button" onclick="closeTransitPanel(true)" aria-label="Close journey panel">
+            <button class="sheet-control-button" type="button" onclick="backTransitPanel()" aria-label="Close journey panel">
                 <svg class="ui-icon" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"></path></svg>
             </button>
         </div>
@@ -3521,6 +3523,9 @@
             document.getElementById('panel-content').innerHTML = html + (showShuttle ? aeonMidtownShuttleOptionHtml() : '');
             document.getElementById('transit-panel').classList.add('open');
             const sheet = document.getElementById('bottom-sheet');
+            const isItinerary = title === 'Journey details' || title === 'Route details';
+            sheet.classList.toggle('journey-itinerary', isItinerary);
+            sheet.querySelector('.sheet-control-button')?.setAttribute('aria-label', isItinerary ? 'Back to route options' : 'Close journey panel');
             sheet.classList.remove('route-browse-mode');
             document.getElementById('resume-journey-button').classList.remove('visible');
             sheet.classList.add('detail-mode');
@@ -3531,6 +3536,7 @@
                 // and timing information; the compact preview is not useful
                 // immediately after a rider presses Search routes.
                 if (title === 'Journey options') sheet.classList.add('sheet-half');
+                if (isItinerary) sheet.classList.add('sheet-expanded');
                 sheet.style.height = '';
             }
             if (title === 'Journey options' && window.innerWidth < 768 && !sheet.classList.contains('sheet-custom-size') && !sheet.classList.contains('sheet-dragging')) {
@@ -3588,9 +3594,9 @@
         }
 
         function backTransitPanel() {
-            // Leaving a journey should restore the idle map. Keeping a hidden
-            // resumable journey left A/B pins and its route visible behind the
-            // home controls, which reads like a route that failed to close.
+            if (document.getElementById('bottom-sheet').classList.contains('journey-itinerary')) {
+                return returnToJourneyOptions();
+            }
             closeTransitPanel(true);
         }
 
@@ -3782,9 +3788,7 @@
             }
         }
 
-        // Detail views live inside the same bottom sheet as the route list. Keep
-        // their return action in the content itself, rather than repurposing the
-        // sheet close button (which should always close the sheet).
+        // Both itinerary exit controls return to the same route search.
         async function returnToJourneyOptions() {
             if (journeyReturnInFlight) return;
             const goBack = journeyDetailBackAction;
@@ -6314,6 +6318,8 @@
 
         async function showJourneyRouteList(journey) {
             const agency = document.getElementById('agency-select').value;
+            const returnToOptions = () => planJourney();
+            journeyDetailBackAction = returnToOptions;
             openTransitPanel('Route details', `${journey.from_stop.stop_name} → ${journey.to_stop.stop_name}`, '<p class="panel-message">Loading your stops…</p>');
             const legs = journey.legs?.length ? journey.legs : [{
                 trip_id:journey.trip_id, direction_id:journey.direction_id,
@@ -6322,7 +6328,8 @@
                 departure_time:journey.departure_time, arrival_time:journey.arrival_time,
             }];
             if (journey.legs?.length) await showJourneyRoutes(journey);
-            else await showJourneySegment(journey, false);
+            else await showJourneySegment(journey, true);
+            if (journeyDetailBackAction !== returnToOptions) return;
             try {
                 const sections = [];
                 for (let index = 0; index < legs.length; index++) {
@@ -6335,6 +6342,7 @@
                     if (!result.success) continue;
                     sections.push({ leg, stops:result.data.stops, fromStop, toStop });
                 }
+                if (journeyDetailBackAction !== returnToOptions) return;
                 openTransitPanel('Route details', '', localJourneyFlowHtml(journey, sections));
                 const bounds = new google.maps.LatLngBounds();
                 for (const stop of [journey.from_stop, journey.to_stop, journey.transfer_stop]) {
@@ -6349,6 +6357,7 @@
                 journeyDetailBackAction = () => planJourney();
                 if (currentJourneyOptions.length) updateLiveJourneyTracking(currentJourneyOptions);
             } catch (error) {
+                if (journeyDetailBackAction !== returnToOptions) return;
                 openTransitPanel('Route unavailable', '', '<p class="panel-message">The stop list could not be loaded.</p>');
             }
         }
@@ -6379,7 +6388,7 @@
                 return `<div class="google-flow-step"><span class="google-flow-icon" style="color:${color}">${iconSvg('bus')}</span><div class="google-flow-copy"><strong>Take <span class="journey-route" style="background:${color}">${escapeHtml(label)}</span></strong><span>Board at ${escapeHtml(board)}${rideStopCount ? ` · ${rideStopCount} stops` : ''}<br>Get off at ${escapeHtml(exit)}${leg.headsign ? ` · towards ${escapeHtml(leg.headsign)}` : ''}</span></div></div><details class="extra-stops"><summary>Show stops on this service</summary>${renderJourneyStopList(stops, fromStop, toStop)}</details>${transfer}`;
             }).join('');
             const endingWalk = walkMinutes ? `<div class="google-flow-step"><span class="google-flow-icon">${iconSvg('walk')}</span><div class="google-flow-copy"><strong>Finish on foot</strong><span>Walk to your destination</span></div></div>` : '';
-            return `${summary}<details class="journey-preview-details"><summary>Trip details</summary><button class="journey-details-back" type="button" onclick="returnToJourneyOptions()">&larr; All route options</button><p class="panel-message">${transfers} ${transfers === 1 ? 'transfer' : 'transfers'}</p><div class="google-journey-flow">${openingWalk}${rides || '<p class="panel-message">Stop-by-stop details are unavailable for this scheduled trip.</p>'}${endingWalk}</div></details>`;
+            return `${summary}<details class="journey-preview-details" open><summary>Trip details</summary><button class="journey-details-back" type="button" onclick="returnToJourneyOptions()">&larr; All route options</button><p class="panel-message">${transfers} ${transfers === 1 ? 'transfer' : 'transfers'}</p><div class="google-journey-flow">${openingWalk}${rides || '<p class="panel-message">Stop-by-stop details are unavailable for this scheduled trip.</p>'}${endingWalk}</div></details>`;
         }
 
         function formatScheduleTime(value) {
@@ -7579,10 +7588,10 @@
             }).join('<span aria-hidden="true">&rsaquo;</span>');
             const preview = `<section class="journey-preview" aria-label="Journey summary">
                 <div class="journey-preview-top"><div><strong>${escapeHtml(leg.duration?.text || 'Journey')}</strong><small>${escapeHtml(timeRange.text || 'Scheduled times unavailable')}</small></div>
-                <button class="start-guidance-button" type="button" onclick="startGuidedJourney(${Number(routeIndex)})">Start guidance</button></div>
+                <button class="start-guidance-button" type="button" aria-label="Start guidance" onclick="startGuidedJourney(${Number(routeIndex)})">GO</button></div>
                 <div class="journey-steps">${tripStrip}</div>
             </section>`;
-            return `${preview}<details class="journey-preview-details"><summary>Trip details</summary><button class="journey-details-back" type="button" onclick="returnToJourneyOptions()">&larr; All route options</button><p class="panel-message">${walkingMinutes} min walking · ${transfers} ${transfers === 1 ? 'transfer' : 'transfers'}</p><div class="google-journey-flow">${displaySteps.map((step, displayIndex) => {
+            return `${preview}<details class="journey-preview-details" open><summary>Trip details</summary><button class="journey-details-back" type="button" onclick="returnToJourneyOptions()">&larr; All route options</button><p class="panel-message">${walkingMinutes} min walking · ${transfers} ${transfers === 1 ? 'transfer' : 'transfers'}</p><div class="google-journey-flow">${displaySteps.map((step, displayIndex) => {
                 const stepIndex = Number(step.sourceStepIndex ?? displayIndex);
                 if (step.travel_mode === google.maps.TravelMode.WALKING) {
                     const nextRide = displaySteps.slice(displayIndex + 1).find(candidate => candidate.travel_mode === google.maps.TravelMode.TRANSIT);
