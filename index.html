@@ -1297,10 +1297,13 @@
            actionable status card instead of covering most of the route. */
         #bottom-sheet.guided-mode.guided-ride-compact { max-height:min(35dvh,280px); padding:6px 16px max(12px,env(safe-area-inset-bottom)); }
         #bottom-sheet.guided-mode.guided-ride-compact .guided-nav-current { padding:6px 3px 4px; }
-        #bottom-sheet.guided-mode.guided-ride-compact .guided-station-rail { margin:5px 0; }
         #bottom-sheet.guided-mode.guided-ride-compact .guided-nav-footer { margin-top:6px; }
         #guided-live-status { position:absolute; top:max(10px, env(safe-area-inset-top)); left:62px; right:12px; z-index:2090; min-height:58px; display:none; align-items:center; gap:11px; padding:9px 13px; box-sizing:border-box; overflow:hidden; border:1px solid rgba(255,255,255,.12); border-radius:16px; background:rgba(5,7,11,.94); color:#fff; box-shadow:0 5px 20px rgba(0,0,0,.34); backdrop-filter:blur(14px); }
         #guided-live-status.onboard { min-height:126px; align-items:flex-start; }
+        #guided-live-status.station-progress-top { min-height:0; padding:0; background:var(--input-bg); border-color:var(--border-color); }
+        #guided-live-status.station-progress-top > :not(#guided-top-stations) { display:none; }
+        #guided-top-stations { width:100%; }
+        #guided-top-stations .guided-station-rail { margin:0; }
         .guided-live-icon { width:36px; height:36px; flex:0 0 36px; display:grid; place-items:center; border-radius:11px; background:#16a34a; color:#fff; }
         .guided-live-icon .ui-icon { width:19px; height:19px; }
         .guided-live-copy { min-width:0; flex:1; }
@@ -2129,6 +2132,7 @@
     </section>
 
     <div id="guided-live-status" role="status" aria-live="polite">
+        <div id="guided-top-stations" hidden></div>
         <span id="guided-live-icon" class="guided-live-icon"><svg class="ui-icon" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="15" rx="3"></rect><path d="M7 7h10M7 12h.01M17 12h.01M7 21v-3M17 21v-3"></path></svg></span>
         <div class="guided-live-body">
             <span class="guided-live-copy"><strong id="guided-live-title">Checking approaching service…</strong><small id="guided-live-detail">Live vehicle information</small></span>
@@ -7091,6 +7095,17 @@
             if (!guidedJourney) return;
             syncGuidedJourneyState();
             if (guidedJourneyMarker) guidedJourneyMarker.setIcon(guidedJourneyBusMarkerIcon());
+            const currentStep = guidedJourney.steps[guidedJourney.stageIndex];
+            const rideStep = currentStep?.travel_mode === google.maps.TravelMode.TRANSIT ? currentStep : null;
+            const onboard = Boolean(rideStep && guidedJourney.boardedStageIndex === guidedJourney.stageIndex);
+            const vehicleMode = googleTransitVehicleMode(rideStep?.transit?.line?.vehicle);
+            const showTopStations = onboard && ['metro', 'train', 'monorail', 'tram'].includes(vehicleMode.icon);
+            const topStations = document.getElementById('guided-top-stations');
+            const stationProgress = rideStep ? guidedRideProgressHtml(rideStep) : '';
+            topStations.innerHTML = showTopStations ? stationProgress : '';
+            topStations.hidden = !showTopStations;
+            document.getElementById('guided-live-status').classList.toggle('station-progress-top', showTopStations);
+            document.getElementById('bottom-sheet').classList.toggle('guided-ride-compact', onboard);
             const details = guidedStageDetails();
             if (!details) {
                 document.getElementById('panel-title').textContent = "You've arrived";
@@ -7110,15 +7125,12 @@
             const remainingText = remainingMinutes ? `${formatGuidedDuration(remainingMinutes)} remaining` : (leg?.duration?.text || 'In progress');
             const needsStageAction = details.kind !== 'walk';
             const alertPreference = getOffAlertPreference();
-            const currentStep = guidedJourney.steps[guidedJourney.stageIndex];
-            const rideStep = currentStep?.travel_mode === google.maps.TravelMode.TRANSIT ? currentStep : null;
-            document.getElementById('bottom-sheet')?.classList.toggle('guided-ride-compact', Boolean(rideStep && guidedJourney.boardedStageIndex === guidedJourney.stageIndex));
             document.getElementById('panel-content').innerHTML = `<div class="guided-nav-card ${rideStep ? 'has-alert-control' : ''}">
                 <div class="guided-nav-route"><div class="guided-nav-route-steps" aria-label="Journey progress">${routeSteps}</div><button class="guided-nav-close" type="button" onclick="backFromGuidedJourney()" aria-label="Back to journey details">&times;</button></div>
                 <div class="guided-nav-current"><strong>${escapeHtml(details.title)}</strong><small>${escapeHtml(details.meta)}</small></div>
                 ${rideStep ? guidedAlertControlHtml(alertPreference) : ''}
                 ${details.advice ? `<div class="leave-now-advice ${escapeHtml(details.advice.tone)}"><strong>${escapeHtml(details.advice.title)}</strong><span>${escapeHtml(details.advice.detail)}</span><small>${escapeHtml(details.advice.meta)}</small></div>` : ''}
-                ${rideStep ? guidedRideProgressHtml(rideStep) : ''}
+                ${showTopStations ? '' : stationProgress}
                 ${needsStageAction ? `<button class="guided-nav-stage-action" type="button" onclick="advanceGuidedJourney()">${escapeHtml(details.action)}</button>` : ''}
                 <div class="guided-nav-footer">
                     <button class="guided-nav-end" type="button" onclick="confirmEndGuidedJourney()">End</button>
@@ -7528,7 +7540,10 @@
             guidedRerouteInFlight = false;
             guidedJourneyMarker?.setMap(null);
             guidedJourneyMarker = null;
-            document.getElementById('guided-live-status')?.classList.remove('onboard', 'approaching');
+            document.getElementById('guided-live-status')?.classList.remove('onboard', 'approaching', 'station-progress-top');
+            const topStations = document.getElementById('guided-top-stations');
+            topStations.replaceChildren();
+            topStations.hidden = true;
             document.getElementById('bottom-sheet')?.classList.remove('guided-mode');
             if (resetCamera) {
                 map.native.setHeading(0);
