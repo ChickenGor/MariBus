@@ -1268,14 +1268,6 @@
         .guided-station-sign-name small { display:block; color:var(--text-muted); margin-top:2px; font-size:9px; font-weight:750; }
         .guided-station-sign-row.is-current { background:color-mix(in srgb,var(--station-line) 14%,transparent); border-radius:6px; }
         .guided-station-sign-gap { position:relative; padding-left:57px; color:var(--text-muted); font-size:10px; }
-        .leave-now-advice { margin:2px 2px 9px; padding:10px 11px; border:1px solid #bfdbfe; border-radius:12px; background:#eff6ff; color:#1e3a8a; }
-        .leave-now-advice.likely,.leave-now-advice.plenty { border-color:#bbf7d0; background:#f0fdf4; color:#166534; }
-        .leave-now-advice.miss { border-color:#fed7aa; background:#fff7ed; color:#9a3412; }
-        body.dark-mode .leave-now-advice { background:color-mix(in srgb,currentColor 10%,var(--sheet-bg)); }
-        .leave-now-advice strong,.leave-now-advice span,.leave-now-advice small { display:block; }
-        .leave-now-advice strong { font-size:12px; }
-        .leave-now-advice span { margin-top:3px; font-size:10px; line-height:1.35; }
-        .leave-now-advice small { margin-top:5px; opacity:.78; font-size:8px; font-weight:750; }
         .get-off-setting { display:flex; align-items:center; justify-content:space-between; gap:10px; margin:0 2px 9px; padding:8px 10px; border-radius:10px; background:var(--input-bg); color:var(--text-muted); font-size:9px; font-weight:800; }
         .get-off-setting select { min-height:32px; border:1px solid var(--border-color); border-radius:8px; background:var(--sheet-bg); color:var(--text-main); font:750 9px Manrope,sans-serif; }
         .guided-nav-stage-action { width:100%; min-height:31px; margin:0 0 7px; border:0; border-radius:10px; background:#2563eb; color:#fff; font:800 10px Manrope,sans-serif; cursor:pointer; }
@@ -1332,7 +1324,7 @@
         .guided-camera-button .ui-icon { width:20px; height:20px; }
         body:has(#bottom-sheet.guided-mode) #guided-live-status { display:flex; left:12px; }
         body:has(#bottom-sheet.guided-mode) #guided-camera-controls { display:flex; }
-        body:has(#bottom-sheet.guided-mode) #map-view-toggle > :is(#map-current-location, #curate-route-main, #map-live-vehicles, #map-save-route, .map-tool-divider) { display:none; }
+        body:has(#bottom-sheet.guided-mode) #map-view-toggle > :not(#guided-camera-controls) { display:none; }
         .journey-live-progress { margin-top:9px; padding:9px 10px 8px; border-radius:10px; background:var(--input-bg); }
         .journey-progress-track { position:relative; height:6px; margin:8px 7px 7px; border-radius:999px; background:#dbe2ea; }
         .journey-progress-fill { position:absolute; inset:0 auto 0 0; width:0; border-radius:inherit; background:#16a34a; transition:width .45s ease; }
@@ -6673,19 +6665,6 @@
             return (degrees(Math.atan2(y, x)) + 360) % 360;
         }
 
-        const leaveNowAdvice = options => window.MariBusTransitServices.adviseLeaveNow(options);
-
-        function guidedLeaveNowAdvice(step, nextTransit) {
-            if (!step || !nextTransit) return null;
-            const live = guidedLiveBusEstimate();
-            if (live?.closest) {
-                const freshness = routeFreshnessText(live.closest.vehicle.timestamp);
-                return leaveNowAdvice({ walkingSeconds:Number(step.duration?.value || 0), busMinutes:live.closest.minutes, nextBusMinutes:live.next?.minutes, source:'live', isStale:freshness.stale });
-            }
-            const scheduledDate = nextTransit.transit?.departure_time?.value;
-            const scheduledMinutes = scheduledDate?.getTime ? Math.max(0, (scheduledDate.getTime() - Date.now()) / 60000) : NaN;
-            return leaveNowAdvice({ walkingSeconds:Number(step.duration?.value || 0), busMinutes:scheduledMinutes, source:'scheduled' });
-        }
 
         function getOffAlertPreference() {
             try {
@@ -6931,7 +6910,6 @@
                     title:finalStage ? `Walk to ${guidedJourney.destinationName}` : `Walk to ${nextTransit?.transit?.departure_stop?.name || 'boarding station'}`,
                     meta:`${step.duration?.text || ''}${step.distance?.text ? ` · ${step.distance.text}` : ''}${step.instructions ? ` · ${plainGoogleInstruction(step.instructions)}` : ''}`,
                     action:finalStage ? 'Finish journey' : "I've arrived",
-                    advice:finalStage ? null : guidedLeaveNowAdvice(step, nextTransit),
                 };
             }
             const line = step.transit?.line || {};
@@ -7138,7 +7116,6 @@
                 <div class="guided-nav-route"><div class="guided-nav-route-steps" aria-label="Journey progress">${routeSteps}</div><button class="guided-nav-close" type="button" onclick="backFromGuidedJourney()" aria-label="Back to journey details">&times;</button></div>
                 <div class="guided-nav-current"><strong>${escapeHtml(details.title)}</strong><small>${escapeHtml(details.meta)}</small></div>
                 ${rideStep ? guidedAlertControlHtml(alertPreference) : ''}
-                ${details.advice ? `<div class="leave-now-advice ${escapeHtml(details.advice.tone)}"><strong>${escapeHtml(details.advice.title)}</strong><span>${escapeHtml(details.advice.detail)}</span><small>${escapeHtml(details.advice.meta)}</small></div>` : ''}
                 ${showTopStations ? '' : stationProgress}
                 ${needsStageAction ? `<button class="guided-nav-stage-action" type="button" onclick="advanceGuidedJourney()">${escapeHtml(details.action)}</button>` : ''}
                 <div class="guided-nav-footer">
