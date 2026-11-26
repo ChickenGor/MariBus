@@ -1213,6 +1213,7 @@ def directions():
             "destination": {"location": {"latLng": {"latitude": destination_lat, "longitude": destination_lng}}},
             "travelMode": travel_mode}
     if travel_mode == "TRANSIT":
+        body["polylineQuality"] = "HIGH_QUALITY"
         body["computeAlternativeRoutes"] = True
         transit_time = str(payload.get("transit_time") or "").strip()
         timing_mode = str(payload.get("transit_time_mode") or "depart_at").lower()

@@ -4863,7 +4863,9 @@
                 if (!transitRouteDrawn && stops.length) {
                     const gtfsSegment = sliceShapeThroughStops(result.data.shape, stops);
                     const coordinates = gtfsSegment.length ? gtfsSegment : stops.map(stop => [Number(stop.stop_lat), Number(stop.stop_lon)]);
-                    drawOutlinedRoute(coordinates, brandColor);
+                    if (coordinates.length > 1) {
+                        routeDirectionsRenderers.push(drawJourneyRideStroke(coordinates.map(([lat, lng]) => ({ lat, lng })), brandColor));
+                    }
                     coordinates.forEach(([lat, lng]) => bounds.extend({ lat, lng }));
                 }
                 [stops[0], stops[stops.length - 1]].filter(Boolean).forEach(stop => {
@@ -5066,7 +5068,7 @@
                 if (revision !== journeyRouteRevision) return false;
                 const path = matchingRoute.path;
                 if (!path?.length) return false;
-                const routeLine = new google.maps.Polyline({ map:map.native, path, strokeColor:color, strokeWeight:6.5, strokeOpacity:1, zIndex:5 });
+                const routeLine = drawJourneyRideStroke(path, color);
                 routeDirectionsRenderers.push(routeLine);
                 path.forEach(point => bounds.extend(point));
                 return true;
@@ -6258,7 +6260,9 @@
                     const stopCoordinates = segmentStops.map(stop => [Number(stop.stop_lat), Number(stop.stop_lon)]);
                     const shapeCoordinates = sliceShapeThroughStops(data.shape, segmentStops);
                     const coordinates = shapeCoordinates.length ? shapeCoordinates : stopCoordinates;
-                    if (coordinates.length) drawOutlinedRoute(coordinates, safeRouteColor(leg.route_color));
+                    if (coordinates.length > 1) {
+                        routeDirectionsRenderers.push(drawJourneyRideStroke(coordinates.map(([lat, lng]) => ({ lat, lng })), safeRouteColor(leg.route_color)));
+                    }
                     // Only show boarding and alighting stops on the map. A marker
                     // for every stop makes a trip look like a crowded "zombie"
                     // route; all intermediate stops remain available in details.
@@ -7661,6 +7665,12 @@
             map.native.fitBounds(bounds, { top:62, right:78, bottom, left:42 });
         }
 
+        function drawJourneyRideStroke(path, color) {
+            return new google.maps.Polyline({
+                map:map.native, path, clickable:false, strokeColor:color, strokeOpacity:1, strokeWeight:6.5, zIndex:19,
+            });
+        }
+
         function drawJourneyWalkStroke(path) {
             const base = { map:map.native, path, clickable:false };
             return [
@@ -7708,11 +7718,7 @@
                 const [outline, routeLine] = isTransit ? [new google.maps.Polyline({
                     map:map.native, path, clickable:false,
                     strokeOpacity:0, strokeWeight:8.5, zIndex:20,
-                }), new google.maps.Polyline({
-                    map:map.native, path, clickable:false,
-                    strokeColor:googleTransitLineColor(step), strokeOpacity:1,
-                    strokeWeight:6.5, zIndex:21,
-                })] : drawJourneyWalkStroke(path);
+                }), drawJourneyRideStroke(path, googleTransitLineColor(step))] : drawJourneyWalkStroke(path);
                 routeDirectionsRenderers.push(outline, routeLine);
                 journeyStepSegments.push({ stepIndex, path, outline, routeLine, isTransit });
                 if (showAlternatives) guidedRouteSegments.push({ stepIndex, path, outline, routeLine });
