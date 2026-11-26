@@ -3828,11 +3828,11 @@
             const segment = journeyStepSegments.find(item => item.stepIndex === Number(stepIndex));
             if (!segment || !map?.native) return;
             journeyStepSegments.forEach(item => {
-                item.outline.setOptions({ strokeWeight:item.isTransit ? 8.5 : 6, strokeOpacity:item.isTransit ? 0 : .9 });
-                item.routeLine.setOptions({ strokeWeight:item.isTransit ? 5 : 3.5, strokeOpacity:item.isTransit ? 1 : 0 });
+                item.outline.setOptions({ strokeWeight:item.isTransit ? 8.5 : 9, strokeOpacity:item.isTransit ? 0 : .95 });
+                item.routeLine.setOptions({ strokeWeight:6.5, strokeOpacity:1 });
             });
-            segment.outline.setOptions({ strokeWeight:segment.isTransit ? 12 : 8.5, strokeOpacity:segment.isTransit ? 0 : 1 });
-            segment.routeLine.setOptions({ strokeWeight:segment.isTransit ? 7 : 4.5, strokeOpacity:1 });
+            segment.outline.setOptions({ strokeWeight:12, strokeOpacity:segment.isTransit ? 0 : 1 });
+            segment.routeLine.setOptions({ strokeWeight:segment.isTransit ? 7 : 9, strokeOpacity:1 });
             const bounds = new google.maps.LatLngBounds();
             segment.path.forEach(point => bounds.extend(point));
             if (!bounds.isEmpty()) map.native.fitBounds(bounds, 80);
@@ -5597,7 +5597,7 @@
                 if (!route?.polyline?.encodedPolyline) throw new Error(result.error || 'No walking route');
                 const path = google.maps.geometry.encoding.decodePath(route.polyline.encodedPolyline);
                 activeRouteLayer.clearLayers();
-                drawOutlinedRoute(path.map(point => [point.lat(), point.lng()]), '#2563eb');
+                routeDirectionsRenderers.push(...drawJourneyWalkStroke(path));
                 const minutes = Math.max(1, Math.round(Number(String(route.duration || '0s').replace('s','')) / 60));
                 openTransitPanel('Walking is the best option', transitNotice, `<article class="journey-card"><div class="journey-summary"><span class="journey-route" style="background:#2563eb">WALK</span><span class="journey-time">About ${minutes} min</span></div><div class="journey-meta"><strong>About ${(Number(route.distanceMeters || 0) / 1000).toFixed(1)} km</strong><br>No scheduled bus travels in this direction.</div></article>`);
             } catch (error) {
@@ -5608,11 +5608,10 @@
                     const estimatedKm = 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)) * 1.2;
                     const estimatedMinutes = Math.max(1, Math.round(estimatedKm / 5 * 60));
                     activeRouteLayer.clearLayers();
-                    L.polyline([[fromPlace.lat, fromPlace.lng], [toPlace.lat, toPlace.lng]], { color:'#2563eb', weight:5, opacity:.85, dashArray:'8 8' }).addTo(activeRouteLayer);
                     openTransitPanel('Walking is the best option', transitNotice, `
                         <article class="journey-card">
                             <div class="journey-summary"><span class="journey-route" style="background:#2563eb">WALK</span><span class="journey-time">About ${estimatedMinutes} min</span></div>
-                            <div class="journey-meta"><strong>About ${estimatedKm.toFixed(1)} km</strong><br>No scheduled bus travels in this direction. The line shown is an estimate because Google walking directions are unavailable.</div>
+                            <div class="journey-meta"><strong>About ${estimatedKm.toFixed(1)} km</strong><br>Walking directions are unavailable. Distance and time are estimates.</div>
                         </article>`);
             }
         }
@@ -6302,7 +6301,7 @@
                 for (const step of steps.length ? steps : [{ path:walk.overview_path }]) {
                     if (!step.path?.length) continue;
                     step.path.forEach(point => bounds.extend(point));
-                    routeDirectionsRenderers.push(...drawJourneyWalkStroke(step.path, step.contributedPath ? '#0f766e' : '#94a3b8'));
+                    routeDirectionsRenderers.push(...drawJourneyWalkStroke(step.path));
                 }
             }
             if (walks.some(Boolean)) fitJourneyBounds(bounds, 64, true);
@@ -7662,12 +7661,11 @@
             map.native.fitBounds(bounds, { top:62, right:78, bottom, left:42 });
         }
 
-        function drawJourneyWalkStroke(path, color) {
+        function drawJourneyWalkStroke(path) {
             const base = { map:map.native, path, clickable:false };
             return [
-                new google.maps.Polyline({ ...base, strokeColor:darkenRouteColor(color, .45), strokeOpacity:.95, strokeWeight:6, zIndex:20 }),
-                new google.maps.Polyline({ ...base, strokeOpacity:0, strokeWeight:3.5, zIndex:21,
-                    icons:[{ icon:{ path:'M 0,-1 0,1', strokeColor:color, strokeOpacity:1, strokeWeight:3, scale:2 }, offset:'0', repeat:'12px' }] }),
+                new google.maps.Polyline({ ...base, strokeColor:'#fff', strokeOpacity:.95, strokeWeight:9, zIndex:20 }),
+                new google.maps.Polyline({ ...base, strokeColor:'#526681', strokeOpacity:1, strokeWeight:6.5, zIndex:21 }),
             ];
         }
 
@@ -7707,15 +7705,14 @@
                 if (path.length < 2) return;
                 path.forEach(point => bounds.extend(point));
                 const isTransit = step.travel_mode === google.maps.TravelMode.TRANSIT;
-                const color = isTransit ? googleTransitLineColor(step) : step.contributedPath ? '#0f766e' : '#94a3b8';
                 const [outline, routeLine] = isTransit ? [new google.maps.Polyline({
                     map:map.native, path, clickable:false,
                     strokeOpacity:0, strokeWeight:8.5, zIndex:20,
                 }), new google.maps.Polyline({
                     map:map.native, path, clickable:false,
-                    strokeColor:color, strokeOpacity:1,
+                    strokeColor:googleTransitLineColor(step), strokeOpacity:1,
                     strokeWeight:6.5, zIndex:21,
-                })] : drawJourneyWalkStroke(path, color);
+                })] : drawJourneyWalkStroke(path);
                 routeDirectionsRenderers.push(outline, routeLine);
                 journeyStepSegments.push({ stepIndex, path, outline, routeLine, isTransit });
                 if (showAlternatives) guidedRouteSegments.push({ stepIndex, path, outline, routeLine });
