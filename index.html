@@ -429,7 +429,6 @@
         #inline-curator.drawing { top:auto; bottom:152px; padding:12px; }
         #inline-curator.drawing h2,#inline-curator.drawing .inline-curator-field,#inline-curator.drawing #inline-curator-save,#inline-curator.drawing #inline-curator-publish,#inline-curator.drawing #inline-curator-reference,#inline-curator.drawing #inline-curator-close { display:none; }
         #inline-curator.drawing p { margin-bottom:8px; }
-        #inline-curator.drawing #inline-curator-status { display:none; }
         body.walking-path-editing #mobile-map-dock { display:none !important; }
         /* Contributing is a deliberate, separate task. Keep the rider's
            search, route sheet and map shortcuts out of the way while editing. */
@@ -5462,19 +5461,38 @@
             const nodes = [], edges = [], sources = [];
             const addNode = (point, source) => { nodes.push(point); sources.push(source); edges.push([]); return nodes.length - 1; };
             const link = (a, b, cost) => { edges[a].push({ to:b, cost }); edges[b].push({ to:a, cost }); };
-            contributed.forEach(contribution => {
-                const points = (contribution.points || []).map(walkingPathPoint).filter(point => Number.isFinite(point.lat) && Number.isFinite(point.lng));
-                let previous = -1;
-                points.forEach(point => {
-                    const current = addNode(point, contribution);
-                    if (previous >= 0) link(previous, current, walkingPathDistance(nodes[previous], point));
-                    previous = current;
+            const paths = contributed.map(source => ({
+                source,
+                points:(source.points || []).map(value => ({ ...walkingPathPoint(value), junctionPathId:value?.junctionPathId }))
+                    .filter(point => Number.isFinite(point.lat) && Number.isFinite(point.lng)),
+                splits:new Map(),
+            }));
+            const pathsById = new Map(paths.map(path => [path.source.id, path]));
+            for (const path of paths) {
+                path.nodes = path.points.map(point => addNode(point, path.source));
+            }
+            for (const path of paths) {
+                path.points.forEach((point, index) => {
+                    const target = point.junctionPathId && pathsById.get(point.junctionPathId);
+                    if (!target || target === path || target.points.length < 2) return;
+                    const snap = closestWalkingPathIndex(target.points, point);
+                    if (snap.distance > .25) return;
+                    const junction = addNode(snap.point, target.source);
+                    if (!target.splits.has(snap.index)) target.splits.set(snap.index, []);
+                    target.splits.get(snap.index).push({ node:junction, metres:snap.metres });
+                    link(path.nodes[index], junction, snap.distance);
                 });
-            });
-            // A point snapped in the editor is saved at the exact target
-            // coordinate. Only join near-identical coordinates here: connecting
-            // every pair within the editor's 80 m pickup radius can invent a
-            // walking connection across roads, buildings, or parallel paths.
+            }
+            for (const path of paths) {
+                for (let index = 0; index < path.nodes.length - 1; index++) {
+                    const splits = (path.splits.get(index) || []).sort((a, b) => a.metres - b.metres);
+                    const segment = [path.nodes[index], ...splits.map(split => split.node), path.nodes[index + 1]];
+                    for (let point = 1; point < segment.length; point++) {
+                        link(segment[point - 1], segment[point], walkingPathDistance(nodes[segment[point - 1]], nodes[segment[point]]));
+                    }
+                }
+            }
+            // Keep existing vertex connections for paths saved before explicit junctions.
             for (let a = 0; a < nodes.length; a += 1) for (let b = a + 1; b < nodes.length; b += 1) {
                 const distance = walkingPathDistance(nodes[a], nodes[b]);
                 if (distance <= 5) link(a, b, distance);

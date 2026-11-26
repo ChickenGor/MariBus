@@ -3,6 +3,7 @@ import { getFirestore, collection, deleteDoc, doc, getDocs, serverTimestamp, set
 
 const $ = selector => document.querySelector(selector);
 let map, db, drawing = false, points = [], line, referenceLine, markers = [], pathId;
+let junctions = [];
 let previousMapType;
 const networkEndpoints = [];
 const networkSegments = [];
@@ -27,6 +28,7 @@ function pathStyle(type) {
 function clearDrawing() {
   drawing = false;
   points = [];
+  junctions = [];
   line?.remove(); line = null;
   referenceLine?.remove(); referenceLine = null;
   markers.forEach(marker => marker.remove()); markers = [];
@@ -72,7 +74,10 @@ function distanceMetres(a, b) {
   return 2 * earth * Math.atan2(Math.sqrt(part), Math.sqrt(1 - part));
 }
 function selectNetworkPath(id, data) {
-  points = (data.points || []).map(asPoint).filter(([lat, lng]) => Number.isFinite(lat) && Number.isFinite(lng));
+  const savedPoints = (data.points || []).map(value => ({ point:asPoint(value), junction:value?.junctionPathId || '' }))
+    .filter(({ point:[lat, lng] }) => Number.isFinite(lat) && Number.isFinite(lng));
+  points = savedPoints.map(item => item.point);
+  junctions = savedPoints.map(item => item.junction);
   if (!points.length) return;
   pathId = id;
   $('#inline-curator-delete').hidden = false;
@@ -90,11 +95,11 @@ function drawNetworkPath(data, id = '') {
     const pathLine = L.polyline(pathPoints, { ...style, opacity:.78 }).addTo(map);
     pathLine.native?.addListener?.('click', () => selectNetworkPath(id, data));
     networkLayers.push(pathLine);
-    for (let index = 1; index < pathPoints.length; index += 1) networkSegments.push([pathPoints[index - 1], pathPoints[index]]);
+    for (let index = 1; index < pathPoints.length; index += 1) networkSegments.push({ start:pathPoints[index - 1], end:pathPoints[index], id });
   }
   const endpoints = pathPoints.length === 1 ? pathPoints : [pathPoints[0], pathPoints.at(-1)];
   endpoints.forEach(point => {
-    networkEndpoints.push(point);
+    networkEndpoints.push({ point, id });
     const endpoint = L.circleMarker(point, { radius:7, color:'#fff', weight:2, fillColor:style.color, fillOpacity:1 }).addTo(map);
     endpoint.native?.addListener?.('click', () => selectNetworkPath(id, data));
     networkLayers.push(endpoint);
@@ -120,12 +125,14 @@ async function loadWalkingPathNetwork(refresh = false) {
   }
 }
 function snapToNetwork(point) {
-  let closest = null, closestDistance = 80;
+  let closest = null, closestDistance = 8;
   networkEndpoints.forEach(endpoint => {
-    const distance = distanceMetres(point, endpoint);
+    if (endpoint.id === pathId) return;
+    const distance = distanceMetres(point, endpoint.point);
     if (distance < closestDistance) { closest = endpoint; closestDistance = distance; }
   });
-  networkSegments.forEach(([start, end]) => {
+  networkSegments.forEach(({ start, end, id }) => {
+    if (id === pathId) return;
     const latitudeScale = 111320;
     const longitudeScale = latitudeScale * Math.cos(((start[0] + end[0] + point[0]) / 3) * Math.PI / 180);
     const ax = start[1] * longitudeScale, ay = start[0] * latitudeScale;
@@ -135,9 +142,9 @@ function snapToNetwork(point) {
     const ratio = lengthSquared ? Math.max(0, Math.min(1, ((px - ax) * (bx - ax) + (py - ay) * (by - ay)) / lengthSquared)) : 0;
     const candidate = [start[0] + (end[0] - start[0]) * ratio, start[1] + (end[1] - start[1]) * ratio];
     const distance = distanceMetres(point, candidate);
-    if (distance < closestDistance) { closest = candidate; closestDistance = distance; }
+    if (distance < closestDistance) { closest = { point:candidate, id }; closestDistance = distance; }
   });
-  return closest ? { point:[...closest], distance:Math.round(closestDistance) } : null;
+  return closest ? { ...closest, distance:Math.round(closestDistance) } : null;
 }
 function previewConnection() {
   // Keep the centre target static. The confirmed point snaps when Add point is pressed.
@@ -224,6 +231,7 @@ function addPointAtMapCentre() {
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return status('Map location is still loading. Try again in a moment.');
   const snapped = snapToNetwork([lat, lng]);
   points.push(snapped?.point || [lat, lng]); redraw();
+  junctions.push(snapped?.id || '');
   status(snapped
     ? `Connected to the existing path (${snapped.distance} m away).`
     : `${points.length} point${points.length === 1 ? '' : 's'} added. Move the map and add another point, or finish drawing.`);
@@ -240,7 +248,10 @@ async function save() {
       status:'published',
       // Firestore does not support nested arrays, so each coordinate is stored
       // as a named object instead of [lat, lng].
-      points:points.map(([lat,lng]) => ({ lat:Number(lat.toFixed(6)), lng:Number(lng.toFixed(6)) })),
+      points:points.map(([lat,lng], index) => ({
+        lat:Number(lat.toFixed(6)), lng:Number(lng.toFixed(6)),
+        ...(junctions[index] ? { junctionPathId:junctions[index] } : {}),
+      })),
       start:{ lat:points[0][0], lng:points[0][1] },
       destination:{ lat:points.at(-1)[0], lng:points.at(-1)[1] },
       updatedAt:serverTimestamp(),
@@ -301,7 +312,7 @@ async function initialize() {
   });
   $('#inline-curator-undo').addEventListener('click', () => {
     if (!points.length) return;
-    points.pop(); redraw();
+    points.pop(); junctions.pop(); redraw();
     status(points.length ? `${points.length} point${points.length === 1 ? '' : 's'} remaining.` : 'All points removed.');
   });
   $('#inline-curator-save').addEventListener('click', save);
