@@ -7085,6 +7085,11 @@
             const currentStep = guidedJourney.steps[guidedJourney.stageIndex];
             const rideStep = currentStep?.travel_mode === google.maps.TravelMode.TRANSIT ? currentStep : null;
             const onboard = Boolean(rideStep && guidedJourney.boardedStageIndex === guidedJourney.stageIndex);
+            const cameraPhase = onboard ? 'ride' : rideStep ? 'boarding' : currentStep ? 'walk' : null;
+            if (guidedJourney.cameraPhase !== cameraPhase) {
+                guidedJourney.cameraPhase = cameraPhase;
+                guidedJourney.cameraZoomPending = Boolean(cameraPhase);
+            }
             const vehicleMode = googleTransitVehicleMode(rideStep?.transit?.line?.vehicle);
             const showTopStations = onboard && ['metro', 'train', 'monorail', 'tram'].includes(vehicleMode.icon);
             const topStations = document.getElementById('guided-top-stations');
@@ -7125,6 +7130,9 @@
                 </div>
             </div>`;
             updateGuidedLiveStatus();
+            if (guidedJourneyFollowMode && guidedJourney.cameraZoomPending) {
+                centerGuidedJourneyCamera(guidedJourneyLastPosition, guidedJourney.travelHeading);
+            }
         }
 
         function guidedRouteHeading(position) {
@@ -7445,7 +7453,11 @@
             const mapRect = map.native.getDiv().getBoundingClientRect();
             const sheetTop = document.getElementById('bottom-sheet').getBoundingClientRect().top;
             const coveredHeight = Math.max(0, mapRect.bottom - sheetTop);
-            const zoom = Math.max(18, map.native.getZoom() || 0);
+            const currentZoom = map.native.getZoom();
+            const zoom = guidedJourney?.cameraZoomPending
+                ? (guidedJourney.cameraPhase === 'ride' ? 16 : guidedJourney.cameraPhase === 'walk' ? 19 : 18)
+                : (currentZoom ?? 18);
+            if (guidedJourney) guidedJourney.cameraZoomPending = false;
             const metresPerPixel = 156543.03392 * Math.cos(position.lat * Math.PI / 180) / Math.pow(2, zoom);
             const offsetMetres = coveredHeight > 0 ? -coveredHeight * .5 * metresPerPixel : 0;
             const distanceRadians = offsetMetres / 6371000;
@@ -7455,7 +7467,7 @@
             const cameraLatitude = Math.asin(Math.sin(latitude) * Math.cos(distanceRadians) + Math.cos(latitude) * Math.sin(distanceRadians) * Math.cos(bearing));
             const cameraLongitude = longitude + Math.atan2(Math.sin(bearing) * Math.sin(distanceRadians) * Math.cos(latitude), Math.cos(distanceRadians) - Math.sin(latitude) * Math.sin(cameraLatitude));
             map.native.setCenter({ lat:cameraLatitude * 180 / Math.PI, lng:cameraLongitude * 180 / Math.PI });
-            map.native.setZoom(zoom);
+            if (zoom !== currentZoom) map.native.setZoom(zoom);
             map.native.setHeading(cameraHeading);
             map.native.setTilt(guidedJourneyHeadingMode === 'north' ? 0 : 55);
             return true;
@@ -7483,8 +7495,10 @@
         }
 
         function recenterGuidedJourney() {
+            if (!guidedJourney) return;
             guidedJourneyFollowMode = true;
             guidedJourneyHeadingMode = 'route';
+            guidedJourney.cameraZoomPending = true;
             if (!centerGuidedJourneyCamera(guidedJourneyLastPosition, guidedJourney?.travelHeading)) {
                 showMenuNotice('Waiting for your location…');
                 return;
