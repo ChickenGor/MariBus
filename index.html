@@ -1014,8 +1014,6 @@
         .stop-marker.route-stop-subtle { width:7px; height:7px; border-width:1px; box-shadow:0 0 0 1px rgba(15,23,42,.28); opacity:.84; }
         .stop-marker.route-stop-major { width:11px; height:11px; border-width:2px; }
         .stop-marker.route-stop-clear { width:16px; height:16px; border-width:3px; cursor:pointer; }
-        .rail-station-map-icon { box-sizing:border-box; display:grid; place-items:center; width:24px; height:24px; border:2px solid #fff; border-radius:7px; background:#334155; color:#fff; box-shadow:0 1px 4px #0005; cursor:pointer; }
-        .rail-station-map-icon .ui-icon { width:15px; height:15px; }
         .route-stop-hit { width:44px; height:44px; display:grid; place-items:center; }
         .panel-message { color:var(--text-muted); font-size:13px; padding:8px 0; }
         .panel-state { padding:16px 12px; border:1px solid var(--border-color); border-radius:13px; background:var(--input-bg); text-align:center; animation:panel-state-enter .18s ease-out both; }
@@ -2409,7 +2407,7 @@
             for (const stop of stations.values()) {
                 const lat = Number(stop.stop_lat), lng = Number(stop.stop_lon);
                 if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
-                const icon = L.divIcon({ html:`<div class="rail-station-map-icon">${iconSvg('metro')}</div>`, className:'', iconSize:[24,24], iconAnchor:[12,12] });
+                const icon = { kind:'rail-station' };
                 L.marker([lat, lng], { icon, title:readableStopName(stop.stop_name) })
                     .on('click', () => showStopArrivals({ ...stop, source_agency:'rapid-rail-kl' }))
                     .addTo(homeRailStationLayer);

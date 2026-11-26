@@ -138,6 +138,14 @@
             const text = this.options.icon?.text || '';
             const kind = this.options.icon?.kind || (this.options.title === 'Your current location' ? 'user-location' : '');
             const markerColor = this.options.icon?.color || '#2563eb';
+            if (kind === 'rail-station') {
+                const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 26 26"><rect x="1" y="1" width="24" height="24" rx="7" fill="#334155" stroke="#fff" stroke-width="2"/><path d="M7 18V8l6 6 6-6v10" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+                return {
+                    url:`data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
+                    scaledSize:new google.maps.Size(26, 26),
+                    anchor:new google.maps.Point(13, 13),
+                };
+            }
             if (kind === 'stop') {
                 return { path:google.maps.SymbolPath.CIRCLE, scale:this.options.icon?.scale || 5, fillColor:'#ffffff', fillOpacity:1, strokeColor:markerColor || '#475569', strokeWeight:this.options.icon?.strokeWeight || 1.5 };
             }
