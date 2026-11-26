@@ -1014,6 +1014,8 @@
         .stop-marker.route-stop-subtle { width:7px; height:7px; border-width:1px; box-shadow:0 0 0 1px rgba(15,23,42,.28); opacity:.84; }
         .stop-marker.route-stop-major { width:11px; height:11px; border-width:2px; }
         .stop-marker.route-stop-clear { width:16px; height:16px; border-width:3px; cursor:pointer; }
+        .rail-station-map-icon { box-sizing:border-box; display:grid; place-items:center; width:24px; height:24px; border:2px solid #fff; border-radius:7px; background:#334155; color:#fff; box-shadow:0 1px 4px #0005; cursor:pointer; }
+        .rail-station-map-icon .ui-icon { width:15px; height:15px; }
         .route-stop-hit { width:44px; height:44px; display:grid; place-items:center; }
         .panel-message { color:var(--text-muted); font-size:13px; padding:8px 0; }
         .panel-state { padding:16px 12px; border:1px solid var(--border-color); border-radius:13px; background:var(--input-bg); text-align:center; animation:panel-state-enter .18s ease-out both; }
@@ -2388,8 +2390,9 @@
         // marker. Build a calm home-map rail layer from the GTFS routes MariBus
         // already serves instead, then keep it out of the way during a journey.
         const homeRailLayer = L.layerGroup().addTo(map);
-        const HOME_RAIL_CACHE_KEY = 'maribus-home-rail-lines-v1';
-        const HOME_RAIL_ROUTE_CODES = ['KJL', 'AGL', 'SPL', 'PYL', 'MRL', 'BRT'];
+        const homeRailStationLayer = L.layerGroup().addTo(map);
+        const HOME_RAIL_CACHE_KEY = 'maribus-home-rail-lines-v2';
+        const HOME_RAIL_ROUTE_CODES = ['KJL', 'AGL', 'SPL', 'PYL', 'KGL', 'MRL', 'SAL', 'BRT'];
         let homeRailLines = [];
         let homeRailLoadStarted = false;
         let homeRailLoadPromise = null;
@@ -2399,8 +2402,23 @@
                 && !document.body.classList.contains('walking-path-editing')
                 && ['rapid-bus-kl', 'rapid-rail-kl'].includes(agency);
         };
+        const renderHomeRailStations = () => {
+            homeRailStationLayer.clearLayers();
+            if (!homeRailVisible() || (map.native.getZoom() ?? 0) < 14) return;
+            const stations = new Map(homeRailLines.flatMap(line => line.stations || []).map(stop => [stop.stop_id, stop]));
+            for (const stop of stations.values()) {
+                const lat = Number(stop.stop_lat), lng = Number(stop.stop_lon);
+                if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+                const icon = L.divIcon({ html:`<div class="rail-station-map-icon">${iconSvg('metro')}</div>`, className:'', iconSize:[24,24], iconAnchor:[12,12] });
+                L.marker([lat, lng], { icon, title:readableStopName(stop.stop_name) })
+                    .on('click', () => showStopArrivals({ ...stop, source_agency:'rapid-rail-kl' }))
+                    .addTo(homeRailStationLayer);
+            }
+        };
+        map.native.addListener('zoom_changed', renderHomeRailStations);
         const renderHomeRailLines = () => {
             homeRailLayer.clearLayers();
+            renderHomeRailStations();
             if (!homeRailVisible()) return;
             homeRailLines.forEach(line => {
                 if (!Array.isArray(line.points) || line.points.length < 2) return;
@@ -2437,7 +2455,8 @@
                         const result = await response.json();
                         const data = result.success ? result.data : null;
                         const points = (data?.shape?.length ? data.shape.map(point => [Number(point.lat), Number(point.lon)]) : data?.stops?.map(stop => [Number(stop.stop_lat), Number(stop.stop_lon)])) || [];
-                        return points.length > 1 ? { points, color:data.route?.route_color || item.route_color || '' } : null;
+                        const stations = (data?.stops || []).filter(stop => /^(?:SP|AG|KJ|KG|PY|MR|SA)\d/i.test(stop.stop_id));
+                        return points.length > 1 ? { points, stations, color:data.route?.route_color || item.route_color || '' } : null;
                     }));
                     homeRailLines = fetched.filter(Boolean);
                     try { sessionStorage.setItem(HOME_RAIL_CACHE_KEY, JSON.stringify({ lines:homeRailLines })); } catch (_) {}
